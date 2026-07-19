@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"D:\\\\vs code 库\\\\北林major报名系统\" status)"
+    ]
+  }
+}
