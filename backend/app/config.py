@@ -10,6 +10,7 @@ Author: keill
 Since: 2026-07-21
 """
 from pydantic_settings import BaseSettings
+import os
 
 
 class Settings(BaseSettings):
@@ -23,16 +24,18 @@ class Settings(BaseSettings):
         SECRET_KEY: JWT 令牌签名密钥，生产环境必须替换为随机字符串
         ALGORITHM: JWT 签名算法，默认 HS256
         ACCESS_TOKEN_EXPIRE_MINUTES: 令牌有效期（分钟），默认 1440 = 24 小时
+        DB_ECHO: 打印SQL语句
         ADMIN_USERNAME: 管理员初始用户名
         ADMIN_PASSWORD: 管理员初始密码
     """
 
-    DATABASE_URL: str = "sqlite:///./cs2_competition.db"
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    DATABASE_URL: str = "sqlite:///" + os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cs2_competition.db")
+    SECRET_KEY: str = "change-me-in-env-file"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
-    ADMIN_USERNAME: str = "keill"
-    ADMIN_PASSWORD: str = "keill000323"
+    DB_ECHO: bool = True
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD: str = "123456"
 
     class Config:
         env_file = ".env"

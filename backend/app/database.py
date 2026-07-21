@@ -17,7 +17,7 @@ engine = create_engine(
     connect_args={"check_same_thread": False}
     if "sqlite" in settings.DATABASE_URL
     else {},
-    echo=True,
+    echo=settings.DB_ECHO,
 )
 
 # 会话工厂：绑定了上述引擎，SessionLocal() 调用即获取一个新会话
