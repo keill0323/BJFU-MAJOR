@@ -21,7 +21,20 @@ class MatchStatus(str, enum.Enum):
 
 
 class Match(Base):
-    """赛事信息表"""
+    """赛事信息表
+
+    Attributes:
+        id: 赛事ID
+        name: 赛事名称，唯一
+        description: 赛事描述
+        max_teams: 最大参赛队伍数
+        team_size: 每队人数上限
+        status: 赛事状态（draft/registering/in_progress/finished）
+        register_start: 报名开始时间
+        register_end: 报名截止时间
+        match_start: 比赛开始时间
+        created_at: 创建时间
+    """
     __tablename__ = "matches"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)  # 赛事编号ID
@@ -44,11 +57,27 @@ class RoundStatus(str, enum.Enum):
 
 
 class MatchRound(Base):
-    """对阵表"""
+    """对阵表
+
+    Attributes:
+        id: 对阵记录ID
+        match_id: 所属赛事ID，外键关联 matches 表
+        round_number: 第几轮（1=淘汰赛第一轮，2=第二轮...）
+        round_number: 第几轮
+        team1_id: 队伍1 ID
+        team2_id: 队伍2 ID
+        team1_score: 队伍1得分
+        team2_score: 队伍2得分
+        winner_id: 胜者队伍ID
+        status: 对阵状态（pending/in_progress/finished）
+        scheduled_time: 预定比赛时间
+        created_at: 创建时间
+    """
     __tablename__ = "match_rounds"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     match_id = Column(Integer, ForeignKey("matches.id"), nullable=False)
+    round_number = Column(Integer, nullable=False)
     team1_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
     team2_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
     team1_score = Column(Integer, default=0)
@@ -57,8 +86,3 @@ class MatchRound(Base):
     status = Column(SAEnum(RoundStatus), default=RoundStatus.PENDING)
     scheduled_time = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
-    winner_id = Column(Integer, ForeignKey("teams.id"), nullable = False)
-    status = Column(SAEnum(RoundStatus), default = RoundStatus.PENDING)
-    scheduled_time = Column(DateTime, nullable = True)
-    created_at = Column(DateTime, default = datetime.now)
-    

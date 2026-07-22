@@ -8,6 +8,7 @@ from datetime import datetime
 import enum
 
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Enum as SAEnum
+from sqlalchemy.orm import relationship
 
 from app.database import Base
 
@@ -32,8 +33,9 @@ class User(Base):
         student_id: 学号（需上传截图人工审核）
         verify_image: 学信网/教务系统截图URL
         is_verified: 管理员是否审核通过
-        role: user/admin
+        role: user/admin/reviewer/commentator
         created_at: 注册时间
+        memberships: 用户加入的所有队伍记录（通过 relationship 关联）
     """
 
     __tablename__ = "users"
@@ -47,3 +49,4 @@ class User(Base):
     is_verified = Column(Boolean, default=False, index=True)
     role = Column(SAEnum(UserRole), default=UserRole.USER)
     created_at = Column(DateTime, default=datetime.now, index=True)
+    memberships = relationship("TeamMember", back_populates="user")
