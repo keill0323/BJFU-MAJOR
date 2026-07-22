@@ -8,3 +8,4 @@ Since: 2026-07-21
 """
 from app.models.user import User
 from app.models.team import Team, TeamMember
+from app.models.match import Match, MatchRound
