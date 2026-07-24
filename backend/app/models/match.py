@@ -62,8 +62,7 @@ class MatchRound(Base):
     Attributes:
         id: 对阵记录ID
         match_id: 所属赛事ID，外键关联 matches 表
-        round_number: 第几轮（1=淘汰赛第一轮，2=第二轮...）
-        round_number: 第几轮
+        round_number: 第几轮（1=淘汰赛第一轮，2=第二轮...
         team1_id: 队伍1 ID
         team2_id: 队伍2 ID
         team1_score: 队伍1得分
@@ -72,6 +71,7 @@ class MatchRound(Base):
         status: 对阵状态（pending/in_progress/finished）
         scheduled_time: 预定比赛时间
         created_at: 创建时间
+        group_name: 组别(A组/上半区等)
     """
     __tablename__ = "match_rounds"
 
@@ -86,3 +86,37 @@ class MatchRound(Base):
     status = Column(SAEnum(RoundStatus), default=RoundStatus.PENDING)
     scheduled_time = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
+    group_name = Column(String(20), nullable=True)
+
+
+class StageStatus(str, enum.Enum):
+    """队伍赛事阶段"""
+    CHALLENGER = "challenger"       # 挑战者组
+    LEGEND = "legend"               # 传奇组
+    PLAYOFF = "playoff"             # 淘汰赛
+    ELIMINATED = "eliminated"       # 已淘汰
+
+
+class TeamProgress(Base):
+    """队伍赛事进度表
+
+    Attributes:
+        id: 进度记录ID
+        match_id: 所属赛事ID，外键关联 matches 表
+        team_id: 队伍ID，外键关联 teams 表
+        stage: 当前阶段（challenger/legend/playoff/eliminated）
+        group_name: 所在小组（A组/上半区等）
+        seed: 种子排名
+        created_at: 创建时间
+    """
+
+    __tablename__ = "team_progress"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    stage = Column(SAEnum(StageStatus), default=StageStatus.CHALLENGER)
+    group_name = Column(String(20), nullable=True)
+    seed = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+    

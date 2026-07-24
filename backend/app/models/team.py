@@ -33,6 +33,7 @@ class Team(Base):
         status: 审核状态（pending/approved/rejected）
         created_at: 创建时间
         members: 关联的成员列表
+        rating: 队伍水平分
     """
     __tablename__ = "teams"
 
@@ -44,6 +45,7 @@ class Team(Base):
     status = Column(SAEnum(TeamStatus), default=TeamStatus.PENDING, index=True)
     created_at = Column(DateTime, default=datetime.now, index=True)
     members = relationship("TeamMember", back_populates="team")
+    rating = Column(Integer, default=1000)
 
 
 class MemberRole(str, enum.Enum):

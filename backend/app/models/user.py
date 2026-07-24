@@ -36,13 +36,15 @@ class User(Base):
         role: user/admin/reviewer/commentator
         created_at: 注册时间
         memberships: 用户加入的所有队伍记录（通过 relationship 关联）
+        individual_rating: 个人水平得分()
+        rank: 个人段位
     """
 
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)  # 用户ID
     wx_openid = Column(String(64), unique=True, index=True, nullable=True)
-    nickname = Column(String(64), nullable=True)
+    nickname = Column(String(64), nullable=False)
     game_id = Column(String(64), nullable=True)
     student_id = Column(String(64), unique=True, nullable=True)
     verify_image = Column(String(256), nullable=True)
@@ -50,3 +52,6 @@ class User(Base):
     role = Column(SAEnum(UserRole), default=UserRole.USER)
     created_at = Column(DateTime, default=datetime.now, index=True)
     memberships = relationship("TeamMember", back_populates="user")
+    individual_rating = Column(Integer, default=0)
+    rank = Column(String(10), nullable=True)
+

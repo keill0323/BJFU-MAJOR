@@ -23,4 +23,30 @@ class UserInfo(BaseModel):
 
     class Config:
         from_attributes = True
-        
+
+
+class UserUpdateRequest(BaseModel):
+    """用户更新资料请求"""
+    nickname: Optional[str] = None
+    game_id: Optional[str] = None
+    
+
+class AdminUpdateUserRequest(BaseModel):
+    """管理员修改用户资料"""
+    student_id: Optional[str] = None
+    is_verified: Optional[bool] = None
+    rank: Optional[str] = None
+    individual_rating: Optional[int] = None
+
+
+class UpdateRoleRequest(BaseModel):
+    """修改用户角色请求"""
+    role: str
+
+
+class TokenResponse(BaseModel):
+    """登录响应"""
+    access_token: str
+    token_type: str = "bearer"
+    user: UserInfo
+    
