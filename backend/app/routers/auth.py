@@ -47,13 +47,16 @@ def admin_update_user(
     admin = Depends(require_admin)
 ):
     """管理员修改用户学号、审核状态、段位"""
-    return auth_service.admin_update_user(
+    user = auth_service.admin_update_user(
         db, user_id,
         student_id=request.student_id,
         is_verified=request.is_verified,
         rank=request.rank,
         individual_rating=request.individual_rating,
     )
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return user
 
 
 @router.put("/admin/users/{user_id}/role")
@@ -64,4 +67,7 @@ def update_user_role(
     admin = Depends(require_admin),
 ):
     """管理员修改用户角色"""
-    return auth_service.update_user_role(db, user_id, request.role, admin)
+    try:
+        return auth_service.update_user_role(db, user_id, request.role, admin)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))

@@ -71,7 +71,7 @@ class TeamMember(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)  # 入队记录ID
     team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     user = relationship("User", back_populates="memberships")
     role = Column(SAEnum(MemberRole), default=MemberRole.MEMBER)
     joined_at = Column(DateTime, default=datetime.now, index=True)

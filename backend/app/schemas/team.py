@@ -45,4 +45,27 @@ class TeamInfo(BaseModel):
 class JoinTeamRequest(BaseModel):
     """加入队伍请求"""
     team_id: int
-    
+    user_id: int
+
+
+class AssignMemberRequest(BaseModel):
+    """管理员分配队员"""
+    team_id: int
+    user_id: int
+
+
+class TalentMarketItem(BaseModel):
+    """人才市场"""
+    id: int
+    nickname: Optional[str] = None
+    game_id: Optional[str] = None
+    individual_rating: Optional[int] = None
+    rank: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class UpdateMarketDescription(BaseModel):
+    """人才市场自我介绍"""
+    user_description: str

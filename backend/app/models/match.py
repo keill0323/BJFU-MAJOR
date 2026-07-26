@@ -119,4 +119,31 @@ class TeamProgress(Base):
     group_name = Column(String(20), nullable=True)
     seed = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.now)
-    
+
+
+class RegistrationStatus(str, enum.Enum):
+    """报名审核状态"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class Registration(Base):
+    """赛事报名表，支持队伍报名和个人报名
+
+    Attributes:
+        id: 报名记录ID
+        match_id: 赛事ID
+        team_id: 队伍ID（队伍报名时填写）
+        user_id: 用户ID（个人报名时填写）
+        status: 审核状态
+        created_at: 报名时间
+    """
+    __tablename__ = "registrations"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    status = Column(SAEnum(RegistrationStatus), default=RegistrationStatus.PENDING)
+    created_at = Column(DateTime, default=datetime.now)

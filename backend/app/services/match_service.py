@@ -8,7 +8,7 @@ from typing import Optional, List
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from app.models.match import Match, MatchRound, MatchStatus, RoundStatus, StageStatus, TeamProgress
+from app.models.match import Match, MatchRound, MatchStatus, RoundStatus, StageStatus, TeamProgress, Registration, RegistrationStatus
 from app.models.team import Team
 
 
@@ -23,7 +23,6 @@ def create_match(
     match_start: Optional[datetime] = None,
 ) -> Match:
     """创建赛事"""
-    from datetime import datetime
     match = Match(
         name=name,
         description=description,
@@ -113,7 +112,7 @@ def auto_assign_seeds(db: Session, match_id: int) -> list:
 
     for i, progress in enumerate(progresses, 1):
         progress.seed = i
-        if i<=4:
+        if i <= 4:
             progress.stage = StageStatus.LEGEND
             progress.group_name = f"种子{i}"
 
@@ -131,9 +130,9 @@ def auto_group_teams(db: Session, match_id: int, group_names: list) -> list:
     n = len(group_names)
     for i, progress in enumerate(progresses):
         group_idx = i % n
-        if(i//n) %2 ==1:
-            group_idx = n-1 -group_idx
-        progress.group_name =group_names[group_idx]
+        if (i // n) % 2 == 1:
+            group_idx = n - 1 - group_idx
+        progress.group_name = group_names[group_idx]
 
     db.commit()
     return progresses
@@ -161,6 +160,40 @@ def auto_generate_group_matches(db: Session, match_id: int, group_name: str) -> 
             round_num += 1
 
     return rounds
+
+
+def register_team(db: Session, match_id: int, team_id: int) -> list:
+    """队伍报名，所有队员自动获得报名记录"""
+    from app.models.team import TeamMember
+    members = db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
+    registrations = []
+    for member in members:
+        reg = Registration(match_id=match_id, user_id=member.user_id, team_id=team_id)
+        db.add(reg)
+        registrations.append(reg)
+    db.commit()
+    for reg in registrations:
+        db.refresh(reg)
+    return registrations
+
+
+def register_user(db: Session, match_id: int, user_id: int) -> Registration:
+    """个人报名"""
+    reg = Registration(match_id=match_id, user_id=user_id)
+    db.add(reg)
+    db.commit()
+    db.refresh(reg)
+    return reg
+
+
+def approve_registration(db: Session, reg_id: int) -> Optional[Registration]:
+    """审核通过报名"""
+    reg = db.query(Registration).filter(Registration.id == reg_id).first()
+    if reg:
+        reg.status = RegistrationStatus.APPROVED
+        db.commit()
+        db.refresh(reg)
+    return reg
 
 
 def auto_generate_single_round_matches(db: Session, match_id: int, group_name: str) -> list:

@@ -38,13 +38,14 @@ class User(Base):
         memberships: 用户加入的所有队伍记录（通过 relationship 关联）
         individual_rating: 个人水平得分()
         rank: 个人段位
+        user_description: 个人介绍
     """
 
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)  # 用户ID
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     wx_openid = Column(String(64), unique=True, index=True, nullable=True)
-    nickname = Column(String(64), nullable=False)
+    nickname = Column(String(64), nullable=True)
     game_id = Column(String(64), nullable=True)
     student_id = Column(String(64), unique=True, nullable=True)
     verify_image = Column(String(256), nullable=True)
@@ -54,4 +55,4 @@ class User(Base):
     memberships = relationship("TeamMember", back_populates="user")
     individual_rating = Column(Integer, default=0)
     rank = Column(String(10), nullable=True)
-
+    user_description = Column(String(200), nullable=True)
