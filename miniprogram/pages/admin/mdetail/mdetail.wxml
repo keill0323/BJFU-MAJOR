@@ -5,7 +5,10 @@
   <block wx:else>
     <!-- 赛事信息 -->
     <view class="card">
-      <text class="section-title">{{match.name}}</text>
+      <view class="detail-header">
+        <text class="section-title">{{match.name}}</text>
+        <view class="btn-outline small-btn" bindtap="exportAll">导出对阵</view>
+      </view>
       <text class="team-meta">状态: {{match.statusText}} | 队伍: {{teams.length}}/{{match.max_teams}}</text>
     </view>
 
@@ -275,7 +278,10 @@
     <view class="history-panel" catchtap="noop">
       <view class="detail-header">
         <text class="section-title">{{historyTeam.team_name}} · 历史对阵</text>
-        <image class="detail-close" src="/images/icons/x.svg" bindtap="closeHistory"/>
+        <view class="header-actions">
+          <view class="btn-outline small-btn" bindtap="exportTeamCsv" data-id="{{historyTeam.team_id}}">导出该队</view>
+          <image class="detail-close" src="/images/icons/x.svg" bindtap="closeHistory"/>
+        </view>
       </view>
       <text class="team-meta">rating {{historyTeam.rating}} | 队长 {{historyTeam.captain_name || '未知'}}</text>
       <view wx:if="{{historyRounds.length === 0}}" class="empty">该队暂无对阵记录</view>

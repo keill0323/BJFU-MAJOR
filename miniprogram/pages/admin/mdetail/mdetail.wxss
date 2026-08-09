@@ -385,6 +385,12 @@
   padding: 10rpx;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
 .history-row {
   background: var(--color-row);
   border-radius: 10rpx;

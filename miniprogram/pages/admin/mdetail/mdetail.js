@@ -367,6 +367,37 @@ Page({
     this.setData({ showHistory: false, historyTeam: null, historyRounds: [] })
   },
 
+  // ===== 数据导出（CSV） =====
+  // 导出赛事全部对阵
+  exportAll() {
+    wx.showLoading({ title: '生成中...' })
+    api.exportMatchCsv(this.data.matchId)
+      .then(() => {
+        wx.hideLoading()
+        wx.showToast({ title: '已导出', icon: 'success' })
+      })
+      .catch(err => {
+        wx.hideLoading()
+        this.showErr(err, '导出失败')
+      })
+  },
+
+  // 导出某队伍在该赛事的历史对阵
+  exportTeamCsv(e) {
+    const tid = e.currentTarget.dataset.id
+    if (!tid) return
+    wx.showLoading({ title: '生成中...' })
+    api.exportMatchCsv(this.data.matchId, tid)
+      .then(() => {
+        wx.hideLoading()
+        wx.showToast({ title: '已导出', icon: 'success' })
+      })
+      .catch(err => {
+        wx.hideLoading()
+        this.showErr(err, '导出失败')
+      })
+  },
+
   // ===== 编排操作 =====
   // 分组（输入组数，自动生成 A/B/C...；自动先分配种子：前4直升传奇组）
   promptGroup() {

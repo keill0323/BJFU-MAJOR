@@ -163,4 +163,32 @@ module.exports = {
   finishLegendStage: (matchId) => request('/api/matches/' + matchId + '/finish-legend', 'POST'),  // 结束传奇组（每区前3晋级）
   generateKnockout: (matchId) => request('/api/matches/' + matchId + '/generate-knockout', 'POST'),  // 生成6强淘汰赛
   advanceKnockout: (matchId) => request('/api/matches/' + matchId + '/advance-knockout', 'POST'),  // 推进淘汰赛（半决赛/决赛）
+
+  // ===== 数据导出（CSV） =====
+  exportMatchCsv: (matchId, teamId) => new Promise((resolve, reject) => {
+    const token = wx.getStorageSync('token')
+    const url = BASE + '/api/matches/' + matchId + '/export' + (teamId ? '?team_id=' + teamId : '')
+    wx.downloadFile({
+      url: url,
+      header: { 'Authorization': token ? 'Bearer ' + token : '' },
+      success(res) {
+        if (res.statusCode === 200) {
+          wx.openDocument({
+            filePath: res.tempFilePath,
+            fileType: 'csv',
+            showMenu: true,
+            success: () => resolve(),
+            fail: () => reject({ detail: '文件已下载，但设备无法预览 CSV' })
+          })
+        } else {
+          let detail = ''
+          try { detail = JSON.parse(res.data).detail || '' } catch (e) {}
+          reject({ detail: detail || ('导出失败（' + res.statusCode + '）') })
+        }
+      },
+      fail() {
+        reject({ detail: '网络错误，请检查后端服务器是否启动' })
+      }
+    })
+  }),
 }

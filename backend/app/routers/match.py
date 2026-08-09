@@ -4,7 +4,11 @@ Author: keill
 Since: 2026-7-26
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import csv
+import io
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -102,6 +106,108 @@ def get_match_admin_detail(
 def get_rounds(match_id: int, db: Session = Depends(get_db)):
     """获取赛事所有对阵"""
     return match_service.get_rounds_by_match(db, match_id)
+
+
+# ===== CSV 导出辅助 =====
+
+_ROUND_STATUS_CN = {"pending": "待开始", "in_progress": "进行中", "finished": "已结束"}
+
+
+def _round_status_cn(status):
+    """对阵状态转中文"""
+    if hasattr(status, "value"):
+        status = status.value
+    return _ROUND_STATUS_CN.get(status, status or "")
+
+
+def _fmt_bo3(bo3_scores):
+    """BO3 小分转可读字符串，如 2:1 (16:14,13:16,19:17)"""
+    if not bo3_scores:
+        return ""
+    try:
+        games = [f"{g.get('t1', 0)}:{g.get('t2', 0)}" for g in bo3_scores]
+        t1_wins = sum(1 for g in bo3_scores if g.get("t1", 0) > g.get("t2", 0))
+        t2_wins = sum(1 for g in bo3_scores if g.get("t2", 0) > g.get("t1", 0))
+        return f"{t1_wins}:{t2_wins} ({', '.join(games)})"
+    except Exception:
+        return ""
+
+
+@router.get("/{match_id}/export")
+def export_match_csv(
+    match_id: int,
+    team_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin),
+):
+    """导出赛事对阵数据为 CSV（管理员）
+
+    - 不传 team_id：导出该赛事全部对阵及结果
+    - 传 team_id：导出该队伍在该赛事的全部历史对阵
+    """
+    from app.models.team import Team
+    match = match_service.get_match_by_id(db, match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail="赛事不存在")
+
+    rounds = match_service.get_rounds_by_match(db, match_id)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+
+    if team_id is not None:
+        # ===== 某支队伍的历史对阵 =====
+        team = db.query(Team).filter(Team.id == team_id).first()
+        if not team:
+            raise HTTPException(status_code=404, detail="队伍不存在")
+        my_rounds = [r for r in rounds if r["team1_id"] == team_id or r["team2_id"] == team_id]
+        if not my_rounds:
+            raise HTTPException(status_code=404, detail="该队伍在此赛事暂无对阵记录")
+
+        writer.writerow([f"{match.name}｜{team.name} 历史对阵"])
+        writer.writerow(["轮次", "组别", "我方", "对手", "我方比分", "对方比分", "结果", "BO3小分", "状态", "时间"])
+        for r in my_rounds:
+            mine = r["team1_score"] if r["team1_id"] == team_id else r["team2_score"]
+            opp = r["team2_score"] if r["team1_id"] == team_id else r["team1_score"]
+            opp_name = r["team2_name"] if r["team1_id"] == team_id else r["team1_name"]
+            if r.get("winner_id") == team_id:
+                result = "胜"
+            elif r.get("winner_id") is not None:
+                result = "负"
+            else:
+                result = "-"
+            writer.writerow([
+                r["round_number"], r["group_name"] or "", team.name,
+                opp_name or "轮空", mine, opp, result,
+                _fmt_bo3(r.get("bo3_scores")),
+                _round_status_cn(r.get("status")),
+                r.get("scheduled_time") or "",
+            ])
+        filename = f"match{match_id}_team{team_id}.csv"
+    else:
+        # ===== 赛事全部对阵 =====
+        writer.writerow([f"{match.name} 全部对阵"])
+        writer.writerow(["轮次", "组别", "队伍1", "队伍2", "队伍1比分", "队伍2比分", "胜者", "BO3小分", "状态", "时间"])
+        for r in rounds:
+            winner_name = "-"
+            if r.get("winner_id"):
+                winner_name = r["team1_name"] if r["team1_id"] == r["winner_id"] else r["team2_name"]
+            writer.writerow([
+                r["round_number"], r["group_name"] or "",
+                r["team1_name"] or "轮空", r["team2_name"] or "轮空",
+                r["team1_score"], r["team2_score"], winner_name or "-",
+                _fmt_bo3(r.get("bo3_scores")),
+                _round_status_cn(r.get("status")),
+                r.get("scheduled_time") or "",
+            ])
+        filename = f"match{match_id}_rounds.csv"
+
+    # UTF-8 BOM：Excel 打开中文不乱码
+    csv_text = "\ufeff" + buffer.getvalue()
+    return Response(
+        content=csv_text,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{match_id}/rounds", response_model=RoundInfo, status_code=201)
