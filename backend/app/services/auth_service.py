@@ -6,10 +6,13 @@ Since: 2026-7-22
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import json
+import urllib.request
 
 from fastapi import Depends, HTTPException, Header
 from jose import jwt, JWTError
 from passlib.context import CryptContext
+from sqlalchemy import cast, String
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -17,6 +20,40 @@ from app.models.user import User, UserRole
 from app.database import get_db
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def wx_code_to_openid(code: str) -> Optional[str]:
+    """调用微信 jscode2session 接口，用小程序登录 code 换取 openid（上线真实登录用）"""
+    url = (
+        "https://api.weixin.qq.com/sns/jscode2session"
+        f"?appid={settings.WX_APPID}&secret={settings.WX_SECRET}"
+        f"&js_code={code}&grant_type=authorization_code"
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+    if data.get("openid"):
+        return data["openid"]
+    return None
+
+# 段位体系：D/C/B/A 各3小段 + S 段50星（总分100，段位越高水平分越高）
+RANK_ORDER = ["D", "D+", "D++", "C", "C+", "C++", "B", "B+", "B++", "A", "A+", "A++"]
+
+
+def _rank_rating(rank: str) -> Optional[int]:
+    """根据段位计算水平分（0-100）：D/C/B/A 每档 +3（4~37），S 段从 40 升到 100。"""
+    if rank in RANK_ORDER:
+        return 4 + RANK_ORDER.index(rank) * 3
+    if rank.startswith("S"):
+        try:
+            n = int(rank[1:])
+        except ValueError:
+            return None
+        if 1 <= n <= 50:
+            return round(40 + (n - 1) * 60 / 49)
+    return None
 
 
 def hash_password(password: str) -> str:
@@ -60,6 +97,40 @@ def create_user(db: Session, wx_openid: str, nickname: Optional[str] = None) -> 
     return user
 
 
+def get_all_users(db: Session, keyword: Optional[str] = None) -> list:
+    """获取全部用户（管理员用），可按 id/昵称/游戏ID/学号 模糊搜索"""
+    query = db.query(User)
+    if keyword:
+        kw = f"%{keyword}%"
+        query = query.filter(
+            cast(User.id, String).like(kw)
+            | User.nickname.like(kw)
+            | User.game_id.like(kw)
+            | User.student_id.like(kw)
+        )
+    return query.order_by(User.id.asc()).all()
+
+
+def get_unverified_users(db: Session) -> list:
+    """列出待认证审核的用户：已上传学信网截图但尚未通过"""
+    return (
+        db.query(User)
+        .filter(User.verify_image.isnot(None), User.is_verified.is_(False))
+        .order_by(User.created_at.asc())
+        .all()
+    )
+
+
+def update_verify_image(db: Session, user_id: int, url: str) -> Optional[User]:
+    """记录用户上传的学信网截图URL"""
+    user = get_user_by_id(db, user_id)
+    if user:
+        user.verify_image = url
+        db.commit()
+        db.refresh(user)
+    return user
+
+
 def update_self_profile(db: Session, user_id: int, nickname: Optional[str] = None, game_id: Optional[str] = None) -> Optional[User]:
     """用户自行修改资料"""
     user = get_user_by_id(db, user_id)
@@ -74,7 +145,8 @@ def update_self_profile(db: Session, user_id: int, nickname: Optional[str] = Non
 
 
 def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = None, is_verified: Optional[bool] = None,
-                      rank: Optional[str] = None, individual_rating: Optional[int] = None) -> Optional[User]:
+                      rank: Optional[str] = None, individual_rating: Optional[int] = None,
+                      verify_image: Optional[str] = None) -> Optional[User]:
     """管理员修改用户资料（学号、审核状态、段位等）"""
     user = get_user_by_id(db, user_id)
     if user:
@@ -84,8 +156,14 @@ def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = Non
             user.is_verified = is_verified
         if rank is not None:
             user.rank = rank
+            # 水平分与段位挂钩：设置段位时自动计算评分
+            rating = _rank_rating(rank)
+            if rating is not None:
+                user.individual_rating = rating
         if individual_rating is not None:
             user.individual_rating = individual_rating
+        if verify_image is not None:
+            user.verify_image = verify_image or None   # 空字符串表示清除截图
         db.commit()
         db.refresh(user)
     return user

@@ -1,0 +1,15 @@
+<view class="page">
+  <image class="banner" src="/images/banner_dark.png" mode="aspectFill"/>
+
+  <view class="content">
+    <view class="brand">
+      <text class="title">北林 CS2 Major</text>
+      <text class="subtitle">北京林业大学 · 校内电竞赛事</text>
+    </view>
+
+    <view class="login-btn" bindtap="handleLogin">
+      <text class="login-btn-text">微信一键登录</text>
+    </view>
+    <text class="login-agree">登录即代表同意《赛事规则与参赛须知》</text>
+  </view>
+</view>

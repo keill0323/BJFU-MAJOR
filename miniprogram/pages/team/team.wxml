@@ -1,0 +1,102 @@
+<!-- ============ 有队伍：显示我的队伍 ============ -->
+<view wx:if="{{myTeam}}" class="page">
+  <!-- 队伍信息卡片 -->
+  <view class="card">
+    <view class="team-top">
+      <text class="team-name">{{myTeam.name}}</text>
+      <text class="tag tag-green">状态: {{myTeam.status}}</text>
+    </view>
+    <text class="team-desc">{{myTeam.description || '暂无简介'}}</text>
+  </view>
+
+  <!-- 成员列表 -->
+  <view class="card">
+    <text class="section-title">成员 ({{members.length}}/{{myTeam.member_count || members.length}})</text>
+    <view wx:for="{{members}}" wx:key="id" class="member-row">
+      <view class="member-info">
+        <text class="member-name">{{item.nickname || '玩家' + item.user_id}}</text>
+        <text class="tag {{item.role === 'captain' ? 'tag-orange' : 'tag-gray'}}">{{item.role === 'captain' ? '队长' : '队员'}}</text>
+      </view>
+      <!-- 队长踢人按钮（非队长成员可见） -->
+      <view wx:if="{{isCaptain && item.role !== 'captain'}}" class="btn-danger small-btn"
+            bindtap="kickMember" data-uid="{{item.user_id}}" data-name="{{item.nickname || '该成员'}}">移除</view>
+    </view>
+  </view>
+
+  <!-- 队长：待审核申请 -->
+  <view wx:if="{{isCaptain && applications.length > 0}}" class="card">
+    <text class="section-title">入队申请 ({{applications.length}})</text>
+    <view wx:for="{{applications}}" wx:key="id" class="app-row">
+      <view class="app-info">
+        <text class="app-name">{{item.nickname || '玩家' + item.user_id}}</text>
+        <text wx:if="{{item.message}}" class="app-msg">{{item.message}}</text>
+      </view>
+      <view class="app-actions">
+        <view class="btn-primary small-btn" bindtap="approveApp" data-id="{{item.id}}">同意</view>
+        <view class="btn-danger small-btn" bindtap="rejectApp" data-id="{{item.id}}">拒绝</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 操作按钮 -->
+  <view class="actions">
+    <view wx:if="{{isCaptain}}" class="btn-outline" bindtap="openMarket">人才市场</view>
+    <view wx:if="{{isCaptain}}" class="btn-outline" bindtap="openRecruit">邀请</view>
+    <view class="btn-danger" bindtap="leaveTeam">退出队伍</view>
+    <view wx:if="{{isCaptain}}" class="btn-danger" bindtap="disbandTeam">解散队伍</view>
+  </view>
+
+  <!-- 人才市场弹层 -->
+  <view wx:if="{{showMarket}}" class="mask" bindtap="closeMarket">
+    <view class="market-panel" catchtap="">
+      <view class="market-header">
+        <text class="section-title">人才市场</text>
+        <image class="market-close" src="/images/icons/x.svg" bindtap="closeMarket"/>
+      </view>
+
+      <!-- 赛事切换 -->
+      <scroll-view scroll-x class="match-tabs">
+        <view wx:for="{{marketMatches}}" wx:key="id"
+              class="match-tab {{selectedMatchId === item.id ? 'active' : ''}}"
+              bindtap="onMatchChange" data-id="{{item.id}}">{{item.name}}</view>
+      </scroll-view>
+
+      <!-- 自由人列表 -->
+      <view wx:if="{{freePlayers.length === 0}}" class="empty">该赛事暂无自由人</view>
+      <view wx:for="{{freePlayers}}" wx:key="id" class="player-row">
+        <view class="player-info">
+          <view class="player-name-row">
+            <text class="player-name">{{item.nickname || '玩家' + item.id}}</text>
+            <text wx:if="{{item.display_rank}}" class="tag tag-green">{{item.display_rank}}</text>
+          </view>
+          <text class="player-meta">游戏ID: {{item.game_id || '未设置'}}</text>
+        </view>
+        <view class="btn-primary small-btn" bindtap="pullPlayer"
+              data-uid="{{item.id}}" data-name="{{item.nickname || '该玩家'}}">邀请</view>
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- ============ 没队伍：创建 + 浏览 ============ -->
+<view wx:else class="page">
+  <!-- 创建队伍 -->
+  <view class="card">
+    <text class="section-title">创建队伍</text>
+    <input class="team-input" placeholder="输入队名" value="{{teamName}}" bindinput="onNameInput"/>
+    <view class="btn-primary" bindtap="createTeam">创建队伍</view>
+  </view>
+
+  <!-- 全部队伍列表 -->
+  <view class="card">
+    <text class="section-title">所有队伍</text>
+    <view wx:if="{{teams.length === 0}}" class="empty">还没有队伍</view>
+    <view wx:for="{{teams}}" wx:key="id" class="team-list-row">
+      <view class="team-list-info">
+        <text class="team-list-name">{{item.name}}</text>
+        <text class="team-list-meta">队长: {{item.captain_name || '未知'}} | {{item.member_count}}人 | 评分{{item.rating || 1000}}</text>
+      </view>
+      <view class="btn-outline small-btn" bindtap="applyJoin" data-id="{{item.id}}" data-name="{{item.name}}">申请加入</view>
+    </view>
+  </view>
+</view>

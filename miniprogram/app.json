@@ -1,0 +1,29 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/index/index",
+    "pages/match/match",
+    "pages/team/team",
+    "pages/profile/profile",
+    "pages/admin/admin",
+    "pages/admin/mdetail/mdetail"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#133a35",
+    "navigationBarTitleText": "北林CS2校赛",
+    "navigationBarTextStyle": "white"
+  },
+  "tabBar": {
+    "color": "#7d928c",
+    "selectedColor": "#2fce7a",
+    "backgroundColor": "#0f3832",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "赛事" },
+      { "pagePath": "pages/team/team", "text": "队伍" },
+      { "pagePath": "pages/profile/profile", "text": "我的" }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

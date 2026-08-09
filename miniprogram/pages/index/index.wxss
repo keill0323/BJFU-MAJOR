@@ -1,0 +1,104 @@
+.page {
+  padding: 20rpx 0 40rpx;
+}
+
+/* 页面大标题（电竞徽章 + 大标题） */
+.page-head {
+  padding: 32rpx 40rpx 28rpx;
+}
+
+.page-eyebrow {
+  display: inline-block;
+  font-size: 20rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+  color: #2fce7a;
+  background: rgba(47, 206, 122, 0.12);
+  border: 1rpx solid rgba(47, 206, 122, 0.3);
+  border-radius: 999rpx;
+  padding: 6rpx 20rpx;
+  margin-bottom: 18rpx;
+}
+
+.page-title {
+  display: block;
+  font-size: 64rpx;
+  font-weight: 700;
+  color: var(--color-gray-900);
+  letter-spacing: 1rpx;
+}
+
+.page-sub {
+  display: block;
+  font-size: 28rpx;
+  color: var(--color-gray-500);
+  margin-top: 10rpx;
+}
+
+/* 搜索框（浅灰圆角，无边框） */
+.search-bar {
+  margin: 0 40rpx 28rpx;
+  background: var(--color-gray-100);
+  border-radius: var(--radius-full);
+  padding: 6rpx;
+}
+
+.search-bar input {
+  background: transparent;
+  border-radius: var(--radius-full);
+  padding: 18rpx 28rpx;
+  font-size: 28rpx;
+  color: var(--color-gray-800);
+}
+
+/* 赛事卡片（深色玻璃，点击亮绿描边） */
+.match-card {
+  background: var(--color-card);
+  border: 1rpx solid var(--color-border);
+  border-radius: 28rpx;
+  padding: 32rpx;
+  margin: 0 40rpx 20rpx;
+}
+.match-card:active {
+  background: var(--color-gray-100);
+  border-color: rgba(47, 206, 122, 0.4);
+}
+
+.match-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.match-name {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: var(--color-gray-900);
+}
+
+.match-status {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.status-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+}
+.status-dot.registering { background: #16a34a; }
+.status-dot.in_progress { background: #58a6ff; }
+.status-dot.finished { background: var(--color-gray-300); }
+.status-dot.draft { background: #f5a623; }
+
+.status-text {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+}
+
+.match-meta {
+  font-size: 26rpx;
+  color: var(--color-gray-500);
+  margin-top: 14rpx;
+}

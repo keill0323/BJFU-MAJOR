@@ -1,0 +1,146 @@
+/**
+ * 全局样式与设计令牌（Design Tokens）— 深绿电竞主题
+ * 靠齐北林 Major 海报配色：墨绿 #133a35 主色 + 亮绿点缀
+ * 参考 frontend-design-steipete（高级感、避免 AI 味）
+ */
+
+/* ===== 设计令牌 ===== */
+page {
+  /* 品牌色（亮绿点缀，电竞感） */
+  --color-primary: #2fce7a;
+  --color-primary-dark: #186958;
+  --color-primary-light: rgba(47, 206, 122, 0.14);
+
+  /* 深色（墨绿基底） */
+  --color-ink: #0d2b26;
+  --color-ink-2: #133a35;
+  --color-ink-3: #1a4a41;
+
+  /* 语义色 */
+  --color-success: #2fce7a;
+  --color-warning: #e6a23c;
+  --color-danger: #ff6b6f;
+  --color-info: #58a6ff;
+
+  /* 中性色阶（深色背景上的白→灰，反向刻度） */
+  --color-gray-50: #152922;
+  --color-gray-100: #1c322c;
+  --color-gray-200: #2d403a;
+  --color-gray-300: #43554f;
+  --color-gray-400: #5f756f;
+  --color-gray-500: #7d928c;
+  --color-gray-600: #9dafaa;
+  --color-gray-700: #c6d2ce;
+  --color-gray-800: #e6edeb;
+  --color-gray-900: #ffffff;
+
+  /* 背景 / 卡片 / 行 */
+  --color-bg: #0d2b26;
+  --color-card: #143b35;
+  --color-row: #12362f;
+  --color-border: rgba(255, 255, 255, 0.10);
+
+  /* 字号刻度（rpx） */
+  --font-xs: 22rpx;
+  --font-sm: 24rpx;
+  --font-base: 28rpx;
+  --font-lg: 32rpx;
+  --font-xl: 36rpx;
+  --font-2xl: 44rpx;
+
+  /* 间距刻度（8 的倍数） */
+  --space-1: 8rpx;
+  --space-2: 16rpx;
+  --space-3: 24rpx;
+  --space-4: 32rpx;
+  --space-6: 48rpx;
+
+  /* 圆角 */
+  --radius-sm: 8rpx;
+  --radius-md: 16rpx;
+  --radius-lg: 24rpx;
+  --radius-full: 999rpx;
+
+  /* 阴影（深色玻璃感） */
+  --shadow-card: 0 8rpx 32rpx rgba(0, 0, 0, 0.35);
+
+  /* 全局基础 */
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', sans-serif;
+  font-size: var(--font-base);
+  color: var(--color-gray-800);
+  background: linear-gradient(180deg, #0b2e28 0%, #0d2b26 45%, #102f2a 100%);
+}
+
+/* ===== 按钮 ===== */
+.btn-primary {
+  background: linear-gradient(135deg, #2fce7a, #1fa361);
+  color: #06281c;
+  border-radius: var(--radius-md);
+  padding: 20rpx;
+  text-align: center;
+  font-size: var(--font-lg);
+  font-weight: 600;
+  box-shadow: 0 8rpx 24rpx rgba(47, 206, 122, 0.22);
+}
+.btn-primary:active { opacity: 0.85; }
+
+.btn-danger {
+  background: rgba(255, 107, 111, 0.14);
+  color: #ff8b8e;
+  border: 2rpx solid rgba(255, 107, 111, 0.35);
+  border-radius: var(--radius-md);
+  padding: 16rpx 30rpx;
+  text-align: center;
+  font-size: var(--font-base);
+}
+.btn-danger:active { background: rgba(255, 107, 111, 0.25); }
+
+.btn-outline {
+  border: 2rpx solid var(--color-primary);
+  color: var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: 16rpx 30rpx;
+  text-align: center;
+  font-size: var(--font-base);
+  background: transparent;
+}
+.btn-outline:active { background: var(--color-primary-light); }
+
+/* ===== 卡片（深色玻璃） ===== */
+.card {
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  margin: 20rpx;
+  padding: 24rpx;
+  box-shadow: var(--shadow-card);
+  border: 1rpx solid var(--color-border);
+}
+
+/* ===== 标签 ===== */
+.tag {
+  display: inline-block;
+  padding: 4rpx 16rpx;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+}
+.tag-green  { background: rgba(47, 206, 122, 0.15); color: #4ade80; }
+.tag-blue   { background: rgba(88, 166, 255, 0.15); color: #7db8ff; }
+.tag-orange { background: rgba(230, 162, 60, 0.15); color: #f5c268; }
+.tag-red    { background: rgba(255, 107, 111, 0.15); color: #ff8b8e; }
+.tag-gray   { background: rgba(255, 255, 255, 0.08); color: #9dafaa; }
+
+/* ===== 输入框 ===== */
+.input {
+  background: var(--color-gray-100);
+  border-radius: var(--radius-md);
+  padding: 16rpx 20rpx;
+  font-size: var(--font-base);
+  color: var(--color-gray-800);
+}
+
+/* ===== 空状态 ===== */
+.empty {
+  text-align: center;
+  padding: 100rpx 0;
+  color: var(--color-gray-500);
+}

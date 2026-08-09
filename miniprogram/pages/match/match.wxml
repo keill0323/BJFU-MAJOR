@@ -1,0 +1,258 @@
+<view class="page">
+  <view wx:if="{{!match}}" class="empty">加载中...</view>
+
+  <block wx:else>
+    <!-- 赛事信息 -->
+    <view class="card">
+      <text class="match-title">{{match.name}}</text>
+      <text class="match-desc">{{match.description || '暂无简介'}}</text>
+      <view class="match-meta">
+        <text>状态: {{match.statusText}}</text>
+        <text>队伍: {{teams.length}}/{{match.max_teams || '不限'}}</text>
+        <text>每队: {{match.team_size || '不限'}} 人</text>
+      </view>
+    </view>
+
+    <!-- 报名区 -->
+    <view class="card register-card">
+      <view wx:if="{{registered}}" class="register-done">
+        <image class="register-icon" src="/images/icons/check-circle.svg"/>
+        <text>已报名{{myReg.team_id ? '（随队伍）' : '（个人）'}}</text>
+      </view>
+      <view wx:elif="{{match.status === 'registering' && isCaptain}}" class="btn-primary" bindtap="handleRegister">队伍报名</view>
+      <view wx:elif="{{match.status === 'registering' && myTeam && !isCaptain}}" class="register-disabled">你是队员，请队长发起队伍报名</view>
+      <view wx:elif="{{match.status === 'registering'}}" class="btn-primary" bindtap="handleRegister">个人报名</view>
+      <text wx:else class="register-disabled">{{match.status === 'draft' ? '赛事未开始' : match.status === 'in_progress' ? '赛事进行中' : match.status === 'finished' ? '赛事已结束' : match.status}}</text>
+    </view>
+
+    <!-- 阶段 tab -->
+    <view class="tabs">
+      <view class="tab {{tab === 'teams' ? 'active' : ''}}" data-tab="teams" bindtap="switchTab">队伍</view>
+      <view class="tab {{tab === 'challenger' ? 'active' : ''}}" data-tab="challenger" bindtap="switchTab">挑战者组</view>
+      <view class="tab {{tab === 'legend' ? 'active' : ''}}" data-tab="legend" bindtap="switchTab">传奇组</view>
+      <view class="tab {{tab === 'knockout' ? 'active' : ''}}" data-tab="knockout" bindtap="switchTab">淘汰赛</view>
+    </view>
+
+    <!-- ===== 队伍 tab：队伍状态 + 排名 ===== -->
+    <view wx:if="{{tab === 'teams'}}">
+      <view class="card">
+        <text class="section-title">队伍状态</text>
+        <view class="stage-tabs">
+          <view wx:for="{{teamsSwiper}}" wx:key="title" class="stage-tab {{teamsStage === index ? 'active' : ''}}" data-idx="{{index}}" bindtap="switchTeamsStage">{{item.title}}</view>
+        </view>
+        <swiper class="stage-swiper teams-swiper" current="{{teamsStage}}" bindchange="onTeamsSwiper">
+          <swiper-item wx:for="{{teamsSwiper}}" wx:key="title" wx:for-item="sec">
+            <scroll-view scroll-y class="teams-scroll">
+              <view wx:if="{{sec.teams.length === 0}}" class="empty">暂无队伍</view>
+              <view wx:for="{{sec.teams}}" wx:key="team_id" class="team-row">
+                <text class="team-name">{{item.team_name}}</text>
+                <view class="detail-tags">
+                  <block wx:if="{{sec.type === 'challenger' || sec.type === 'legend'}}">
+                    <text class="tag {{item.stage_status === '已淘汰' ? 'tag-gray' : item.stage_status === '已晋级' ? 'tag-green' : 'tag-blue'}}">{{item.stage_status}}</text>
+                  </block>
+                  <block wx:else>
+                    <text class="tag {{item.ko_rank === '冠军' ? 'tag-orange' : item.ko_rank === '亚军' ? 'tag-green' : item.ko_rank === '四强' ? 'tag-blue' : 'tag-gray'}}">{{item.ko_rank}}</text>
+                    <text wx:if="{{item.stage === 'eliminated'}}" class="tag tag-gray">已淘汰</text>
+                  </block>
+                  <text class="tag tag-gray">{{item.wins}}胜{{item.losses}}负</text>
+                </view>
+              </view>
+            </scroll-view>
+          </swiper-item>
+        </swiper>
+      </view>
+
+      <view class="card">
+        <text class="section-title">队伍排名</text>
+        <view wx:if="{{rankingTeams.length === 0}}" class="empty">暂无队伍</view>
+        <view wx:for="{{rankingTeams}}" wx:key="team_id" class="team-row">
+          <view class="rank-left">
+            <text class="rank-no {{index < 3 ? 'rank-top' : ''}}">{{index + 1}}</text>
+            <text class="team-name">{{item.team_name}}</text>
+          </view>
+          <view class="detail-tags">
+            <text wx:if="{{item.ko_rank}}" class="tag {{item.ko_rank === '冠军' ? 'tag-orange' : item.ko_rank === '亚军' ? 'tag-green' : item.ko_rank === '四强' ? 'tag-blue' : 'tag-gray'}}">{{item.ko_rank}}</text>
+            <text class="tag {{item.stage === 'eliminated' ? 'tag-gray' : 'tag-green'}}">{{item.stage === 'eliminated' ? '已淘汰' : '已晋级'}}</text>
+            <text class="tag tag-gray">{{item.wins}}胜{{item.losses}}负</text>
+            <text class="tag tag-gray">净胜{{item.diff}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- ===== 挑战者组 tab ===== -->
+    <view wx:if="{{tab === 'challenger'}}">
+      <view class="card">
+        <text class="section-title">挑战者组队伍</text>
+        <view wx:if="{{challengerTeams.length === 0}}" class="empty">暂无挑战者队伍</view>
+        <view class="chip-wrap">
+          <view wx:for="{{challengerTeams}}" wx:key="team_id" class="team-chip">
+            <text class="chip-name">{{item.team_name}}</text>
+            <text wx:if="{{item.group_name}}" class="tag tag-blue">{{item.group_name}}组</text>
+            <text class="tag tag-gray">{{item.wins}}胜{{item.losses}}负</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="card">
+        <text class="section-title">挑战者组对阵</text>
+        <view class="stage-tabs">
+          <view wx:for="{{challengerSwiper}}" wx:key="title" class="stage-tab {{challengerStage === index ? 'active' : ''}}" data-idx="{{index}}" bindtap="switchChallengerStage">{{item.title}}</view>
+        </view>
+        <swiper class="stage-swiper" current="{{challengerStage}}" bindchange="onChallengerSwiper">
+          <swiper-item wx:for="{{challengerSwiper}}" wx:key="title">
+            <!-- 小组赛：按组分区 -->
+            <block wx:if="{{item.groups}}">
+              <scroll-view scroll-y class="stage-scroll">
+                <view wx:if="{{item.count === 0}}" class="empty">暂无对阵</view>
+                <view wx:for="{{item.groups}}" wx:for-item="gr" wx:for-index="gname" wx:key="gname">
+                  <text class="group-title">{{gname}}组</text>
+                  <view wx:for="{{gr}}" wx:key="id" wx:for-item="r" class="round-row">
+                    <view class="versus">
+                      <view class="vteam {{r.winner_id === r.team1_id ? 'vteam-win' : ''}}">
+                        <text class="vteam-name">{{r.team1_name || '轮空'}}</text>
+                        <text class="vteam-score {{r.team1_id === r.winner_id ? 'score-win' : ''}}">{{r.team1_score == null ? '-' : r.team1_score}}</text>
+                      </view>
+                      <text class="vs-text">VS</text>
+                      <view class="vteam {{r.winner_id === r.team2_id ? 'vteam-win' : ''}}">
+                        <text class="vteam-name">{{r.team2_name || '轮空'}}</text>
+                        <text class="vteam-score {{r.team2_id === r.winner_id ? 'score-win' : ''}}">{{r.team2_score == null ? '-' : r.team2_score}}</text>
+                      </view>
+                    </view>
+                    <text class="tag tag-blue">{{r.group_name}}</text>
+                  </view>
+                </view>
+              </scroll-view>
+            </block>
+            <!-- 附加赛 -->
+            <block wx:else>
+              <scroll-view scroll-y class="stage-scroll">
+                <view wx:if="{{item.rounds.length === 0}}" class="empty">暂无对阵</view>
+                <view wx:for="{{item.rounds}}" wx:key="id" wx:for-item="r" class="round-row">
+                  <view class="versus">
+                    <view class="vteam {{r.winner_id === r.team1_id ? 'vteam-win' : ''}}">
+                      <text class="vteam-name">{{r.team1_name || '轮空'}}</text>
+                      <text class="vteam-score {{r.team1_id === r.winner_id ? 'score-win' : ''}}">{{r.team1_score == null ? '-' : r.team1_score}}</text>
+                    </view>
+                    <text class="vs-text">VS</text>
+                    <view class="vteam {{r.winner_id === r.team2_id ? 'vteam-win' : ''}}">
+                      <text class="vteam-name">{{r.team2_name || '轮空'}}</text>
+                      <text class="vteam-score {{r.team2_id === r.winner_id ? 'score-win' : ''}}">{{r.team2_score == null ? '-' : r.team2_score}}</text>
+                    </view>
+                  </view>
+                  <text class="tag tag-blue">{{r.group_name}}</text>
+                </view>
+              </scroll-view>
+            </block>
+          </swiper-item>
+        </swiper>
+      </view>
+    </view>
+
+    <!-- ===== 传奇组 tab ===== -->
+    <view wx:if="{{tab === 'legend'}}">
+      <view class="card">
+        <text class="section-title">传奇组队伍（上区/下区）</text>
+        <view wx:if="{{legendTeams.length === 0}}" class="empty">暂无传奇组队伍</view>
+        <view class="chip-wrap">
+          <view wx:for="{{legendTeams}}" wx:key="team_id" class="team-chip">
+            <text class="chip-name">{{item.team_name}}</text>
+            <text class="tag {{item.seed <= 4 ? 'tag-orange' : 'tag-green'}}">{{item.seed <= 4 ? '直升' : '晋级'}}</text>
+            <text wx:if="{{item.group_name}}" class="tag tag-blue">{{item.group_name}}</text>
+            <text class="tag tag-gray">{{item.wins}}胜{{item.losses}}负</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="card">
+        <text class="section-title">传奇组循环赛对阵</text>
+        <view class="stage-tabs">
+          <view wx:for="{{legendSwiper}}" wx:key="title" class="stage-tab {{legendStage === index ? 'active' : ''}}" data-idx="{{index}}" bindtap="switchLegendStage">{{item.title}}</view>
+        </view>
+        <swiper class="stage-swiper" current="{{legendStage}}" bindchange="onLegendSwiper">
+          <swiper-item wx:for="{{legendSwiper}}" wx:key="title">
+            <scroll-view scroll-y class="stage-scroll">
+              <view wx:if="{{item.rounds.length === 0}}" class="empty">暂无对阵</view>
+              <view wx:for="{{item.rounds}}" wx:key="id" wx:for-item="r" class="round-row">
+                <view class="versus">
+                  <view class="vteam {{r.winner_id === r.team1_id ? 'vteam-win' : ''}}">
+                    <text class="vteam-name">{{r.team1_name || '轮空'}}</text>
+                    <text class="vteam-score {{r.team1_id === r.winner_id ? 'score-win' : ''}}">{{r.team1_score == null ? '-' : r.team1_score}}</text>
+                  </view>
+                  <text class="vs-text">VS</text>
+                  <view class="vteam {{r.winner_id === r.team2_id ? 'vteam-win' : ''}}">
+                    <text class="vteam-name">{{r.team2_name || '轮空'}}</text>
+                    <text class="vteam-score {{r.team2_id === r.winner_id ? 'score-win' : ''}}">{{r.team2_score == null ? '-' : r.team2_score}}</text>
+                  </view>
+                </view>
+                <text class="tag tag-blue">{{r.group_name}}</text>
+              </view>
+            </scroll-view>
+          </swiper-item>
+        </swiper>
+      </view>
+    </view>
+
+    <!-- ===== 淘汰赛 tab（BO3 大比分，点行看小局） ===== -->
+    <view wx:if="{{tab === 'knockout'}}">
+      <view class="card">
+        <text class="section-title">淘汰赛队伍（6强 · 上下区）</text>
+        <view wx:if="{{playoffTeams.length === 0}}" class="empty">暂无淘汰赛队伍</view>
+        <view class="chip-wrap">
+          <view wx:for="{{playoffTeams}}" wx:key="team_id" class="team-chip">
+            <text class="chip-name">{{item.team_name}}</text>
+            <text wx:if="{{item.stage === 'playoff' && item.seed <= 2}}" class="tag tag-orange">轮空·直进半决赛</text>
+            <text wx:elif="{{item.stage === 'playoff' && item.seed <= 4}}" class="tag tag-green">1/4决赛·第2</text>
+            <text wx:elif="{{item.stage === 'playoff'}}" class="tag tag-blue">1/4决赛·第3</text>
+            <text wx:else class="tag tag-gray">已淘汰</text>
+            <text wx:if="{{item.group_name}}" class="tag tag-blue">{{item.group_name}}</text>
+            <text class="tag tag-gray">{{item.wins}}胜{{item.losses}}负</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="card">
+        <text class="section-title">淘汰赛对阵（BO3 三局两胜 · 点对阵查看小局）</text>
+        <view wx:if="{{knockoutGroups.length === 0}}" class="empty">暂无对阵</view>
+        <view wx:for="{{knockoutGroups}}" wx:key="title" wx:for-item="grp" class="ko-section">
+          <text class="group-title ko-title">{{grp.title}}</text>
+          <view wx:for="{{grp.rounds}}" wx:key="id" wx:for-item="item" class="round-row ko-row" bindtap="showBo3" data-id="{{item.id}}">
+            <view class="versus">
+              <view class="vteam {{item.winner_id === item.team1_id ? 'vteam-win' : ''}}">
+                <text class="vteam-name">{{item.team1_name || '轮空'}}</text>
+              </view>
+              <view class="big-score">
+                <text class="big-score-text {{item.status === 'finished' ? 'score-win' : 'score-tbd'}}">{{item.team1_score}} : {{item.team2_score}}</text>
+                <text class="big-score-label">{{item.ko_label}}</text>
+              </view>
+              <view class="vteam {{item.winner_id === item.team2_id ? 'vteam-win' : ''}}">
+                <text class="vteam-name">{{item.team2_name || '轮空'}}</text>
+              </view>
+            </view>
+            <text class="bo3-more">小局 ›</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- BO3 小局详情弹层 -->
+    <view wx:if="{{showBo3 && bo3Detail}}" class="mask" bindtap="closeBo3">
+      <view class="bo3-panel" catchtap="noop">
+        <view class="detail-header">
+          <text class="section-title">{{bo3Detail.team1_name}} vs {{bo3Detail.team2_name}}</text>
+          <image class="detail-close" src="/images/icons/x.svg" bindtap="closeBo3"/>
+        </view>
+        <view class="bo3-big">
+          <text class="bo3-big-score">{{bo3Detail.score1}} : {{bo3Detail.score2}}</text>
+          <text class="bo3-big-label">{{bo3Detail.ko_label}}</text>
+        </view>
+        <view wx:if="{{bo3Detail.games.length === 0}}" class="empty">暂无小局比分</view>
+        <view wx:for="{{bo3Detail.games}}" wx:key="index" class="bo3-game">
+          <text class="bo3-game-title">第{{index + 1}}局</text>
+          <text class="bo3-game-score">{{item.t1}} : {{item.t2}}</text>
+          <text class="tag {{item.t1 > item.t2 ? 'tag-green' : item.t2 > item.t1 ? 'tag-blue' : 'tag-gray'}}">{{item.t1 > item.t2 ? bo3Detail.team1_name : item.t2 > item.t1 ? bo3Detail.team2_name : '平局'}}</text>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

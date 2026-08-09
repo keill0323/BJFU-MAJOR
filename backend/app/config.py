@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "123456"
 
+    # 上传文件保存目录（学信网截图等），默认 backend/uploads
+    UPLOAD_DIR: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")
+
+    # 上线配置
+    CORS_ORIGINS: str = "*"       # 允许的来源，逗号分隔；生产填小程序/后台域名
+    WX_APPID: str = ""            # 微信小程序 AppID（上线必填）
+    WX_SECRET: str = ""           # 微信小程序 AppSecret（上线必填）
+    WX_MOCK_LOGIN: bool = True    # True=开发用 mock 登录；上线设 False 走真实微信登录
+
     class Config:
         env_file = ".env"
 

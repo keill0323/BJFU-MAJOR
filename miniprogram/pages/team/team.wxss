@@ -1,0 +1,217 @@
+.page {
+  padding: 20rpx;
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.team-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.team-name {
+  font-size: 34rpx;
+  font-weight: bold;
+}
+
+.team-desc {
+  font-size: 26rpx;
+  color: var(--color-gray-500);
+  display: block;
+}
+
+.team-input {
+  background: var(--color-gray-100);
+  border-radius: 10rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  font-size: 28rpx;
+  color: var(--color-gray-800);
+}
+
+/* 成员行 */
+.member-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid var(--color-border);
+}
+
+.member-info {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.member-name {
+  font-size: 28rpx;
+}
+
+/* 申请行 */
+.app-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid var(--color-border);
+}
+
+.app-info {
+  flex: 1;
+}
+
+.app-name {
+  font-size: 28rpx;
+  display: block;
+}
+
+.app-msg {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+  display: block;
+  margin-top: 6rpx;
+}
+
+.app-actions {
+  display: flex;
+  gap: 12rpx;
+}
+
+/* 操作按钮：两个一行，等宽排布 */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+  margin: 20rpx;
+}
+
+.actions .btn-outline,
+.actions .btn-danger {
+  flex: 1 1 calc(50% - 10rpx);
+  box-sizing: border-box;
+  padding: 22rpx 0;
+  font-size: 30rpx;
+}
+
+.small-btn {
+  font-size: 24rpx;
+  padding: 10rpx 24rpx;
+}
+
+/* 队伍列表 */
+.team-list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid var(--color-border);
+}
+
+.team-list-info {
+  flex: 1;
+}
+
+.team-list-name {
+  font-size: 28rpx;
+  font-weight: bold;
+  display: block;
+}
+
+.team-list-meta {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+  display: block;
+  margin-top: 6rpx;
+}
+
+/* 人才市场弹层 */
+.mask {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+}
+
+.market-panel {
+  background: var(--color-card);
+  border-radius: 20rpx 20rpx 0 0;
+  width: 100%;
+  max-height: 70vh;
+  padding: 24rpx;
+  padding-bottom: 60rpx;
+}
+
+.market-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.market-close {
+  width: 40rpx;
+  height: 40rpx;
+  padding: 10rpx;
+}
+
+.match-tabs {
+  white-space: nowrap;
+  margin: 20rpx 0;
+}
+
+.match-tab {
+  display: inline-block;
+  padding: 10rpx 24rpx;
+  border-radius: var(--radius-full);
+  font-size: 24rpx;
+  background: var(--color-gray-100);
+  color: var(--color-gray-600);
+  margin-right: 12rpx;
+}
+
+.match-tab.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.player-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 4rpx;
+  border-bottom: 1rpx solid var(--color-border);
+}
+
+.player-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+.player-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  display: block;
+}
+
+.player-meta {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+  display: block;
+  margin-top: 8rpx;
+}

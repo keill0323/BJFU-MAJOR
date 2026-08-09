@@ -1,0 +1,112 @@
+<!-- 管理后台 -->
+<view class="page">
+  <!-- 统计概览 -->
+  <view class="stat-row">
+    <view class="stat-card">
+      <text class="stat-num">{{users.length}}</text>
+      <text class="stat-label">用户</text>
+    </view>
+    <view class="stat-card">
+      <text class="stat-num">{{teams.length}}</text>
+      <text class="stat-label">队伍</text>
+    </view>
+    <view class="stat-card">
+      <text class="stat-num">{{matches.length}}</text>
+      <text class="stat-label">赛事</text>
+    </view>
+  </view>
+
+  <!-- 顶部 tab 切换 -->
+  <view class="admin-tabs">
+    <view class="admin-tab {{tab === 'users' ? 'active' : ''}}" data-tab="users" bindtap="switchTab">用户</view>
+    <view class="admin-tab {{tab === 'verify' ? 'active' : ''}}" data-tab="verify" bindtap="switchTab">认证</view>
+    <view class="admin-tab {{tab === 'teams' ? 'active' : ''}}" data-tab="teams" bindtap="switchTab">队伍</view>
+    <view class="admin-tab {{tab === 'matches' ? 'active' : ''}}" data-tab="matches" bindtap="switchTab">赛事</view>
+  </view>
+
+  <!-- ===== 用户管理 ===== -->
+  <view wx:if="{{tab === 'users'}}">
+    <view class="card search-row">
+      <input placeholder="按 id/昵称/学号 搜索" value="{{userKeyword}}" bindinput="onUserKeyword" bindconfirm="searchUsers"/>
+      <view class="btn-primary small-btn" bindtap="searchUsers">搜索</view>
+    </view>
+
+    <view wx:for="{{users}}" wx:key="id" class="card user-card">
+      <view class="user-top">
+        <text class="user-id">#{{item.id}}</text>
+        <text class="tag {{item.role === 'admin' ? 'tag-red' : item.role === 'reviewer' ? 'tag-orange' : 'tag-gray'}}">{{item.role === 'admin' ? '管理员' : item.role === 'reviewer' ? '审核员' : '用户'}}</text>
+      </view>
+      <text class="user-name">{{item.nickname || '未设昵称'}} {{item.game_id ? '(' + item.game_id + ')' : ''}}</text>
+      <text class="user-meta">学号: {{item.student_id || '未认证'}} | {{item.is_verified ? '已认证' : '未认证'}} | 段位: {{item.display_rank || '-'}} | 评分: {{item.individual_rating || 0}}</text>
+      <view class="user-actions">
+        <view class="btn-outline small-btn" bindtap="setStudentId" data-id="{{item.id}}">设学号</view>
+        <view class="btn-outline small-btn" bindtap="setRank" data-id="{{item.id}}">设段位</view>
+        <view class="btn-outline small-btn" bindtap="setRole" data-id="{{item.id}}">修改权限</view>
+      </view>
+    </view>
+
+    <view wx:if="{{users.length === 0}}" class="empty">暂无用户</view>
+  </view>
+
+  <!-- ===== 认证审核 ===== -->
+  <view wx:if="{{tab === 'verify'}}">
+    <view wx:if="{{verifyUsers.length === 0}}" class="empty">暂无待认证用户</view>
+    <view wx:for="{{verifyUsers}}" wx:key="id" class="card verify-card">
+      <view class="verify-top">
+        <text class="user-id">#{{item.id}}</text>
+        <text class="tag tag-orange">待审核</text>
+      </view>
+      <text class="user-name">{{item.nickname || '未设昵称'}} {{item.game_id ? '(' + item.game_id + ')' : ''}}</text>
+      <text class="user-meta">学号: {{item.student_id || '未填写'}} | 提交: {{item.created_at || '-'}}</text>
+      <image wx:if="{{item.verify_image_full}}" class="verify-shot" src="{{item.verify_image_full}}" mode="aspectFit" bindtap="previewVerify" data-url="{{item.verify_image_full}}"/>
+      <view class="user-actions">
+        <view class="btn-primary small-btn" bindtap="verifyPass" data-id="{{item.id}}">通过</view>
+        <view class="btn-danger small-btn" bindtap="verifyReject" data-id="{{item.id}}">驳回</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===== 队伍管理 ===== -->
+  <view wx:if="{{tab === 'teams'}}">
+    <view wx:for="{{teams}}" wx:key="id" class="card team-card">
+      <view class="team-top">
+        <text class="team-name">{{item.name}}</text>
+        <text class="tag {{item.status === 'pending' ? 'tag-orange' : item.status === 'approved' ? 'tag-green' : 'tag-red'}}">{{item.status === 'pending' ? '待审核' : item.status === 'approved' ? '已通过' : '已驳回'}}</text>
+      </view>
+      <text class="team-meta">队长: {{item.captain_name || '#' + item.captain_id}} | 成员: {{item.member_count}} | 评分: {{item.rating || 1000}}</text>
+      <view wx:if="{{item.status === 'pending'}}" class="user-actions">
+        <view class="btn-primary small-btn" bindtap="approveTeam" data-id="{{item.id}}">通过</view>
+        <view class="btn-danger small-btn" bindtap="rejectTeam" data-id="{{item.id}}">驳回</view>
+      </view>
+    </view>
+    <view wx:if="{{teams.length === 0}}" class="empty">暂无队伍</view>
+  </view>
+
+  <!-- ===== 赛事管理 ===== -->
+  <view wx:if="{{tab === 'matches'}}">
+    <!-- 创建赛事 -->
+    <view class="card">
+      <text class="section-title">创建赛事</text>
+      <input class="input" placeholder="赛事名称" value="{{newMatch.name}}" bindinput="onMatchName"/>
+      <view class="input-row">
+        <input class="input half" type="number" placeholder="队伍上限" value="{{newMatch.max_teams}}" bindinput="onMatchMax"/>
+        <input class="input half" type="number" placeholder="每队人数" value="{{newMatch.team_size}}" bindinput="onMatchSize"/>
+      </view>
+      <input class="input" placeholder="赛事简介" value="{{newMatch.description}}" bindinput="onMatchDesc"/>
+      <view class="btn-primary" bindtap="createMatch">创建赛事</view>
+    </view>
+
+    <!-- 赛事列表（点击整卡进入赛事详情） -->
+    <view wx:for="{{matches}}" wx:key="id" class="card match-card" bindtap="goMDetail" data-id="{{item.id}}">
+      <view class="team-top">
+        <text class="team-name">{{item.name}}</text>
+        <text class="tag {{item.status === 'registering' ? 'tag-green' : item.status === 'in_progress' ? 'tag-blue' : item.status === 'finished' ? 'tag-gray' : 'tag-orange'}}">{{item.statusText}}</text>
+      </view>
+      <text class="team-meta">队伍上限: {{item.max_teams}} | 每队: {{item.team_size}}人</text>
+      <view class="user-actions">
+        <view class="btn-outline small-btn" catchtap="changeMatchStatus" data-id="{{item.id}}" data-name="{{item.name}}">修改状态</view>
+      </view>
+    </view>
+    <view wx:if="{{matches.length === 0}}" class="empty">暂无赛事</view>
+  </view>
+</view>

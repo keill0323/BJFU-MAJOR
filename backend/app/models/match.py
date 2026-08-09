@@ -7,7 +7,7 @@ Since: 2026-7-22
 from datetime import datetime
 import enum
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SAEnum, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SAEnum, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -37,16 +37,16 @@ class Match(Base):
     """
     __tablename__ = "matches"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)  # 赛事编号ID
-    name = Column(String(128), unique=True, nullable=False)
-    description = Column(Text, nullable=True)
-    max_teams = Column(Integer, default=16)
-    team_size = Column(Integer, default=5)
-    status = Column(SAEnum(MatchStatus), default=MatchStatus.DRAFT)
-    register_start = Column(DateTime, nullable=True)
-    register_end = Column(DateTime, nullable=True)
-    match_start = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.now, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="赛事ID")
+    name = Column(String(128), unique=True, nullable=False, comment="赛事名称（唯一）")
+    description = Column(Text, nullable=True, comment="赛事描述")
+    max_teams = Column(Integer, default=16, comment="最大参赛队伍数")
+    team_size = Column(Integer, default=5, comment="每队人数上限")
+    status = Column(SAEnum(MatchStatus), default=MatchStatus.DRAFT, comment="赛事状态 draft/registering/in_progress/finished")
+    register_start = Column(DateTime, nullable=True, comment="报名开始时间")
+    register_end = Column(DateTime, nullable=True, comment="报名截止时间")
+    match_start = Column(DateTime, nullable=True, comment="比赛开始时间")
+    created_at = Column(DateTime, default=datetime.now, index=True, comment="创建时间")
 
 
 class RoundStatus(str, enum.Enum):
@@ -75,18 +75,19 @@ class MatchRound(Base):
     """
     __tablename__ = "match_rounds"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False)
-    round_number = Column(Integer, nullable=False)
-    team1_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
-    team2_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
-    team1_score = Column(Integer, default=0)
-    team2_score = Column(Integer, default=0)
-    winner_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
-    status = Column(SAEnum(RoundStatus), default=RoundStatus.PENDING)
-    scheduled_time = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
-    group_name = Column(String(20), nullable=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="对阵记录ID")
+    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False, comment="所属赛事ID")
+    round_number = Column(Integer, nullable=False, comment="轮次")
+    team1_id = Column(Integer, ForeignKey("teams.id"), nullable=True, comment="队伍1ID")
+    team2_id = Column(Integer, ForeignKey("teams.id"), nullable=True, comment="队伍2ID")
+    team1_score = Column(Integer, default=0, comment="队伍1得分")
+    team2_score = Column(Integer, default=0, comment="队伍2得分")
+    winner_id = Column(Integer, ForeignKey("teams.id"), nullable=True, comment="胜者队伍ID")
+    status = Column(SAEnum(RoundStatus), default=RoundStatus.PENDING, comment="对阵状态 pending/in_progress/finished")
+    scheduled_time = Column(DateTime, nullable=True, comment="预定比赛时间")
+    created_at = Column(DateTime, default=datetime.now, comment="创建时间")
+    group_name = Column(String(20), nullable=True, comment="组别(A组/上半区等)")
+    bo3_scores = Column(Text, nullable=True, comment="淘汰赛BO3三局小分(JSON数组字符串)")
 
 
 class StageStatus(str, enum.Enum):
@@ -112,13 +113,13 @@ class TeamProgress(Base):
 
     __tablename__ = "team_progress"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False)
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
-    stage = Column(SAEnum(StageStatus), default=StageStatus.CHALLENGER)
-    group_name = Column(String(20), nullable=True)
-    seed = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.now)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="进度记录ID")
+    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False, comment="所属赛事ID")
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, comment="队伍ID")
+    stage = Column(SAEnum(StageStatus), default=StageStatus.CHALLENGER, comment="当前阶段 challenger/legend/playoff/eliminated")
+    group_name = Column(String(20), nullable=True, comment="所在小组(A组/上半区等)")
+    seed = Column(Integer, default=0, comment="种子排名")
+    created_at = Column(DateTime, default=datetime.now, comment="创建时间")
 
 
 class RegistrationStatus(str, enum.Enum):
@@ -140,10 +141,14 @@ class Registration(Base):
         created_at: 报名时间
     """
     __tablename__ = "registrations"
+    __table_args__ = (
+        # 一人对同一赛事只能有一条报名记录，防止个人/队伍报名重复
+        UniqueConstraint("match_id", "user_id", name="uq_registration_match_user"),
+    )
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False)
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    status = Column(SAEnum(RegistrationStatus), default=RegistrationStatus.PENDING)
-    created_at = Column(DateTime, default=datetime.now)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="报名记录ID")
+    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False, comment="赛事ID")
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True, comment="队伍ID(队伍报名时填写)")
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="用户ID(个人报名时填写)")
+    status = Column(SAEnum(RegistrationStatus), default=RegistrationStatus.PENDING, comment="审核状态 pending/approved/rejected")
+    created_at = Column(DateTime, default=datetime.now, comment="报名时间")

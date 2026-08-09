@@ -1,0 +1,24 @@
+<view class="page">
+  <view class="page-head">
+    <view class="page-eyebrow">BJFU MAJOR</view>
+    <text class="page-title">赛事</text>
+    <text class="page-sub">北林 CS2 校内联赛</text>
+  </view>
+
+  <view class="search-bar">
+    <input placeholder="搜索赛事..." value="{{keyword}}" bindinput="onSearchInput" bindconfirm="onSearch"/>
+  </view>
+
+  <view wx:for="{{matches}}" wx:key="id" class="match-card" bindtap="goMatch" data-id="{{item.id}}">
+    <view class="match-top">
+      <text class="match-name">{{item.name}}</text>
+      <view class="match-status">
+        <view class="status-dot {{item.status}}"></view>
+        <text class="status-text">{{item.status==='registering' ? '报名中' : item.status==='in_progress' ? '进行中' : item.status==='finished' ? '已结束' : '草稿'}}</text>
+      </view>
+    </view>
+    <view class="match-meta">队伍 {{item.registered_count || 0}}/{{item.max_teams || '不限'}} · 每队 {{item.team_size || '不限'}} 人</view>
+  </view>
+
+  <view wx:if="{{matches.length === 0}}" class="empty">暂无赛事</view>
+</view>

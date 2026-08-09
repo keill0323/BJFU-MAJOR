@@ -51,7 +51,9 @@ class RoundInfo(BaseModel):
     team2_score: int
     winner_id: Optional[int] = None
     status: str
+    group_name: Optional[str] = None
     scheduled_time: Optional[datetime] = None
+    bo3_scores: Optional[List[dict]] = None   # 淘汰赛 BO3 三局小分
 
     class Config:
         from_attributes = True
@@ -62,6 +64,12 @@ class RoundUpdateRequest(BaseModel):
     team1_score: Optional[int] = None
     team2_score: Optional[int] = None
     winner_id: Optional[int] = None
+    bo3_scores: Optional[List[dict]] = None   # 淘汰赛 BO3 三局小分（每局 {t1, t2}）
+
+
+class MatchStatusUpdateRequest(BaseModel):
+    """更新赛事状态请求"""
+    status: str  # draft/registering/in_progress/finished
 
 
 class LeaderboardItem(BaseModel):
@@ -72,4 +80,27 @@ class LeaderboardItem(BaseModel):
     wins: int
     losses: int
     total_score: int
+
+
+class RegistrationDetail(BaseModel):
+    """赛事报名队伍详情（含进度：阶段/分组/种子）"""
+    team_id: int
+    team_name: str
+    rating: int = 0
+    registration_status: str
+    stage: Optional[str] = None
+    group_name: Optional[str] = None
+    seed: int = 0
+    captain_name: Optional[str] = None
+    member_count: int = 0
+    wins: int = 0      # 当前阶段胜场
+    losses: int = 0    # 当前阶段负场
+    diff: int = 0      # 当前阶段净胜分
+
+
+class MatchAdminDetail(BaseModel):
+    """管理后台赛事详情：赛事信息 + 报名队伍进度 + 对阵列表"""
+    match: MatchInfo
+    teams: List[RegistrationDetail] = []
+    rounds: List[RoundInfo] = []
     

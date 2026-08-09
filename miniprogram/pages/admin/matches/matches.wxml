@@ -1,0 +1,94 @@
+<!-- 对阵记录页：录比分 + 点队伍看历史对阵 -->
+<view class="page">
+  <view wx:if="{{!match}}" class="empty">加载中...</view>
+
+  <block wx:else>
+    <!-- 赛事信息 -->
+    <view class="card">
+      <text class="section-title">{{match.name}}</text>
+      <text class="team-meta">状态: {{match.statusText}} | 报名: {{teams.length}}/{{match.max_teams}} | 对阵: {{rounds.length}}场</text>
+    </view>
+
+    <!-- 队伍列表（点击看该队历史） -->
+    <view class="card">
+      <text class="section-title">队伍列表（点击查看该队历史对阵）</text>
+      <view class="detail-sub-title title-with-icon">
+        <image class="title-icon" src="/images/icons/trophy.svg"/>
+        <text>传奇组</text>
+      </view>
+      <view wx:if="{{legendTeams.length === 0}}" class="empty">暂无</view>
+      <view class="chip-wrap">
+        <view wx:for="{{legendTeams}}" wx:key="team_id" class="team-chip" bindtap="showTeam" data-id="{{item.team_id}}">
+          <text class="chip-name">{{item.team_name}}</text>
+          <text class="tag {{item.seed <= 4 ? 'tag-orange' : 'tag-green'}}">{{item.seed <= 4 ? '直升队伍' : '晋级传奇组'}}</text>
+          <text wx:if="{{item.group_name}}" class="tag tag-blue">{{item.group_name}}</text>
+        </view>
+      </view>
+      <view class="detail-sub-title title-with-icon">
+        <image class="title-icon" src="/images/icons/swords.svg"/>
+        <text>挑战者组</text>
+      </view>
+      <view wx:if="{{challengerTeams.length === 0}}" class="empty">暂无</view>
+      <view class="chip-wrap">
+        <view wx:for="{{challengerTeams}}" wx:key="team_id" class="team-chip" bindtap="showTeam" data-id="{{item.team_id}}">
+          <text class="chip-name">{{item.team_name}}</text>
+          <text wx:if="{{item.group_name && item.stage !== 'playoff' && item.stage !== 'eliminated'}}" class="tag tag-blue">{{item.group_name}}组</text>
+          <text wx:if="{{item.stage === 'playoff'}}" class="tag tag-green">已晋级</text>
+          <text wx:if="{{item.stage === 'eliminated'}}" class="tag tag-gray">已淘汰</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 对阵记录（按组展示） -->
+    <view class="card">
+      <text class="section-title">对阵记录</text>
+      <view wx:for="{{groups}}" wx:for-item="list" wx:for-index="gname" wx:key="gname" class="group-block">
+        <text class="detail-sub-title">{{gname}}</text>
+        <view wx:for="{{list}}" wx:for-item="r" wx:key="id" class="round-row">
+          <view class="versus">
+            <view class="vteam {{r.winner_id === r.team1_id ? 'vteam-win' : ''}}">
+              <text class="vteam-name" bindtap="showTeam" data-id="{{r.team1_id}}">{{r.team1_name || '轮空'}}</text>
+              <text class="vteam-score {{r.winner_id === r.team1_id ? 'score-win' : ''}}">{{r.team1_score == null ? '-' : r.team1_score}}</text>
+            </view>
+            <text class="vs-text">VS</text>
+            <view class="vteam {{r.winner_id === r.team2_id ? 'vteam-win' : ''}}">
+              <text class="vteam-name" bindtap="showTeam" data-id="{{r.team2_id}}">{{r.team2_name || '轮空'}}</text>
+              <text class="vteam-score {{r.winner_id === r.team2_id ? 'score-win' : ''}}">{{r.team2_score == null ? '-' : r.team2_score}}</text>
+            </view>
+          </view>
+          <view class="btn-outline small-btn" bindtap="openScore" data-id="{{r.id}}">录比分</view>
+        </view>
+      </view>
+      <view wx:if="{{rounds.length === 0}}" class="empty">暂无对阵</view>
+    </view>
+  </block>
+
+  <!-- 队伍历史对阵弹层 -->
+  <view wx:if="{{showHistory && historyTeam}}" class="mask" bindtap="closeHistory">
+    <view class="history-panel" catchtap="">
+      <view class="detail-header">
+        <text class="section-title">{{historyTeam.team_name}} · 历史对阵</text>
+        <image class="detail-close" src="/images/icons/x.svg" bindtap="closeHistory"/>
+      </view>
+      <text class="team-meta">rating {{historyTeam.rating}} | 队长 {{historyTeam.captain_name || '未知'}} | {{historyTeam.stage === 'legend' ? '传奇组' : historyTeam.stage === 'playoff' ? '淘汰赛' : historyTeam.stage === 'eliminated' ? '已淘汰' : '挑战者'}}</text>
+      <view wx:if="{{historyRounds.length === 0}}" class="empty">该队暂无对阵记录</view>
+      <view wx:for="{{historyRounds}}" wx:key="id" class="history-row">
+        <text class="team-name">{{item.team1_name || '轮空'}} vs {{item.team2_name || '轮空'}}</text>
+        <text class="team-meta">{{item.group_name ? item.group_name + ' · ' : ''}}第{{item.round_number}}轮 · {{item.team1_score}} : {{item.team2_score}} · {{item.status === 'finished' ? (item.winner_id === historyTeam.team_id ? '胜' : '负') : '未开始'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 比分输入面板（页面内，录完停留当前页） -->
+  <view wx:if="{{showScoreInput}}" class="mask" bindtap="closeScoreInput">
+    <view class="score-panel" catchtap="">
+      <text class="section-title">录入比分</text>
+      <text class="team-meta">格式: 13-9（主队-客队）</text>
+      <input class="input score-input" type="digit" placeholder="如: 13-9" value="{{scoreInput}}" bindinput="onScoreInput"/>
+      <view class="score-btns">
+        <view class="btn-outline" bindtap="closeScoreInput">取消</view>
+        <view class="btn-primary" bindtap="submitScore">确认</view>
+      </view>
+    </view>
+  </view>
+</view>

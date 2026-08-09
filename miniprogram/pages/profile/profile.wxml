@@ -1,0 +1,124 @@
+<!-- 个人中心 -->
+<view class="page">
+  <view wx:if="{{!token}}" class="card">
+    <text class="empty-text">请先登录</text>
+    <view class="btn-primary" bindtap="logout" style="margin-top:30rpx">去登录</view>
+  </view>
+
+  <view wx:else>
+    <!-- 渐变用户卡 -->
+    <view wx:if="{{user}}" class="profile-hero">
+      <view class="avatar"><image class="avatar-img" src="/images/icons/gamepad.svg"/></view>
+      <view class="hero-info">
+        <text class="hero-name">{{user.nickname || '未设置昵称'}}</text>
+        <text class="hero-id">ID {{user.id}} · {{user.display_rank || '暂无段位'}}</text>
+        <view class="hero-badges">
+          <text class="hero-badge {{user.is_verified ? 'hero-badge-ok' : 'hero-badge-no'}}">{{user.is_verified ? '已认证' : '未认证'}}</text>
+          <text class="hero-badge hero-badge-role">{{user.role === 'admin' ? '管理员' : user.role === 'reviewer' ? '审核员' : '普通用户'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 个人信息卡片 -->
+    <view class="card">
+      <text class="section-title">个人信息</text>
+
+      <!-- 资料详情（非编辑态）：两栏网格，紧凑不臃肿 -->
+      <view wx:if="{{!editMode && user}}" class="info-grid">
+        <view class="info-cell">
+          <text class="info-label">用户ID</text>
+          <text class="info-value">{{user.id}}</text>
+        </view>
+        <view class="info-cell">
+          <text class="info-label">昵称</text>
+          <text class="info-value">{{user.nickname || '未设置'}}</text>
+        </view>
+        <view class="info-cell">
+          <text class="info-label">游戏ID</text>
+          <text class="info-value">{{user.game_id || '未设置'}}</text>
+        </view>
+        <view class="info-cell">
+          <text class="info-label">学号</text>
+          <text class="info-value">{{user.student_id || '未认证'}}</text>
+        </view>
+        <view class="info-cell">
+          <text class="info-label">认证状态</text>
+          <text class="info-value {{user.is_verified ? 'text-green' : 'text-red'}}">{{user.is_verified ? '已认证' : '未认证'}}</text>
+        </view>
+        <view class="info-cell">
+          <text class="info-label">段位</text>
+          <text class="info-value">{{user.display_rank || '未设置'}}</text>
+        </view>
+        <view class="info-cell">
+          <text class="info-label">个人评分</text>
+          <text class="info-value">{{user.individual_rating || 0}}</text>
+        </view>
+        <view class="info-cell">
+          <text class="info-label">身份</text>
+          <text class="info-value">{{user.role === 'admin' ? '管理员' : user.role === 'reviewer' ? '审核员' : '普通用户'}}</text>
+        </view>
+      </view>
+      <!-- 在校认证：未认证用户上传学信网截图 -->
+      <view wx:if="{{!editMode && user && !user.is_verified}}" class="verify-box">
+        <text class="verify-tip">{{user.verify_image ? '已提交截图，等待管理员审核' : '上传学信网/教务系统截图完成在校认证'}}</text>
+        <view wx:if="{{user.verify_image}}" class="verify-img-row">
+          <image class="verify-thumb" src="{{user.verify_image_full}}" bindtap="previewVerifyImage"/>
+          <view class="btn-outline small-btn" bindtap="chooseVerifyImage">重新上传</view>
+        </view>
+        <view wx:else class="btn-primary" bindtap="chooseVerifyImage">{{uploading ? '上传中...' : '上传学信网截图'}}</view>
+      </view>
+
+      <view wx:if="{{!editMode && user}}" class="btn-outline edit-btn" bindtap="enableEdit">修改资料</view>
+
+      <!-- 编辑态 -->
+      <view wx:if="{{editMode}}">
+        <input class="input" placeholder="昵称" value="{{nickname}}" bindinput="onNickInput"/>
+        <input class="input" placeholder="游戏ID" value="{{gameId}}" bindinput="onGameIdInput"/>
+        <view class="btn-primary" bindtap="saveProfile">保存</view>
+      </view>
+    </view>
+
+    <!-- 管理入口（仅管理员/审核员可见） -->
+    <view wx:if="{{isManager}}" class="card menu-entry" bindtap="goAdmin">
+      <image class="menu-icon" src="/images/icons/settings.svg"/>
+      <text class="menu-text">管理后台</text>
+      <image class="menu-arrow" src="/images/icons/chevron-right.svg"/>
+    </view>
+
+    <!-- 入队邀请入口 -->
+    <view class="card menu-entry" bindtap="openInvites">
+      <image class="menu-icon" src="/images/icons/mail.svg"/>
+      <text class="menu-text">入队邀请</text>
+      <text wx:if="{{invitations.length > 0}}" class="invite-badge">{{invitations.length}}</text>
+      <image class="menu-arrow" src="/images/icons/chevron-right.svg"/>
+    </view>
+
+    <view class="card">
+      <text class="section-title">关于</text>
+      <text class="about-text">北林CS2校赛报名系统 v1.1</text>
+    </view>
+
+    <view class="btn-danger logout-btn" bindtap="logout">退出登录</view>
+  </view>
+</view>
+
+<!-- 入队邀请弹层 -->
+<view wx:if="{{showInvites}}" class="mask" bindtap="closeInvites">
+  <view class="invite-panel" catchtap="">
+    <view class="invite-header">
+      <text class="section-title">入队邀请</text>
+      <image class="invite-close" src="/images/icons/x.svg" bindtap="closeInvites"/>
+    </view>
+    <view wx:if="{{invitations.length === 0}}" class="empty">暂无邀请</view>
+    <view wx:for="{{invitations}}" wx:key="id" class="invite-row">
+      <view class="invite-info">
+        <text class="invite-team">{{item.team_name || '某队伍'}}</text>
+        <text class="invite-msg">队长: {{item.captain_name || '未知'}}{{item.message ? ' | ' + item.message : ''}}</text>
+      </view>
+      <view class="invite-actions">
+        <view class="btn-primary small-btn" bindtap="acceptInv" data-id="{{item.id}}">同意</view>
+        <view class="btn-danger small-btn" bindtap="rejectInv" data-id="{{item.id}}">拒绝</view>
+      </view>
+    </view>
+  </view>
+</view>

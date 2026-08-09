@@ -1,0 +1,243 @@
+.page {
+  padding: 20rpx;
+  padding-bottom: 60rpx;
+}
+
+.section-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: bold;
+  color: var(--color-gray-800);
+  margin-bottom: 12rpx;
+}
+
+.team-meta {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+}
+
+.team-name {
+  font-size: 26rpx;
+  color: var(--color-gray-800);
+}
+
+.detail-sub-title {
+  display: block;
+  font-size: 26rpx;
+  font-weight: bold;
+  color: var(--color-gray-600);
+  margin: 16rpx 0 10rpx;
+}
+
+/* 队伍标签 */
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-bottom: 10rpx;
+}
+
+.team-chip {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  background: var(--color-gray-100);
+  border-radius: 30rpx;
+  padding: 12rpx 24rpx;
+  font-size: 26rpx;
+}
+
+.chip-name {
+  font-weight: bold;
+  color: var(--color-gray-800);
+}
+
+/* 对阵行 */
+.group-block {
+  margin-bottom: 10rpx;
+}
+
+.round-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-row);
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 12rpx;
+  gap: 16rpx;
+}
+
+/* 竖排比分布局：队名在上，比分在下 */
+.versus {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+.vteam {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx 8rpx;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1rpx solid transparent;
+  min-width: 0;
+}
+
+.vteam-win {
+  background: rgba(47, 206, 122, 0.10);
+  border: 1rpx solid rgba(47, 206, 122, 0.25);
+}
+
+.vteam-name {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--color-gray-800);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vteam-score {
+  font-size: 38rpx;
+  font-weight: 700;
+  color: var(--color-gray-500);
+}
+
+.score-win {
+  color: #2fce7a;
+}
+
+.vs-text {
+  font-size: 22rpx;
+  color: var(--color-gray-500);
+  flex-shrink: 0;
+}
+
+.round-teams {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.round-score {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: var(--color-gray-800);
+}
+
+.winner {
+  color: var(--color-primary);
+  font-weight: bold;
+}
+
+/* 按钮 */
+.btn-outline {
+  border: 2rpx solid var(--color-primary);
+  color: var(--color-primary);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.small-btn {
+  font-size: 24rpx;
+  padding: 10rpx 24rpx;
+}
+
+/* 队伍历史弹层 */
+.mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.history-panel {
+  width: 86%;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--color-card);
+  border-radius: 16rpx;
+  padding: 30rpx;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.detail-close {
+  width: 40rpx;
+  height: 40rpx;
+  padding: 10rpx;
+}
+
+/* 带图标的小标题 */
+.title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.title-icon {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+.history-row {
+  background: var(--color-row);
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 12rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+/* 比分输入面板 */
+.score-panel {
+  width: 80%;
+  background: var(--color-card);
+  border-radius: 16rpx;
+  padding: 30rpx;
+}
+
+.score-input {
+  margin: 20rpx 0;
+  background: var(--color-gray-100);
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  font-size: 30rpx;
+  color: var(--color-gray-800);
+}
+
+.score-btns {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 20rpx;
+}
+
+.score-btns .btn-outline,
+.score-btns .btn-primary {
+  flex: 1;
+  padding: 16rpx 0;
+  font-size: 28rpx;
+  text-align: center;
+}

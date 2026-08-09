@@ -1,0 +1,490 @@
+.page {
+  padding: 20rpx;
+  padding-bottom: 60rpx;
+}
+
+.section-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: bold;
+  color: var(--color-gray-800);
+  margin-bottom: 12rpx;
+}
+
+.team-meta {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+}
+
+.team-name {
+  font-size: 26rpx;
+  color: var(--color-gray-800);
+}
+
+.detail-sub-title {
+  display: block;
+  font-size: 26rpx;
+  font-weight: bold;
+  color: var(--color-gray-600);
+  margin: 16rpx 0 10rpx;
+}
+
+/* 阶段 tab */
+.tabs {
+  display: flex;
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  margin-bottom: 20rpx;
+  overflow: hidden;
+}
+
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  font-size: 26rpx;
+  color: var(--color-gray-600);
+}
+
+.tab.active {
+  color: var(--color-primary);
+  font-weight: bold;
+  border-bottom: 4rpx solid var(--color-primary);
+}
+
+/* 队伍标签 */
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-bottom: 10rpx;
+}
+
+.team-chip {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  background: var(--color-gray-100);
+  border-radius: 30rpx;
+  padding: 12rpx 24rpx;
+  font-size: 26rpx;
+}
+
+.chip-name {
+  font-weight: bold;
+  color: var(--color-gray-800);
+}
+
+/* 队伍行（赛事队伍 tab） */
+.team-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-row);
+  border-radius: 10rpx;
+  padding: 14rpx 20rpx;
+  margin-bottom: 10rpx;
+}
+
+.detail-tags {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+/* 对阵行 */
+.round-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-row);
+  border-radius: 10rpx;
+  padding: 14rpx 20rpx;
+  margin-bottom: 12rpx;
+  gap: 16rpx;
+}
+
+/* 竖排比分布局：队名在上，比分在下 */
+.versus {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+.vteam {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx 8rpx;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1rpx solid transparent;
+  min-width: 0;
+}
+
+.vteam-win {
+  background: rgba(47, 206, 122, 0.10);
+  border: 1rpx solid rgba(47, 206, 122, 0.25);
+}
+
+.vteam-name {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--color-gray-800);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vteam-score {
+  font-size: 38rpx;
+  font-weight: 700;
+  color: var(--color-gray-500);
+}
+
+.score-win {
+  color: #2fce7a;
+}
+
+.vs-text {
+  font-size: 22rpx;
+  color: var(--color-gray-500);
+  flex-shrink: 0;
+}
+
+/* BO3 大比分 */
+.big-score {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+  padding: 8rpx 16rpx;
+}
+
+.big-score-text {
+  font-size: 44rpx;
+  font-weight: 800;
+  color: var(--color-gray-500);
+}
+
+.big-score-text.score-win {
+  color: #2fce7a;
+}
+
+.big-score-text.score-tbd {
+  color: var(--color-gray-400);
+}
+
+.big-score-label {
+  font-size: 20rpx;
+  color: var(--color-gray-500);
+}
+
+.round-teams {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.round-score {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: var(--color-gray-800);
+}
+
+.winner {
+  color: var(--color-primary);
+  font-weight: bold;
+}
+
+/* 可滑动区块（swiper） */
+.stage-tabs {
+  display: flex;
+  gap: 14rpx;
+  margin-bottom: 12rpx;
+}
+
+.stage-tab {
+  padding: 8rpx 28rpx;
+  font-size: 24rpx;
+  color: var(--color-gray-600);
+  background: var(--color-gray-100);
+  border-radius: 30rpx;
+}
+
+.stage-tab.active {
+  background: linear-gradient(135deg, #2fce7a, #1fa361);
+  color: #06281c;
+  font-weight: 600;
+}
+
+.stage-swiper {
+  height: 600rpx;
+}
+
+.stage-scroll {
+  height: 100%;
+}
+
+/* 赛事队伍分阶段 swiper：更高 + 内部滚动 */
+.teams-swiper {
+  height: 620rpx;
+}
+
+.teams-scroll {
+  height: 100%;
+}
+
+/* 队伍排名 */
+.rank-left {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  flex: 1;
+}
+
+.rank-no {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--color-gray-600);
+  font-size: 26rpx;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rank-no.rank-top {
+  background: rgba(47, 206, 122, 0.22);
+  color: #4ade80;
+}
+
+/* 组分区标题（小组赛区块内 A组/B组/C组） */
+.group-title {
+  display: block;
+  font-size: 24rpx;
+  font-weight: bold;
+  color: var(--color-primary);
+  margin: 14rpx 0 10rpx;
+  padding-left: 12rpx;
+  border-left: 6rpx solid var(--color-primary);
+}
+
+/* 灰色标签（胜场等） */
+.tag-gray {
+  background: rgba(255, 255, 255, 0.08);
+  color: #9dafaa;
+}
+
+/* 流程提示条 */
+.hint-bar {
+  background: rgba(230, 162, 60, 0.12);
+  border: 2rpx solid rgba(230, 162, 60, 0.3);
+  color: #f5c268;
+  border-radius: 10rpx;
+  padding: 14rpx 20rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  margin-bottom: 14rpx;
+}
+
+/* 淘汰赛轮次区块 */
+.ko-section {
+  margin-bottom: 8rpx;
+}
+
+.ko-title {
+  color: #ff6b6f;
+  border-left-color: #ff6b6f;
+}
+
+/* BO3 输入行 */
+.bo3-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin: 16rpx 0;
+}
+
+.bo3-label {
+  width: 100rpx;
+  font-size: 26rpx;
+  color: var(--color-gray-600);
+  flex-shrink: 0;
+}
+
+.bo3-input {
+  flex: 1;
+  margin: 0;
+}
+
+/* 操作按钮组 */
+.op-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 14rpx;
+}
+
+.op-btns .small-btn {
+  font-size: 24rpx;
+  padding: 10rpx 24rpx;
+}
+
+/* 通用小按钮 */
+.small-btn {
+  font-size: 24rpx;
+  padding: 10rpx 24rpx;
+}
+
+/* 弹层 */
+.mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.history-panel,
+.score-panel {
+  width: 86%;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--color-card);
+  border-radius: 16rpx;
+  padding: 30rpx;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.detail-close {
+  width: 40rpx;
+  height: 40rpx;
+  padding: 10rpx;
+}
+
+.history-row {
+  background: var(--color-row);
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 12rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+/* 比分输入 */
+.score-input {
+  margin: 20rpx 0;
+  background: var(--color-gray-100);
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  font-size: 30rpx;
+  color: var(--color-gray-800);
+}
+
+/* BO3 小局弹层 */
+.bo3-panel {
+  width: 82%;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--color-card);
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 30rpx;
+}
+
+.bo3-big {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid var(--color-border);
+  margin-bottom: 20rpx;
+}
+
+.bo3-big-score {
+  font-size: 64rpx;
+  font-weight: 800;
+  color: var(--color-gray-900);
+}
+
+.bo3-big-label {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+}
+
+.bo3-game {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-row);
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 18rpx 24rpx;
+  margin-bottom: 12rpx;
+}
+
+.bo3-game-title {
+  font-size: 26rpx;
+  color: var(--color-gray-500);
+}
+
+.bo3-game-score {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--color-gray-800);
+}
+
+.ko-row:active {
+  background: var(--color-gray-100);
+}
+
+/* 比分可点击（点击修改比分） */
+.big-score-tap {
+  padding: 12rpx 24rpx;
+  border-radius: var(--radius-md);
+  border: 1rpx solid transparent;
+}
+
+.big-score-tap:active {
+  background: rgba(47, 206, 122, 0.12);
+  border-color: rgba(47, 206, 122, 0.3);
+}
+
+.bo3-more {
+  font-size: 22rpx;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.score-btns .btn-outline,
+.score-btns .btn-primary {
+  flex: 1;
+  padding: 16rpx 0;
+  font-size: 28rpx;
+  text-align: center;
+}

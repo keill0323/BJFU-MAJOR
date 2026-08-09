@@ -1,0 +1,286 @@
+.page {
+  padding: 20rpx;
+}
+
+/* 统计概览 */
+.stat-row {
+  display: flex;
+  gap: 16rpx;
+  margin: 20rpx;
+}
+
+.stat-card {
+  flex: 1;
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  padding: 28rpx 0;
+  text-align: center;
+  box-shadow: var(--shadow-card);
+}
+
+.stat-num {
+  display: block;
+  font-size: 44rpx;
+  font-weight: 700;
+  color: var(--color-gray-900);
+}
+
+.stat-label {
+  display: block;
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+  margin-top: 6rpx;
+}
+
+/* 顶部 tab（胶囊选中） */
+.admin-tabs {
+  display: flex;
+  background: var(--color-card);
+  border-radius: var(--radius-full);
+  margin: 20rpx;
+  padding: 8rpx;
+  gap: 8rpx;
+  box-shadow: var(--shadow-card);
+}
+
+.admin-tab {
+  flex: 1;
+  text-align: center;
+  padding: 14rpx 0;
+  font-size: 28rpx;
+  color: var(--color-gray-600);
+  border-radius: var(--radius-full);
+}
+
+.admin-tab.active {
+  background: linear-gradient(135deg, #2fce7a, #1fa361);
+  color: #06281c;
+  font-weight: 600;
+}
+
+/* 认证审核 */
+.verify-card {
+  margin-bottom: 20rpx;
+}
+
+.verify-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.verify-shot {
+  width: 100%;
+  height: 360rpx;
+  background: var(--color-gray-100);
+  border-radius: var(--radius-md);
+  margin: 16rpx 0;
+}
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.search-row input {
+  flex: 1;
+  background: var(--color-gray-100);
+  border-radius: var(--radius-md);
+  padding: 16rpx 20rpx;
+  font-size: 26rpx;
+}
+
+.user-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.user-id {
+  font-size: 26rpx;
+  color: var(--color-gray-500);
+  font-weight: bold;
+}
+
+.user-name {
+  font-size: 30rpx;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.user-meta {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+  display: block;
+  margin-bottom: 16rpx;
+}
+
+.user-actions {
+  display: flex;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+/* 队伍卡 */
+.team-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.team-name {
+  font-size: 30rpx;
+  font-weight: bold;
+}
+
+.team-meta {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+  display: block;
+  margin-bottom: 14rpx;
+}
+
+/* 赛事 */
+.section-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.input {
+  background: var(--color-gray-100);
+  border-radius: var(--radius-md);
+  padding: 20rpx;
+  margin-bottom: 16rpx;
+  font-size: 28rpx;
+}
+
+.input-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+.input.half {
+  flex: 1;
+}
+
+.status-btn {
+  display: inline-block;
+}
+
+.small-btn {
+  font-size: 24rpx;
+  padding: 10rpx 24rpx;
+}
+
+/* 赛事详情弹层 */
+.mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-panel {
+  width: 86%;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  padding: 30rpx;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.detail-close {
+  font-size: 36rpx;
+  color: var(--color-gray-500);
+  padding: 10rpx;
+}
+
+.detail-section-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: bold;
+  color: var(--color-gray-800);
+  margin: 24rpx 0 12rpx;
+  border-left: 6rpx solid var(--color-primary);
+  padding-left: 12rpx;
+}
+
+.detail-sub-title {
+  display: block;
+  font-size: 26rpx;
+  font-weight: bold;
+  color: var(--color-gray-600);
+  margin: 16rpx 0 10rpx;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-row);
+  border-radius: var(--radius-md);
+  padding: 16rpx 20rpx;
+  margin-bottom: 12rpx;
+}
+
+.detail-row-main {
+  flex: 1;
+  margin-right: 16rpx;
+}
+
+.detail-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8rpx;
+}
+
+/* 比分输入面板 */
+.score-panel {
+  width: 80%;
+  background: var(--color-card);
+  border-radius: 16rpx;
+  padding: 30rpx;
+}
+
+.score-input {
+  margin: 20rpx 0;
+  background: var(--color-gray-100);
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  font-size: 30rpx;
+  color: var(--color-gray-800);
+}
+
+.score-btns {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 20rpx;
+}
+
+.score-btns .btn-outline,
+.score-btns .btn-primary {
+  flex: 1;
+  padding: 16rpx 0;
+  font-size: 28rpx;
+  text-align: center;
+}
