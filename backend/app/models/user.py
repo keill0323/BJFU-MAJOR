@@ -7,7 +7,7 @@ Since: 2026-07-21
 from datetime import datetime
 import enum
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, Enum as SAEnum
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -56,3 +56,6 @@ class User(Base):
     individual_rating = Column(Integer, default=0, comment="个人水平得分")
     rank = Column(String(10), nullable=True, comment="个人段位")
     user_description = Column(String(200), nullable=True, comment="个人介绍")
+    ai_review_status = Column(String(20), nullable=True, comment="AI审核状态 auto_pass/auto_reject/pending")
+    ai_review_reason = Column(String(500), nullable=True, comment="AI判断理由")
+    ai_review_confidence = Column(Float, default=0, nullable=True, comment="AI置信度 0~1")

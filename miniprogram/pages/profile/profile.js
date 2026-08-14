@@ -28,6 +28,13 @@ Page({
     }
   },
 
+  // AI 审核状态 → 展示文本和样式
+  AI_STATUS_MAP: {
+    auto_pass: { text: 'AI 已自动通过', cls: 'ai-pass' },
+    auto_reject: { text: 'AI 已自动驳回', cls: 'ai-reject' },
+    pending: { text: 'AI 初审中，待人工复核', cls: 'ai-pending' }
+  },
+
   // 拉取当前用户完整信息（后端 /api/auth/me）
   async loadUser() {
     try {
@@ -36,6 +43,12 @@ Page({
       // 截图相对路径拼成完整 URL（image 组件需要）
       if (user && user.verify_image && !user.verify_image.startsWith('http')) {
         user.verify_image_full = api.BASE + user.verify_image
+      }
+      // AI 审核结果 → 生成显示文本（置信度只给管理后台看）
+      if (user && user.ai_review_status) {
+        const st = this.AI_STATUS_MAP[user.ai_review_status] || { text: '', cls: '' }
+        user.ai_review_text = st.text
+        user.ai_review_class = st.cls
       }
       this.setData({
         user,
@@ -110,25 +123,48 @@ Page({
   },
 
   // 选择并上传学信网截图（仅未认证用户可见入口）
+  // 真机照片通常好几 MB，直接上传容易失败，所以先压缩再上传
   chooseVerifyImage() {
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
-      success: async (res) => {
-        const filePath = res.tempFiles[0].filePath
-        this.setData({ uploading: true })
-        try {
-          await api.uploadVerify(filePath)
-          wx.showToast({ title: '上传成功，等待审核', icon: 'success' })
-          await this.loadUser()
-        } catch (err) {
-          wx.showToast({ title: err.detail || '上传失败', icon: 'none' })
-        } finally {
-          this.setData({ uploading: false })
-        }
+      success: (res) => {
+        // 注意：wx.chooseMedia 返回的字段是 tempFilePath（不是 filePath！）
+        const filePath = res.tempFiles[0].tempFilePath
+        console.log('【调试】原图路径:', filePath)
+        wx.compressImage({
+          src: filePath,
+          quality: 80,          // 压缩质量 80%，肉眼几乎无差别
+          success: (cr) => {
+            // 压缩结果可能为空，为空就退回原图（避免传 undefined）
+            const compressedPath = (cr && cr.tempFilePath) || filePath
+            console.log('【调试】压缩后路径:', compressedPath)
+            this.uploadWithPath(compressedPath)
+          },
+          fail: (err) => {
+            console.error('【调试】压缩失败，改用原图:', err)
+            this.uploadWithPath(filePath)   // 压缩失败就用原图
+          }
+        })
       }
     })
+  },
+
+  // 真正的上传动作（把指定路径的图片传上去）
+  uploadWithPath(filePath) {
+    this.setData({ uploading: true })
+    api.uploadVerify(filePath)
+      .then(() => {
+        wx.showToast({ title: '上传成功，等待审核', icon: 'success' })
+        return this.loadUser()
+      })
+      .catch(err => {
+        wx.showToast({ title: err.detail || '上传失败', icon: 'none' })
+      })
+      .finally(() => {
+        this.setData({ uploading: false })
+      })
   },
 
   // 点击预览已上传的截图

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.config import settings
 from app.schemas.user import UserLoginRequest, UserInfo, TokenResponse, UserUpdateRequest, AdminUpdateUserRequest, UpdateRoleRequest, VerifyListItem
-from app.services import auth_service
+from app.services import auth_service, ai_review_service
 from app.services.auth_service import get_current_user, require_admin
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
@@ -105,32 +105,69 @@ def update_user_role(
 
 
 @router.post("/upload-verify", response_model=UserInfo)
-async def upload_verify(
+def upload_verify(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    """上传学信网/教务系统截图（用于人工审核认证）"""
+    """上传学信网/教务系统截图（开启AI时自动预审）"""
     # 仅允许图片类型
     allowed = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
     if file.content_type not in allowed:
         raise HTTPException(status_code=400, detail="仅支持 JPG/PNG/WebP 格式图片")
 
-    # 读取内容并限制大小 5MB
-    content = await file.read()
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="图片大小不能超过 5MB")
+    # 读取内容并限制大小 10MB
+    content = file.file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="图片大小不能超过 10MB")
 
     # 保存到上传目录，文件名带用户ID和时间戳防冲突
     ext = {"image/jpeg": ".jpg", "image/jpg": ".jpg", "image/png": ".png", "image/webp": ".webp"}[file.content_type]
     upload_dir = Path(settings.UPLOAD_DIR)
     upload_dir.mkdir(parents=True, exist_ok=True)
     filename = f"verify_{current_user.id}_{int(time.time())}{ext}"
-    (upload_dir / filename).write_bytes(content)
+    file_path = upload_dir / filename          # ← 新增：存完整路径，AI 要用
+    file_path.write_bytes(content)
 
     url = f"/uploads/{filename}"
     user = auth_service.update_verify_image(db, current_user.id, url)
+
+    if settings.AI_REVIEW_ENABLED:
+        try:
+            ai_result = ai_review_service.review_image(str(file_path))
+        except Exception:
+            ai_result = None      # AI 调用失败不影响上传，转人工审核
+
+        if ai_result:
+            # 把 AI 结果写进数据库的 3 个新字段
+            user.ai_review_reason = ai_result.get("reason")
+            user.ai_review_confidence = ai_result.get("confidence", 0)
+
+            # 置信度分级：≥0.9 高置信才自动通过/驳回，否则转人工
+            conf = ai_result.get("confidence", 0)
+            if ai_result.get("is_valid") is True and conf >= 0.9:
+                user.ai_review_status = "auto_pass"     # 自动通过
+                user.is_verified = True
+                # AI 识别到学号则直接写入，无需管理员再填写
+                sid = ai_result.get("student_id")
+                if sid:
+                    sid = str(sid).strip()
+                    if sid:
+                        # 学号唯一，若已被其他用户占用则不覆盖
+                        from app.models.user import User
+                        exists = db.query(User).filter(User.student_id == sid).first()
+                        if not exists:
+                            user.student_id = sid
+            elif ai_result.get("is_valid") is False and conf >= 0.9:
+                user.ai_review_status = "auto_reject"   # 自动驳回
+            else:
+                user.ai_review_status = "pending"       # 转人工
+
+            db.commit()
+            db.refresh(user)
+
     return user
+
 
 
 @router.get("/admin/verify-list", response_model=list[VerifyListItem])

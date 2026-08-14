@@ -173,11 +173,23 @@ Page({
   async loadVerifyList() {
     try {
       const data = await api.getVerifyList()
-      const list = (data || []).map(u => Object.assign({}, u, {
-        verify_image_full: u.verify_image
-          ? (u.verify_image.startsWith('http') ? u.verify_image : api.BASE + u.verify_image)
-          : ''
-      }))
+      const AI_MAP = {
+        auto_pass: { text: '自动通过', cls: 'ai-pass' },
+        auto_reject: { text: '自动驳回', cls: 'ai-reject' },
+        pending: { text: '初审待人工', cls: 'ai-pending' }
+      }
+      const list = (data || []).map(u => {
+        const st = AI_MAP[u.ai_review_status] || { text: '', cls: '' }
+        return Object.assign({}, u, {
+          verify_image_full: u.verify_image
+            ? (u.verify_image.startsWith('http') ? u.verify_image : api.BASE + u.verify_image)
+            : '',
+          ai_review_text: st.text,
+          ai_review_class: st.cls,
+          ai_review_conf_text: (u.ai_review_confidence != null)
+            ? Math.round(u.ai_review_confidence * 100) + '%' : ''
+        })
+      })
       this.setData({ verifyUsers: list })
     } catch (err) {
       this.setData({ verifyUsers: [] })

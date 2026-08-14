@@ -81,6 +81,57 @@
   background: var(--color-gray-100);
 }
 
+/* AI 审核结果 */
+.ai-review {
+  margin-top: 24rpx;
+  border-radius: var(--radius-md);
+  padding: 20rpx 24rpx;
+  border: 1rpx solid var(--color-border);
+}
+
+.ai-pass {
+  background: rgba(47, 206, 122, 0.08);
+  border-color: rgba(47, 206, 122, 0.35);
+}
+
+.ai-reject {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.ai-pending {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.ai-review-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.ai-review-status {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.ai-pass .ai-review-status { color: var(--color-success); }
+.ai-reject .ai-review-status { color: var(--color-danger); }
+.ai-pending .ai-review-status { color: #d97706; }
+
+.ai-review-conf {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+}
+
+.ai-review-reason {
+  display: block;
+  font-size: 24rpx;
+  color: var(--color-gray-600);
+  line-height: 1.5;
+}
+
 /* 顶部用户卡（深绿渐变 + 亮绿描边，电竞感） */
 .profile-hero {
   margin: 20rpx;

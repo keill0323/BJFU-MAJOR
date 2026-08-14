@@ -58,6 +58,14 @@
       </view>
       <text class="user-name">{{item.nickname || '未设昵称'}} {{item.game_id ? '(' + item.game_id + ')' : ''}}</text>
       <text class="user-meta">学号: {{item.student_id || '未填写'}} | 提交: {{item.created_at || '-'}}</text>
+      <!-- AI 审核建议（含置信度，辅助管理员决策） -->
+      <view wx:if="{{item.ai_review_status}}" class="ai-suggest {{item.ai_review_class}}">
+        <view class="ai-suggest-top">
+          <text class="ai-suggest-label">AI 建议：{{item.ai_review_text}}</text>
+          <text wx:if="{{item.ai_review_conf_text}}" class="ai-suggest-conf">置信度 {{item.ai_review_conf_text}}</text>
+        </view>
+        <text wx:if="{{item.ai_review_reason}}" class="ai-suggest-reason">{{item.ai_review_reason}}</text>
+      </view>
       <image wx:if="{{item.verify_image_full}}" class="verify-shot" src="{{item.verify_image_full}}" mode="aspectFit" bindtap="previewVerify" data-url="{{item.verify_image_full}}"/>
       <view class="user-actions">
         <view class="btn-primary small-btn" bindtap="verifyPass" data-id="{{item.id}}">通过</view>

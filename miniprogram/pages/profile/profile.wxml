@@ -58,6 +58,13 @@
           <text class="info-value">{{user.role === 'admin' ? '管理员' : user.role === 'reviewer' ? '审核员' : '普通用户'}}</text>
         </view>
       </view>
+
+      <!-- AI 审核结果（有 AI 审核记录时显示，三种状态都展示） -->
+      <view wx:if="{{user && user.ai_review_status}}" class="ai-review {{user.ai_review_class}}">
+        <text class="ai-review-status">{{user.ai_review_text}}</text>
+        <text wx:if="{{user.ai_review_reason}}" class="ai-review-reason">AI 判断：{{user.ai_review_reason}}</text>
+      </view>
+
       <!-- 在校认证：未认证用户上传学信网截图 -->
       <view wx:if="{{!editMode && user && !user.is_verified}}" class="verify-box">
         <text class="verify-tip">{{user.verify_image ? '已提交截图，等待管理员审核' : '上传学信网/教务系统截图完成在校认证'}}</text>

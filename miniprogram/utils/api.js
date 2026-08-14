@@ -95,8 +95,9 @@ module.exports = {
           reject({ detail: detail || ('上传失败（' + res.statusCode + '）') })
         }
       },
-      fail() {
-        reject({ detail: '网络错误，请检查后端服务器是否启动' })
+      fail(err) {
+        console.error('uploadVerify 失败详情:', err)
+        reject({ detail: '网络错误：' + (err.errMsg || '请检查后端服务器是否启动') })
       }
     })
   }),

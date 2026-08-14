@@ -25,6 +25,9 @@ class UserInfo(BaseModel):
     individual_rating: int = 0
     role: str
     verify_image: Optional[str] = None   # 学信网截图URL
+    # AI 审核结果（auto_pass 自动通过 / auto_reject 自动驳回 / pending 待人工复核）
+    ai_review_status: Optional[str] = None
+    ai_review_reason: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -66,6 +69,10 @@ class VerifyListItem(BaseModel):
     verify_image: Optional[str] = None
     is_verified: bool = False
     created_at: Optional[datetime] = None
+    # AI 审核结果（管理后台可见，含置信度）
+    ai_review_status: Optional[str] = None
+    ai_review_reason: Optional[str] = None
+    ai_review_confidence: Optional[float] = None
 
     class Config:
         from_attributes = True

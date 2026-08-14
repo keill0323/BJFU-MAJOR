@@ -77,6 +77,53 @@
   border-radius: var(--radius-md);
   margin: 16rpx 0;
 }
+
+/* AI 审核建议（认证审核列表，管理后台可见置信度） */
+.ai-suggest {
+  border-radius: var(--radius-md);
+  padding: 16rpx 20rpx;
+  margin: 16rpx 0;
+  border: 1rpx solid var(--color-border);
+}
+
+.ai-pass {
+  background: rgba(47, 206, 122, 0.08);
+  border-color: rgba(47, 206, 122, 0.35);
+}
+
+.ai-reject {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.ai-pending {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.ai-suggest-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6rpx;
+}
+
+.ai-suggest-label {
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.ai-suggest-conf {
+  font-size: 22rpx;
+  color: var(--color-gray-500);
+}
+
+.ai-suggest-reason {
+  display: block;
+  font-size: 22rpx;
+  color: var(--color-gray-600);
+  line-height: 1.5;
+}
 .search-row {
   display: flex;
   align-items: center;

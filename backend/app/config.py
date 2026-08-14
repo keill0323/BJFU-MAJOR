@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     WX_APPID: str = ""            # 微信小程序 AppID（上线必填）
     WX_SECRET: str = ""           # 微信小程序 AppSecret（上线必填）
     WX_MOCK_LOGIN: bool = True    # True=开发用 mock 登录；上线设 False 走真实微信登录
+    """AI配置"""
+    AI_REVIEW_ENABLED: bool = False                                         #总开关,上线启用AI审核
+    AI_API_KEY: str = ""                                                    #智谱API密钥
+    AI_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"               #智谱接口地址
+    AI_MODEL: str = "GLM-5V-Turbo"                                          #智谱模型名称
 
     class Config:
         env_file = ".env"

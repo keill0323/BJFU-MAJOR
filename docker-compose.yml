@@ -26,6 +26,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads   # 上传的截图持久化，容器重建不丢失
     environment:
       DATABASE_URL: mysql+pymysql://cs2_user:${MYSQL_PASSWORD:-cs2_pass123456}@mysql:3306/cs2_competition?charset=utf8mb4
       SECRET_KEY: ${SECRET_KEY:-please-change-me}
@@ -53,3 +55,4 @@ services:
 
 volumes:
   mysql_data:
+  uploads_data:   # 上传文件存储卷
