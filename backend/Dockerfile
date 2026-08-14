@@ -3,9 +3,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# 安装依赖
+# 安装依赖（腾讯云 PyPI 镜像，国内服务器加速）
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -i https://mirrors.cloud.tencent.com/pypi/simple -r requirements.txt
 
 # 拷贝代码
 COPY app ./app
