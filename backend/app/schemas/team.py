@@ -6,12 +6,12 @@ Since: 2026-7-22
 
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TeamCreateRequest(BaseModel):
     """创建队伍请求"""
-    name: str
+    name: str = Field(..., min_length=1, max_length=20, description="队伍名（1-20字符）")
     description: Optional[str] = None
 
 

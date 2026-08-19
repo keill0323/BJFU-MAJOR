@@ -236,6 +236,9 @@ def disband_team(db: Session, team_id: int, captain_id: int) -> None:
     # 清理该队伍的赛事报名记录、队伍进度
     db.query(Registration).filter(Registration.team_id == team_id).delete()
     db.query(TeamProgress).filter(TeamProgress.team_id == team_id).delete()
+    # 清理入队申请和邀请记录（有外键引用，必须先删，否则删队伍会失败）
+    db.query(TeamApplication).filter(TeamApplication.team_id == team_id).delete()
+    db.query(TeamInvitation).filter(TeamInvitation.team_id == team_id).delete()
     db.query(TeamMember).filter(TeamMember.team_id == team_id).delete()
     db.delete(team)
     db.commit()

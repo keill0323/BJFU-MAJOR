@@ -14,8 +14,13 @@
     <text class="section-title">成员 ({{members.length}}/{{myTeam.member_count || members.length}})</text>
     <view wx:for="{{members}}" wx:key="id" class="member-row">
       <view class="member-info">
-        <text class="member-name">{{item.nickname || '玩家' + item.user_id}}</text>
-        <text class="tag {{item.role === 'captain' ? 'tag-orange' : 'tag-gray'}}">{{item.role === 'captain' ? '队长' : '队员'}}</text>
+        <view class="member-name-col">
+          <view class="member-name-row">
+            <text class="member-name">{{item.nickname || '玩家' + item.user_id}}</text>
+            <text class="tag {{item.role === 'captain' ? 'tag-orange' : 'tag-gray'}}">{{item.role === 'captain' ? '队长' : '队员'}}</text>
+          </view>
+          <text class="member-meta">游戏ID: {{item.game_id || '未设置'}} · ID: {{item.user_id}}</text>
+        </view>
       </view>
       <!-- 队长踢人按钮（非队长成员可见） -->
       <view wx:if="{{isCaptain && item.role !== 'captain'}}" class="btn-danger small-btn"
@@ -29,7 +34,8 @@
     <view wx:for="{{applications}}" wx:key="id" class="app-row">
       <view class="app-info">
         <text class="app-name">{{item.nickname || '玩家' + item.user_id}}</text>
-        <text wx:if="{{item.message}}" class="app-msg">{{item.message}}</text>
+        <text class="app-meta">游戏ID: {{item.game_id || '未设置'}} · ID: {{item.user_id}}</text>
+        <text wx:if="{{item.message}}" class="app-msg">留言: {{item.message}}</text>
       </view>
       <view class="app-actions">
         <view class="btn-primary small-btn" bindtap="approveApp" data-id="{{item.id}}">同意</view>
@@ -42,6 +48,7 @@
   <view class="actions">
     <view wx:if="{{isCaptain}}" class="btn-outline" bindtap="openMarket">人才市场</view>
     <view wx:if="{{isCaptain}}" class="btn-outline" bindtap="openRecruit">邀请</view>
+    <button class="btn-outline share-btn" open-type="share">分享队伍</button>
     <view class="btn-danger" bindtap="leaveTeam">退出队伍</view>
     <view wx:if="{{isCaptain}}" class="btn-danger" bindtap="disbandTeam">解散队伍</view>
   </view>
@@ -83,7 +90,7 @@
   <!-- 创建队伍 -->
   <view class="card">
     <text class="section-title">创建队伍</text>
-    <input class="team-input" placeholder="输入队名" value="{{teamName}}" bindinput="onNameInput"/>
+    <input class="team-input" placeholder="输入队名（最多20字）" value="{{teamName}}" bindinput="onNameInput" maxlength="20"/>
     <view class="btn-primary" bindtap="createTeam">创建队伍</view>
   </view>
 

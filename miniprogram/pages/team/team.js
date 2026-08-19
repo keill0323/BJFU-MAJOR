@@ -41,13 +41,30 @@ Page({
     }
   },
 
+  // 分享队伍（右上角转发 + 分享按钮都会触发）
+  onShareAppMessage() {
+    const team = this.data.myTeam
+    if (team) {
+      return {
+        title: '【' + team.name + '】正在招募队员，快来加入！',
+        path: '/pages/team/team'
+      }
+    }
+    return {
+      title: '北林CS2校赛报名系统',
+      path: '/pages/index/index'
+    }
+  },
+
   // 加载我的队伍 + 成员
   async loadMyTeam() {
     try {
       const team = await api.getMyTeam()
       this.setData({ myTeam: team || null })
       if (team) {
-        const userId = Number(this.getUserIdFromToken())   // JWT 里 sub 是字符串，转数字
+        // 用 /me 接口拿当前用户 id（比解析 JWT 更可靠）
+        const me = await api.getMe()
+        const userId = me ? me.id : null
         this.setData({
           isCaptain: team.captain_id === userId,
           members: team.members || []

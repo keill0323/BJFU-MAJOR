@@ -175,9 +175,14 @@ Page({
     }
   },
 
-  // 点击进入编辑模式
+  // 点击进入编辑模式（回显当前昵称和游戏ID，而不是空）
   enableEdit() {
-    this.setData({ editMode: true, nickname: '', gameId: '' })
+    const user = this.data.user || {}
+    this.setData({
+      editMode: true,
+      nickname: user.nickname || '',
+      gameId: user.game_id || ''
+    })
   },
 
   // 昵称输入同步

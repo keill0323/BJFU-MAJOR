@@ -381,6 +381,15 @@ def register_team(db: Session, match_id: int, team_id: int) -> list:
     避免同一用户产生多条报名记录。
     """
     from app.models.team import TeamMember
+
+    # 队伍级校验：该队伍是否已报名此赛事（防止队长重复报名）
+    team_registered = db.query(Registration).filter(
+        Registration.match_id == match_id,
+        Registration.team_id == team_id,
+    ).first()
+    if team_registered:
+        raise HTTPException(status_code=400, detail="该队伍已报名此赛事，请勿重复报名")
+
     members = db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
     registrations = []
     for member in members:

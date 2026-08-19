@@ -10,12 +10,13 @@ import urllib.request
 from app.config import settings
 
 # 审核指令
-REVIEW_PROMPT = """请审核这张学信网/校园卡截图是否真实有效，用于在校生认证。
+REVIEW_PROMPT = """请审核这张学信网/校园卡截图，用于「北京林业大学」校内赛事报名认证。
 请检查：
-1. 是否包含学校名称
+1. 学校名称是否为「北京林业大学」（截图可能写作：北京林业大学、北林、Beijing Forestry University、BJFU，均视为同一学校）
 2. 是否包含姓名和学号
 3. 是否有明显P图、涂抹、拼接痕迹
 4. 是否像本人上传的截图
+特别注意：如果截图中的学校不是北京林业大学（是其他学校），必须判定 is_valid=false。
 请只返回 JSON 格式（不要任何其他文字），格式如下：
 {"is_valid": true或false, "confidence": 0到1之间的小数, "reason": "判断理由（中文简短）", "student_id": "截图中的学号，没有则写null"}
 如果不确定，confidence 给低值（如 0.5 以下）。"""

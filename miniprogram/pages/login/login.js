@@ -8,6 +8,23 @@ const api = require('../../utils/api.js')
 Page({
   data: {},
 
+  // 进入登录页时：已有 token 则直接进首页，无需重复登录
+  onLoad() {
+    if (wx.getStorageSync('token')) {
+      wx.switchTab({ url: '/pages/index/index' })
+    }
+  },
+
+  // 查看赛事规则与参赛须知
+  showRules() {
+    wx.showModal({
+      title: '赛事规则与参赛须知',
+      content: '1. 本赛事仅限北京林业大学在校学生参加。\n2. 报名需上传学信网/校园卡截图进行实名认证。\n3. 每位同学同一时间只能加入一支队伍。\n4. 报名信息须真实有效，弄虚作假将取消参赛资格。\n5. 请遵守比赛规则，文明竞技。',
+      showCancel: false,
+      confirmText: '我知道了'
+    })
+  },
+
   // 点登录按钮触发
   async handleLogin() {
     try {

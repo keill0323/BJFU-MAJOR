@@ -55,6 +55,23 @@
   font-size: 28rpx;
 }
 
+.member-name-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.member-name-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.member-meta {
+  font-size: 22rpx;
+  color: #7d928c;
+}
+
 /* 申请行 */
 .app-row {
   display: flex;
@@ -71,6 +88,13 @@
 .app-name {
   font-size: 28rpx;
   display: block;
+}
+
+.app-meta {
+  font-size: 22rpx;
+  color: var(--color-gray-500);
+  display: block;
+  margin-top: 4rpx;
 }
 
 .app-msg {
@@ -99,6 +123,17 @@
   box-sizing: border-box;
   padding: 22rpx 0;
   font-size: 30rpx;
+}
+
+/* 分享按钮：重置 button 默认样式（边框/背景/伪元素），继承 btn-outline 外观 */
+.actions .share-btn {
+  border: none;
+  background: transparent;
+  margin: 0;
+  line-height: inherit;
+}
+.actions .share-btn::after {
+  border: none;
 }
 
 .small-btn {

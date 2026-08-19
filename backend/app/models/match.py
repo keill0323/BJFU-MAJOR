@@ -48,6 +48,11 @@ class Match(Base):
     match_start = Column(DateTime, nullable=True, comment="比赛开始时间")
     created_at = Column(DateTime, default=datetime.now, index=True, comment="创建时间")
 
+    @property
+    def registered_count(self) -> int:
+        """报名队伍数（非数据库字段，仅用于响应序列化兜底；真实值由 service 层计算后覆盖）"""
+        return 0
+
 
 class RoundStatus(str, enum.Enum):
     """对阵状态"""

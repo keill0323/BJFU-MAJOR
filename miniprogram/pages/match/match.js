@@ -172,7 +172,17 @@ Page({
       return 6
     }
     const rankingTeams = teams.slice()
-      .map(t => Object.assign({}, t, { ko_rank: koRankOf(t.team_id) }))
+      .map(t => {
+        const ko_rank = koRankOf(t.team_id)
+        // 排名状态：淘汰赛名次 > 阶段状态 > 待分组
+        let stage_text = '待分组'
+        if (ko_rank) stage_text = ko_rank
+        else if (t.stage === 'legend') stage_text = '传奇组'
+        else if (t.stage === 'challenger') stage_text = '挑战者'
+        else if (t.stage === 'playoff') stage_text = '已晋级'
+        else if (t.stage === 'eliminated') stage_text = '已淘汰'
+        return Object.assign({}, t, { ko_rank, stage_text })
+      })
       .sort((a, b) => {
         const w = stageWeightOf(a) - stageWeightOf(b)
         if (w !== 0) return w
@@ -240,7 +250,9 @@ Page({
       const team = await api.getMyTeam()
       let isCaptain = false
       if (team) {
-        const userId = Number(this.getUserIdFromToken())
+        // 用 /me 接口拿当前用户 id（比解析 JWT 更可靠）
+        const me = await api.getMe()
+        const userId = me ? me.id : null
         isCaptain = team.captain_id === userId
       }
       this.setData({ myTeam: team || null, isCaptain: isCaptain })

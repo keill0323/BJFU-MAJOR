@@ -77,6 +77,15 @@ class TeamMember(Base):
     joined_at = Column(DateTime, default=datetime.now, index=True, comment="加入时间")
     team = relationship("Team", back_populates="members")
 
+    # 非数据库字段：从关联的 user 取值，供序列化（TeamMemberInfo 需要 nickname/game_id）
+    @property
+    def nickname(self):
+        return self.user.nickname if self.user else None
+
+    @property
+    def game_id(self):
+        return self.user.game_id if self.user else None
+
 
 class ApplicationStatus(str, enum.Enum):
     """申请状态"""

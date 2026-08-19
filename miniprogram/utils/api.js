@@ -19,6 +19,31 @@ const BASE = 'https://bjfumajor.com'   // 正式：HTTPS 域名（备案 + 证�
 // const BASE = 'http://192.168.16.170:8000'   // 本地开发：局域网 IP
 
 /**
+ * 递归把返回数据里的 role 字段转小写
+ * 原因：后端 SQLAlchemy 枚举存的是大写名（CAPTAIN/ADMIN），前端判断统一用小写
+ */
+function normalizeRole(data) {
+  if (Array.isArray(data)) {
+    return data.map(normalizeRole)
+  }
+  if (data && typeof data === 'object') {
+    const out = {}
+    for (const key in data) {
+      const val = data[key]
+      if (key === 'role' && typeof val === 'string') {
+        out[key] = val.toLowerCase()
+      } else if (val && typeof val === 'object') {
+        out[key] = normalizeRole(val)
+      } else {
+        out[key] = val
+      }
+    }
+    return out
+  }
+  return data
+}
+
+/**
  * 通用请求函数
  * @param path  接口路径，如 '/api/auth/login'
  * @param method HTTP 方法，默认 GET
@@ -37,7 +62,7 @@ function request(path, method = 'GET', data = {}) {
       },
       success(res) {
         if (res.statusCode < 400) {
-          resolve(res.data)      // 2xx/3xx：成功，返回数据
+          resolve(normalizeRole(res.data))      // 2xx/3xx：成功，返回数据（role 统一转小写）
         } else {
           // 401 = 令牌无效或用户不存在（如删库后），清 token 回登录页
           if (res.statusCode === 401) {
@@ -83,7 +108,7 @@ module.exports = {
       success(res) {
         if (res.statusCode < 400) {
           try {
-            resolve(JSON.parse(res.data))
+            resolve(normalizeRole(JSON.parse(res.data)))
           } catch (e) {
             reject({ detail: '上传响应解析失败' })
           }

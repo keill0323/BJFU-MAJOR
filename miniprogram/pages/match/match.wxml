@@ -72,7 +72,7 @@
           </view>
           <view class="detail-tags">
             <text wx:if="{{item.ko_rank}}" class="tag {{item.ko_rank === '冠军' ? 'tag-orange' : item.ko_rank === '亚军' ? 'tag-green' : item.ko_rank === '四强' ? 'tag-blue' : 'tag-gray'}}">{{item.ko_rank}}</text>
-            <text class="tag {{item.stage === 'eliminated' ? 'tag-gray' : 'tag-green'}}">{{item.stage === 'eliminated' ? '已淘汰' : '已晋级'}}</text>
+            <text class="tag {{item.stage_text === '已淘汰' ? 'tag-gray' : 'tag-green'}}">{{item.stage_text}}</text>
             <text class="tag tag-gray">{{item.wins}}胜{{item.losses}}负</text>
             <text class="tag tag-gray">净胜{{item.diff}}</text>
           </view>

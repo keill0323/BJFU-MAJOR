@@ -10,6 +10,6 @@
     <view class="login-btn" bindtap="handleLogin">
       <text class="login-btn-text">微信一键登录</text>
     </view>
-    <text class="login-agree">登录即代表同意《赛事规则与参赛须知》</text>
+    <text class="login-agree" bindtap="showRules">登录即代表同意《赛事规则与参赛须知》</text>
   </view>
 </view>
