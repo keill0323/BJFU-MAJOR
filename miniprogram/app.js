@@ -1,7 +1,7 @@
 App({
   globalData: {
     token: '',
-    baseUrl: 'http://127.0.0.1:8000'
+    baseUrl: 'https://bjfumajor.com'
   },
 
   onLaunch() {
