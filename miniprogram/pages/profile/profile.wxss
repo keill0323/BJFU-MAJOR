@@ -52,6 +52,19 @@
   margin-top: 24rpx;
 }
 
+/* 原生 button 默认样式重置（open-type=chooseAvatar 用） */
+button.edit-btn {
+  line-height: 1.6;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16rpx 30rpx;
+  margin-left: 0;
+  margin-right: 0;
+}
+button.edit-btn::after {
+  border: none;
+}
+
 /* 在校认证上传区 */
 .verify-box {
   margin-top: 24rpx;
@@ -152,16 +165,14 @@
   height: 120rpx;
   border-radius: 50%;
   background: rgba(47, 206, 122, 0.14);
-  border: 2rpx solid rgba(47, 206, 122, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
   flex-shrink: 0;
 }
 
 .avatar-img {
-  width: 64rpx;
-  height: 64rpx;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
 }
 
 .hero-info {

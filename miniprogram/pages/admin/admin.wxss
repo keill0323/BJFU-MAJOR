@@ -50,6 +50,24 @@
   font-size: 28rpx;
   color: var(--color-gray-600);
   border-radius: var(--radius-full);
+  white-space: nowrap;
+  position: relative;
+}
+
+/* tab 右上角红点（待处理数量） */
+.tab-badge {
+  display: inline-block;
+  margin-left: 6rpx;
+  min-width: 28rpx;
+  height: 28rpx;
+  line-height: 28rpx;
+  padding: 0 8rpx;
+  border-radius: 999rpx;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 20rpx;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .admin-tab.active {

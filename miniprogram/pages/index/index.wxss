@@ -35,6 +35,20 @@
   margin-top: 10rpx;
 }
 
+/* 赛事规则入口 */
+.rules-link {
+  margin: 0 40rpx 24rpx;
+  padding: 20rpx 28rpx;
+  font-size: 26rpx;
+  color: #2fce7a;
+  background: rgba(47, 206, 122, 0.08);
+  border: 1rpx solid rgba(47, 206, 122, 0.25);
+  border-radius: 20rpx;
+}
+.rules-link:active {
+  opacity: 0.8;
+}
+
 /* 搜索框（浅灰圆角，无边框） */
 .search-bar {
   margin: 0 40rpx 28rpx;

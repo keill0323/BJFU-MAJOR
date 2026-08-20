@@ -129,6 +129,69 @@ module.exports = {
     })
   }),
 
+  // 上传游戏段位截图（完美/5E平台，AI 识别段位）
+  uploadRank: (filePath) => new Promise((resolve, reject) => {
+    const token = wx.getStorageSync('token')
+    wx.uploadFile({
+      url: BASE + '/api/auth/upload-rank',
+      filePath: filePath,
+      name: 'file',
+      header: { 'Authorization': token ? 'Bearer ' + token : '' },
+      success(res) {
+        if (res.statusCode < 400) {
+          try {
+            resolve(JSON.parse(res.data))
+          } catch (e) {
+            reject({ detail: '上传响应解析失败' })
+          }
+        } else {
+          let detail = ''
+          try { detail = JSON.parse(res.data).detail || '' } catch (e) {}
+          if (res.statusCode === 401) {
+            wx.removeStorageSync('token')
+            wx.redirectTo({ url: '/pages/login/login' })
+          }
+          reject({ detail: detail || ('上传失败（' + res.statusCode + '）') })
+        }
+      },
+      fail(err) {
+        console.error('uploadRank 失败详情:', err)
+        reject({ detail: '网络错误：' + (err.errMsg || '请检查后端服务器是否启动') })
+      }
+    })
+  }),
+
+  // 上传头像
+  uploadAvatar: (filePath) => new Promise((resolve, reject) => {
+    const token = wx.getStorageSync('token')
+    wx.uploadFile({
+      url: BASE + '/api/auth/upload-avatar',
+      filePath: filePath,
+      name: 'file',
+      header: { 'Authorization': token ? 'Bearer ' + token : '' },
+      success(res) {
+        if (res.statusCode < 400) {
+          try {
+            resolve(normalizeRole(JSON.parse(res.data)))
+          } catch (e) {
+            reject({ detail: '上传响应解析失败' })
+          }
+        } else {
+          let detail = ''
+          try { detail = JSON.parse(res.data).detail || '' } catch (e) {}
+          if (res.statusCode === 401) {
+            wx.removeStorageSync('token')
+            wx.redirectTo({ url: '/pages/login/login' })
+          }
+          reject({ detail: detail || ('上传失败（' + res.statusCode + '）') })
+        }
+      },
+      fail(err) {
+        reject({ detail: '网络错误：' + (err.errMsg || '请检查后端服务器是否启动') })
+      }
+    })
+  }),
+
   // ===== 队伍 =====
   createTeam: (name) => request('/api/teams', 'POST', { name }),          // 创建队伍
   getTeams: () => request('/api/teams'),                                  // 队伍列表
@@ -140,6 +203,7 @@ module.exports = {
   leaveTeam: (teamId) => request('/api/teams/' + teamId + '/leave', 'DELETE'),  // 主动退队
   kickMember: (teamId, userId) => request('/api/teams/' + teamId + '/members/' + userId, 'DELETE'),  // 队长踢人
   disbandTeam: (teamId) => request('/api/teams/' + teamId, 'DELETE'),     // 解散队伍
+  deleteTeam: (teamId) => request('/api/teams/admin/' + teamId, 'DELETE'), // 管理员删队伍
 
   // ===== 入队申请 =====
   applyJoin: (teamId, message) => request('/api/teams/' + teamId + '/apply', 'POST', { team_id: teamId, message: message || '' }),  // 申请加入
@@ -168,6 +232,10 @@ module.exports = {
   // ===== 管理后台（admin/reviewer） =====
   adminListUsers: (keyword) => request('/api/auth/admin/users' + (keyword ? '?keyword=' + keyword : '')),  // 用户列表/搜索
   getVerifyList: () => request('/api/auth/admin/verify-list'),  // 待认证审核列表（已上传截图未通过）
+  getRankApplications: () => request('/api/auth/admin/rank-applications'),  // 段位更新申请列表
+  getMyRankApplications: () => request('/api/auth/my-rank-applications'),  // 我的段位申请（含驳回原因）
+  approveRankApplication: (appId, rank) => request('/api/auth/admin/rank-applications/' + appId + '/approve' + (rank ? '?rank=' + encodeURIComponent(rank) : ''), 'POST'),  // 通过段位更新申请（可指定段位）
+  rejectRankApplication: (appId, reason) => request('/api/auth/admin/rank-applications/' + appId + '/reject' + (reason ? '?reject_reason=' + encodeURIComponent(reason) : ''), 'POST'),  // 驳回段位更新申请（可填原因）
   adminUpdateUser: (userId, data) => request('/api/auth/admin/users/' + userId, 'PUT', data),  // 改学号/段位/评分/认证
   adminUpdateRole: (userId, role) => request('/api/auth/admin/users/' + userId + '/role', 'PUT', { role: role }),  // 改角色
   createMatch: (data) => request('/api/matches', 'POST', data),  // 创建赛事

@@ -193,7 +193,10 @@ Page({
         return t.seed > 4   // 从挑战者组晋级上来的（直升的前4 seed 1-4）
       }).map(t => Object.assign({}, t, { stage_status: challengerStatusOf(t) }))
       // 传奇组 tab：所有参加过传奇组比赛的队伍（直升 + 晋级 + 传奇组及以后淘汰）
-      const legendTab = teams.filter(t => t.stage !== 'challenger')
+      const legendTab = teams.filter(t =>
+        t.stage === 'legend' || t.stage === 'playoff' ||
+        (t.stage === 'eliminated' && ['上区', '下区', '淘汰赛'].indexOf(t.group_name) >= 0)
+      )
         .map(t => Object.assign({}, t, { stage_status: legendStatusOf(t) }))
       // 淘汰赛 tab：所有参加过淘汰赛的队伍（6强 + 淘汰赛被淘汰的）
       const playoffTab = teams.filter(t => t.stage === 'playoff' ||

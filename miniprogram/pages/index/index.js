@@ -55,5 +55,10 @@ Page({
   goMatch(e) {
     const id = e.currentTarget.dataset.id
     wx.navigateTo({ url: '/pages/match/match?id=' + id })
+  },
+
+  // 查看赛事规则与参赛须知
+  showRules() {
+    wx.navigateTo({ url: '/pages/rules/rules' })
   }
 })

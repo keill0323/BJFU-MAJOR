@@ -21,6 +21,9 @@ class TeamMemberInfo(BaseModel):
     user_id: int
     nickname: Optional[str] = None
     game_id: Optional[str] = None
+    avatar: Optional[str] = None
+    rating: Optional[int] = None
+    rank: Optional[str] = None
     role: str
 
     class Config:

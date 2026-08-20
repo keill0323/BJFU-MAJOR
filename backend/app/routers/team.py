@@ -276,3 +276,17 @@ def disband_team(
     """队长解散队伍"""
     team_service.disband_team(db, team_id, current_user.id)
     return {"message": "队伍已解散"}
+
+
+@router.delete("/admin/{team_id}")
+def delete_team(
+    team_id: int,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin),
+):
+    """管理员删除队伍"""
+    team = team_service.delete_team(db, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="队伍不存在")
+    return {"message": "队伍已删除"}
+    

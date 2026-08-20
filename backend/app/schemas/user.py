@@ -25,6 +25,7 @@ class UserInfo(BaseModel):
     individual_rating: int = 0
     role: str
     verify_image: Optional[str] = None   # 学信网截图URL
+    avatar: Optional[str] = None         # 头像URL
     # AI 审核结果（auto_pass 自动通过 / auto_reject 自动驳回 / pending 待人工复核）
     ai_review_status: Optional[str] = None
     ai_review_reason: Optional[str] = None
@@ -73,6 +74,25 @@ class VerifyListItem(BaseModel):
     ai_review_status: Optional[str] = None
     ai_review_reason: Optional[str] = None
     ai_review_confidence: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RankApplicationInfo(BaseModel):
+    """段位更新申请"""
+    id: int
+    user_id: int
+    nickname: Optional[str] = None
+    game_id: Optional[str] = None
+    current_rank: Optional[str] = None   # 当前段位
+    rank_image: Optional[str] = None     # 新段位截图
+    ai_rank: Optional[str] = None        # AI 识别段位
+    ai_confidence: Optional[float] = None
+    ai_reason: Optional[str] = None
+    reject_reason: Optional[str] = None   # 驳回原因
+    status: str
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

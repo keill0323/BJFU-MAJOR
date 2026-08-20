@@ -20,7 +20,8 @@
   <view class="admin-tabs">
     <view class="admin-tab {{tab === 'users' ? 'active' : ''}}" data-tab="users" bindtap="switchTab">用户</view>
     <view class="admin-tab {{tab === 'verify' ? 'active' : ''}}" data-tab="verify" bindtap="switchTab">认证</view>
-    <view class="admin-tab {{tab === 'teams' ? 'active' : ''}}" data-tab="teams" bindtap="switchTab">队伍</view>
+    <view class="admin-tab {{tab === 'rankapps' ? 'active' : ''}}" data-tab="rankapps" bindtap="switchTab">段位申请</view>
+    <view class="admin-tab {{tab === 'teams' ? 'active' : ''}}" data-tab="teams" bindtap="switchTab">队伍<text wx:if="{{pendingTeamCount > 0}}" class="tab-badge">{{pendingTeamCount}}</text></view>
     <view class="admin-tab {{tab === 'matches' ? 'active' : ''}}" data-tab="matches" bindtap="switchTab">赛事</view>
   </view>
 
@@ -74,6 +75,25 @@
     </view>
   </view>
 
+  <!-- ===== 段位更新申请 ===== -->
+  <view wx:if="{{tab === 'rankapps'}}">
+    <view wx:if="{{rankApplications.length === 0}}" class="empty">暂无段位更新申请</view>
+    <view wx:for="{{rankApplications}}" wx:key="id" class="card verify-card">
+      <view class="verify-top">
+        <text class="user-id">#{{item.user_id}}</text>
+        <text class="tag tag-orange">待审批</text>
+      </view>
+      <text class="user-name">{{item.nickname || '未设昵称'}} {{item.game_id ? '(' + item.game_id + ')' : ''}}</text>
+      <text class="user-meta">当前段位: {{item.current_rank || '-'}} → AI 识别: {{item.display_ai_rank}}（置信度 {{item.ai_conf_text}}）</text>
+      <text wx:if="{{item.ai_reason}}" class="user-meta">AI 判断：{{item.ai_reason}}</text>
+      <image wx:if="{{item.rank_image_full}}" class="verify-shot" src="{{item.rank_image_full}}" mode="aspectFit" bindtap="previewRankShot" data-url="{{item.rank_image_full}}"/>
+      <view class="user-actions">
+        <view class="btn-primary small-btn" bindtap="approveRankApp" data-id="{{item.id}}" data-rank="{{item.ai_rank}}">通过</view>
+        <view class="btn-danger small-btn" bindtap="rejectRankApp" data-id="{{item.id}}">驳回</view>
+      </view>
+    </view>
+  </view>
+
   <!-- ===== 队伍管理 ===== -->
   <view wx:if="{{tab === 'teams'}}">
     <view wx:for="{{teams}}" wx:key="id" class="card team-card">
@@ -81,10 +101,13 @@
         <text class="team-name">{{item.name}}</text>
         <text class="tag {{item.status === 'pending' ? 'tag-orange' : item.status === 'approved' ? 'tag-green' : 'tag-red'}}">{{item.status === 'pending' ? '待审核' : item.status === 'approved' ? '已通过' : '已驳回'}}</text>
       </view>
-      <text class="team-meta">队长: {{item.captain_name || '#' + item.captain_id}} | 成员: {{item.member_count}} | 评分: {{item.rating || 1000}}</text>
+      <text class="team-meta">队长: {{item.captain_name || '#' + item.captain_id}} | 成员: {{item.member_count}} | 评分: {{item.rating || 0}}</text>
       <view wx:if="{{item.status === 'pending'}}" class="user-actions">
         <view class="btn-primary small-btn" bindtap="approveTeam" data-id="{{item.id}}">通过</view>
         <view class="btn-danger small-btn" bindtap="rejectTeam" data-id="{{item.id}}">驳回</view>
+      </view>
+      <view class="user-actions">
+        <view class="btn-danger small-btn" bindtap="deleteTeam" data-id="{{item.id}}">删除</view>
       </view>
     </view>
     <view wx:if="{{teams.length === 0}}" class="empty">暂无队伍</view>

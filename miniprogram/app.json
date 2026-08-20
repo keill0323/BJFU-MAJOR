@@ -1,10 +1,11 @@
 {
   "pages": [
-    "pages/login/login",
     "pages/index/index",
     "pages/match/match",
     "pages/team/team",
     "pages/profile/profile",
+    "pages/login/login",
+    "pages/rules/rules",
     "pages/admin/admin",
     "pages/admin/mdetail/mdetail"
   ],

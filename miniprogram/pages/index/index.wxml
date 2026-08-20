@@ -5,6 +5,8 @@
     <text class="page-sub">北林 CS2 校内联赛</text>
   </view>
 
+  <view class="rules-link" bindtap="showRules">赛事规则与参赛须知 ›</view>
+
   <view class="search-bar">
     <input placeholder="搜索赛事..." value="{{keyword}}" bindinput="onSearchInput" bindconfirm="onSearch"/>
   </view>

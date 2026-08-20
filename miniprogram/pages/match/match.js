@@ -149,7 +149,10 @@ Page({
       if (['A', 'B', 'C', 'D', 'E', 'F', '附加赛'].indexOf(t.group_name) >= 0) return true
       return t.seed > 4
     }).map(t => Object.assign({}, t, { stage_status: challengerStatusOf(t) }))
-    const legendTab = teams.filter(t => t.stage !== 'challenger')
+    const legendTab = teams.filter(t =>
+      t.stage === 'legend' || t.stage === 'playoff' ||
+      (t.stage === 'eliminated' && ['上区', '下区', '淘汰赛'].indexOf(t.group_name) >= 0)
+    )
       .map(t => Object.assign({}, t, { stage_status: legendStatusOf(t) }))
     const playoffTab = teams.filter(t => t.stage === 'playoff' ||
       (t.stage === 'eliminated' && t.group_name === '淘汰赛'))
@@ -283,6 +286,20 @@ Page({
       wx.showToast({ title: '当前不可报名', icon: 'none' })
       return
     }
+
+    // 报名前检查学籍认证（未认证直接拦截，体验优于等后端报错）
+    try {
+      const me = await api.getMe()
+      if (me && !me.is_verified) {
+        wx.showModal({
+          title: '未完成认证',
+          content: '报名需先完成学籍认证（上传学信网/教务系统/校园卡截图）。',
+          confirmText: '去认证',
+          success: (r) => { if (r.confirm) wx.switchTab({ url: '/pages/profile/profile' }) }
+        })
+        return
+      }
+    } catch (e) { /* 忽略，交给后端二次校验 */ }
 
     // 判断报名方式
     let title = '确认报名'

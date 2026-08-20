@@ -15,7 +15,8 @@ Page({
     gameId: '',          // 新游戏ID输入
     showInvites: false,  // 是否显示邀请面板
     invitations: [],     // 我收到的入队邀请
-    uploading: false     // 是否正在上传截图
+    uploading: false,    // 是否正在上传截图
+    rankApplications: [] // 我的段位申请
   },
 
   // 每次进入页面刷新用户信息
@@ -44,6 +45,12 @@ Page({
       if (user && user.verify_image && !user.verify_image.startsWith('http')) {
         user.verify_image_full = api.BASE + user.verify_image
       }
+      if (user && user.rank_image && !user.rank_image.startsWith('http')) {
+        user.rank_image_full = api.BASE + user.rank_image
+      }
+      if (user && user.avatar && !user.avatar.startsWith('http')) {
+        user.avatar_full = api.BASE + user.avatar
+      }
       // AI 审核结果 → 生成显示文本（置信度只给管理后台看）
       if (user && user.ai_review_status) {
         const st = this.AI_STATUS_MAP[user.ai_review_status] || { text: '', cls: '' }
@@ -64,6 +71,27 @@ Page({
   isManager() {
     const user = this.data.user
     return user && (user.role === 'admin' || user.role === 'reviewer')
+  },
+
+  // 选择头像（微信 chooseAvatar 按钮回调）
+  onChooseAvatar(e) {
+    const avatarUrl = e.detail.avatarUrl
+    if (!avatarUrl) return
+    this.uploadAvatar(avatarUrl)
+  },
+
+  // 上传头像到后端
+  async uploadAvatar(filePath) {
+    try {
+      const user = await api.uploadAvatar(filePath)
+      if (user && user.avatar && !user.avatar.startsWith('http')) {
+        user.avatar_full = api.BASE + user.avatar
+      }
+      this.setData({ user })
+      wx.showToast({ title: '头像已更新', icon: 'success' })
+    } catch (err) {
+      wx.showToast({ title: err.detail || '上传失败', icon: 'error' })
+    }
   },
 
   // 拉取我收到的待处理邀请
@@ -96,6 +124,11 @@ Page({
       return
     }
     wx.navigateTo({ url: '/pages/admin/admin' })
+  },
+
+  // 跳转赛事规则与隐私政策页
+  goRules() {
+    wx.navigateTo({ url: '/pages/rules/rules' })
   },
 
   // 同意邀请入队
@@ -165,6 +198,68 @@ Page({
       .finally(() => {
         this.setData({ uploading: false })
       })
+  },
+
+  // 选择并上传游戏段位截图（完美/5E平台，AI 识别段位）
+  chooseRankImage() {
+    wx.chooseMedia({
+      count: 1,
+      mediaType: ['image'],
+      sourceType: ['album', 'camera'],
+      success: (res) => {
+        const filePath = res.tempFiles[0].tempFilePath
+        wx.compressImage({
+          src: filePath,
+          quality: 80,
+          success: (cr) => {
+            const compressedPath = (cr && cr.tempFilePath) || filePath
+            this.uploadRankWithPath(compressedPath)
+          },
+          fail: () => {
+            this.uploadRankWithPath(filePath)
+          }
+        })
+      }
+    })
+  },
+
+  // 上传段位截图，处理 AI 识别结果
+  uploadRankWithPath(filePath) {
+    this.setData({ uploading: true })
+    api.uploadRank(filePath)
+      .then((res) => {
+        if (res.auto_applied) {
+          wx.showToast({ title: '识别成功：' + res.rank, icon: 'success' })
+        } else if (res.need_review) {
+          wx.showModal({
+            title: '已提交更新申请',
+            content: (res.rank ? 'AI 识别为 ' + res.rank + '。' : '') + '已提交段位更新申请，等待管理员审批。',
+            showCancel: false
+          })
+        } else {
+          const rankText = res.rank ? 'AI 识别为 ' + res.rank + '，但置信度不足。\n' : ''
+          wx.showModal({
+            title: 'AI 初审结果',
+            content: rankText + (res.reason || '请联系管理员手动设置段位'),
+            showCancel: false
+          })
+        }
+        return this.loadUser()
+      })
+      .catch(err => {
+        wx.showToast({ title: err.detail || '上传失败', icon: 'none' })
+      })
+      .finally(() => {
+        this.setData({ uploading: false })
+      })
+  },
+
+  // 点击预览已上传的段位截图
+  previewRankImage() {
+    const url = this.data.user && this.data.user.rank_image_full
+    if (url) {
+      wx.previewImage({ urls: [url], current: url })
+    }
   },
 
   // 点击预览已上传的截图

@@ -8,6 +8,7 @@ Since: 2026-7-23
 from typing import Optional
 
 from fastapi import HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -39,11 +40,35 @@ def create_team(db: Session, name: str, captain_id: int, description: Optional[s
         db.rollback()
         raise HTTPException(status_code=400, detail="你已在某支队伍中，不能重复创建")
     db.refresh(team)
+    recalc_team_rating(db, team.id)
     return team
+
+
 
 def get_team_by_id(db: Session, team_id: int) -> Optional[Team]:
     """根据队伍ID获取队伍"""
     return db.query(Team).filter(Team.id == team_id).first()
+
+
+def recalc_team_rating(db: Session, team_id: int) -> None:
+    """计算队员rating之和作为队伍rating"""
+    team = get_team_by_id(db, team_id)
+    if not team:
+        return
+
+    # 获取队员评分
+    rows = db.query(User.individual_rating).join(TeamMember, TeamMember.user_id == User.id).filter(TeamMember.team_id == team_id).all()
+    # 取最高五人评分
+    scores = sorted([(r[0] or 0) for r in rows], reverse=True)
+    team.rating = sum(scores[:5])
+    db.commit()
+
+
+def recalc_user_team_rating(db: Session, user_id: int) -> None:
+    """当用户 rating 变动时，重新计算其所在队伍的 rating"""
+    member = db.query(TeamMember).filter(TeamMember.user_id == user_id).first()
+    if member:
+        recalc_team_rating(db, member.team_id)
 
 
 def get_my_team(db: Session, user_id: int) -> Optional[Team]:
@@ -100,6 +125,7 @@ def join_team(db: Session, team_id: int, user_id: int) -> TeamMember:
     db.refresh(member)
     # 队伍已报名的赛事，自动为该队员补报名
     sync_member_registrations(db, team_id, user_id)
+    recalc_user_team_rating(db, user_id)
     return member
 
 
@@ -111,14 +137,15 @@ def sync_member_registrations(db: Session, team_id: int, user_id: int) -> None:
 
     若队员此前有该赛事的个人报名（team_id 为空），则升级为随队报名。
     """
-    # 该队伍报名了哪些赛事
-    team_regs = db.query(Registration).filter(
+    # 该队伍报名了哪些赛事（match_id 去重，避免同一赛事被多条队员记录重复处理）
+    match_ids = [m[0] for m in db.query(Registration.match_id).filter(
         Registration.team_id == team_id
-    ).all()
-    for reg in team_regs:
+    ).distinct().all()]
+
+    for match_id in match_ids:
         # 该用户是否已有此赛事的报名记录
         existing = db.query(Registration).filter(
-            Registration.match_id == reg.match_id,
+            Registration.match_id == match_id,
             Registration.user_id == user_id,
         ).first()
         if existing:
@@ -127,11 +154,16 @@ def sync_member_registrations(db: Session, team_id: int, user_id: int) -> None:
                 existing.team_id = team_id
             # 已有随队报名 → 无需处理
             continue
+        # 取该队伍在此赛事的一条报名记录作为状态参考
+        team_reg = db.query(Registration).filter(
+            Registration.team_id == team_id,
+            Registration.match_id == match_id,
+        ).first()
         new_reg = Registration(
-            match_id=reg.match_id,
+            match_id=match_id,
             team_id=team_id,
             user_id=user_id,
-            status=reg.status,  # 跟队伍报名同状态
+            status=team_reg.status if team_reg else RegistrationStatus.PENDING,
         )
         db.add(new_reg)
     db.commit()
@@ -187,14 +219,15 @@ def leave_team(db: Session, team_id: int, user_id: int) -> None:
     if member.role == MemberRole.CAPTAIN:
         raise HTTPException(status_code=400, detail="队长不能退队，请先转让队长或解散队伍")
 
-    # 退队时清理该用户随该队伍产生的赛事报名记录
+    # 退队时：随队报名改回个人报名（恢复自由人状态）
     db.query(Registration).filter(
         Registration.team_id == team_id,
         Registration.user_id == user_id,
-    ).delete()
+    ).update({Registration.team_id: None, Registration.status: RegistrationStatus.APPROVED})
 
     db.delete(member)
     db.commit()
+    recalc_team_rating(db, team_id)
 
 
 def kick_member(db: Session, team_id: int, captain_id: int, user_id: int) -> None:
@@ -215,15 +248,15 @@ def kick_member(db: Session, team_id: int, captain_id: int, user_id: int) -> Non
     if not member:
         raise HTTPException(status_code=404, detail="该用户不在队伍中")
 
-    # 被踢出时清理该用户随该队伍产生的赛事报名记录
+    # 被踢出时：随队报名改回个人报名（恢复自由人状态）
     db.query(Registration).filter(
         Registration.team_id == team_id,
         Registration.user_id == user_id,
-    ).delete()
+    ).update({Registration.team_id: None, Registration.status: RegistrationStatus.APPROVED})
 
     db.delete(member)
     db.commit()
-
+    recalc_team_rating(db, team_id)
 
 def disband_team(db: Session, team_id: int, captain_id: int) -> None:
     """队长解散队伍，删除队伍及所有成员记录"""
@@ -242,6 +275,24 @@ def disband_team(db: Session, team_id: int, captain_id: int) -> None:
     db.query(TeamMember).filter(TeamMember.team_id == team_id).delete()
     db.delete(team)
     db.commit()
+
+
+def delete_team(db: Session, team_id: int) -> Optional[Team]:
+    """管理员删除队伍，删除队伍及所有关联记录"""
+    team = get_team_by_id(db, team_id)
+    if not team:
+        return None
+
+    # 清理该队伍的赛事报名记录、队伍进度
+    db.query(Registration).filter(Registration.team_id == team_id).delete()
+    db.query(TeamProgress).filter(TeamProgress.team_id == team_id).delete()
+    # 清理入队申请和邀请记录（有外键引用，必须先删，否则删队伍会失败）
+    db.query(TeamApplication).filter(TeamApplication.team_id == team_id).delete()
+    db.query(TeamInvitation).filter(TeamInvitation.team_id == team_id).delete()
+    db.query(TeamMember).filter(TeamMember.team_id == team_id).delete()
+    db.delete(team)
+    db.commit()
+    return team
 
 
 def get_all_teams(db: Session) -> list:
@@ -362,6 +413,8 @@ def approve_application(db: Session, application_id: int, captain_id: int) -> No
     db.commit()
     # 队伍已报名的赛事，自动为该新队员补报名
     sync_member_registrations(db, app.team_id, app.user_id)
+    # 新队员入队，重算队伍评分
+    recalc_team_rating(db, app.team_id)
 
 
 def reject_application(db: Session, application_id: int, captain_id: int) -> None:
@@ -463,6 +516,8 @@ def accept_invitation(db: Session, invitation_id: int, user_id: int) -> None:
     db.commit()
     # 队伍已报名的赛事，自动为该新队员补报名
     sync_member_registrations(db, inv.team_id, user_id)
+    # 新队员入队，重算队伍评分
+    recalc_team_rating(db, inv.team_id)
 
 
 def reject_invitation(db: Session, invitation_id: int, user_id: int) -> None:

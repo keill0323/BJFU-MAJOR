@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.match import Match, MatchRound, MatchStatus, RoundStatus, StageStatus, TeamProgress, Registration, RegistrationStatus
 from app.models.team import Team
+from app.models.user import User
 
 
 def create_match(
@@ -49,10 +50,10 @@ def get_all_matches(db: Session) -> list:
     matches = db.query(Match).order_by(Match.created_at.desc()).all()
     result = []
     for m in matches:
-        reg_count = db.query(Registration).filter(
+        reg_count = db.query(Registration.team_id).filter(
             Registration.match_id == m.id,
             Registration.team_id.isnot(None),
-        ).count()
+        ).distinct().count()
         result.append({
             "id": m.id,
             "name": m.name,
@@ -74,10 +75,10 @@ def search_matches(db: Session, keyword: str) -> list:
     matches = db.query(Match).filter(Match.name.contains(keyword)).all()
     result = []
     for m in matches:
-        reg_count = db.query(Registration).filter(
+        reg_count = db.query(Registration.team_id).filter(
             Registration.match_id == m.id,
             Registration.team_id.isnot(None),
-        ).count()
+        ).distinct().count()
         result.append({
             "id": m.id,
             "name": m.name,
@@ -261,15 +262,19 @@ def get_match_admin_detail(db: Session, match_id: int) -> Optional[dict]:
     if not match:
         return None
 
-    regs = db.query(Registration).filter(
+    team_ids = db.query(Registration.team_id).filter(
         Registration.match_id == match_id,
         Registration.team_id.isnot(None),
-    ).all()
+    ).distinct().all()
     teams = []
-    for reg in regs:
-        team = db.query(Team).filter(Team.id == reg.team_id).first()
+    for (team_id,) in team_ids:
+        team = db.query(Team).filter(Team.id == team_id).first()
         if not team:
             continue
+        reg = db.query(Registration).filter(
+            Registration.match_id == match_id,
+            Registration.team_id == team_id,
+        ).first()
         progress = db.query(TeamProgress).filter(
             TeamProgress.match_id == match_id,
             TeamProgress.team_id == team.id,
@@ -282,7 +287,7 @@ def get_match_admin_detail(db: Session, match_id: int) -> Optional[dict]:
             "team_id": team.id,
             "team_name": team.name,
             "rating": team.rating or 0,
-            "registration_status": reg.status.value if hasattr(reg.status, "value") else reg.status,
+            "registration_status": reg.status.value if reg and hasattr(reg.status, "value") else (reg.status if reg else None),
             "stage": stage,
             "group_name": progress.group_name if progress else None,
             "seed": progress.seed if progress else 0,
@@ -391,6 +396,17 @@ def register_team(db: Session, match_id: int, team_id: int) -> list:
         raise HTTPException(status_code=400, detail="该队伍已报名此赛事，请勿重复报名")
 
     members = db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
+
+    # 校验：所有队员（含队长）必须完成学籍认证
+    unverified = []
+    for member in members:
+        user = db.query(User).filter(User.id == member.user_id).first()
+        if not user or not user.is_verified:
+            name = (user.nickname or user.game_id) if user else f"用户{member.user_id}"
+            unverified.append(name)
+    if unverified:
+        raise HTTPException(status_code=400, detail=f"以下队员未完成学籍认证，无法报名：{'、'.join(unverified)}")
+
     registrations = []
     for member in members:
         # 该队员是否已报名此赛事（个人或其它队伍）
@@ -416,6 +432,12 @@ def register_user(db: Session, match_id: int, user_id: int) -> Registration:
     个人报名直接通过（APPROVED），报名即出现在人才市场，
     方便队长查看并邀请入队。
     """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if not user.is_verified:
+        raise HTTPException(status_code=400, detail="未完成学籍认证，无法报名")
+
     # 检查是否已报名该赛事（无论个人还是随队伍）
     existing = db.query(Registration).filter(
         Registration.match_id == match_id,
@@ -749,3 +771,41 @@ def advance_knockout(db: Session, match_id: int) -> dict:
         raise HTTPException(status_code=400, detail="淘汰赛已全部结束")
     db.commit()
     return {"added_rounds": added}
+
+
+def delete_match(db: Session, match_id: int) -> Optional[Match]:
+    """管理员删除比赛，删除比赛及所有关联记录"""
+    match = get_match_by_id(db, match_id)
+    if not match:
+        return None
+    # 清理对阵、队伍进度、报名记录（有外键引用，必须先删）
+    db.query(MatchRound).filter(MatchRound.match_id == match_id).delete()
+    db.query(TeamProgress).filter(TeamProgress.match_id == match_id).delete()
+    db.query(Registration).filter(Registration.match_id == match_id).delete()
+    db.delete(match)
+    db.commit()
+    return match
+
+
+def remove_team_from_match(db: Session, match_id: int, team_id: int) -> None:
+    """管理员将某队伍从赛事中移除（删除报名/进度/相关对阵）"""
+    match = get_match_by_id(db, match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail="赛事不存在")
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="队伍不存在")
+    # 清理该队在此赛事的报名记录、进度、参与的对阵
+    db.query(Registration).filter(
+        Registration.match_id == match_id,
+        Registration.team_id == team_id,
+    ).delete()
+    db.query(TeamProgress).filter(
+        TeamProgress.match_id == match_id,
+        TeamProgress.team_id == team_id,
+    ).delete()
+    db.query(MatchRound).filter(
+        MatchRound.match_id == match_id,
+        (MatchRound.team1_id == team_id) | (MatchRound.team2_id == team_id),
+    ).delete()
+    db.commit()

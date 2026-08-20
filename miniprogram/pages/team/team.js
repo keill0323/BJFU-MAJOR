@@ -20,12 +20,20 @@ Page({
     showMarket: false,  // 是否显示人才市场
     marketMatches: [],  // 可选赛事列表
     freePlayers: [],    // 当前选中的赛事的自由人
-    selectedMatchId: 0  // 选中的赛事id
+    selectedMatchId: 0, // 选中的赛事id
+    tab: 'mine',        // 当前 tab: mine=我的队伍, all=所有队伍, info=信息
+    invitations: [],    // 我收到的入队邀请
+    showInvites: false, // 是否显示邀请面板
+    showTeamDetail: false, // 是否显示队伍详情弹层
+    detailTeam: null,      // 详情中的队伍
+    detailMembers: [],     // 详情中的成员
+    rankApplications: []   // 我的段位申请
   },
 
   // 每次进入页面刷新
   async onShow() {
     await this.refreshAll()
+    await this.loadInvitations()
   },
 
   // 刷新所有数据
@@ -65,9 +73,16 @@ Page({
         // 用 /me 接口拿当前用户 id（比解析 JWT 更可靠）
         const me = await api.getMe()
         const userId = me ? me.id : null
+        const members = (team.members || []).map(m => {
+          const item = Object.assign({}, m, { display_rank: rankDisplay(m.rank) })
+          if (item.avatar && !item.avatar.startsWith('http')) {
+            item.avatar_full = api.BASE + item.avatar
+          }
+          return item
+        })
         this.setData({
           isCaptain: team.captain_id === userId,
-          members: team.members || []
+          members
         })
         if (team.captain_id === userId) {
           await this.loadApplications(team.id)
@@ -190,6 +205,29 @@ Page({
     }
   },
 
+  // 查看队伍详情
+  async viewTeam(e) {
+    const id = e.currentTarget.dataset.id
+    try {
+      const team = await api.getTeam(id)
+      const members = (team.members || []).map(m => {
+        const item = Object.assign({}, m, { display_rank: rankDisplay(m.rank) })
+        if (item.avatar && !item.avatar.startsWith('http')) {
+          item.avatar_full = api.BASE + item.avatar
+        }
+        return item
+      })
+      this.setData({ showTeamDetail: true, detailTeam: team, detailMembers: members })
+    } catch (err) {
+      wx.showToast({ title: '加载失败', icon: 'error' })
+    }
+  },
+
+  // 关闭队伍详情弹层
+  closeTeamDetail() {
+    this.setData({ showTeamDetail: false })
+  },
+
   // === 创建队伍 ===
   onNameInput(e) {
     this.setData({ teamName: e.detail.value })
@@ -296,6 +334,64 @@ Page({
   // === 申请加入（浏览队伍列表时） ===
   onMessageInput(e) {
     this.setData({ applyMessage: e.detail.value })
+  },
+
+  // 切换 tab
+  switchTab(e) {
+    this.setData({ tab: e.currentTarget.dataset.tab })
+    if (e.currentTarget.dataset.tab === 'all') {
+      this.loadTeams()
+    }
+  },
+
+  // 拉取信息 tab 数据（入队邀请 + 段位申请）+ 更新 tab 红点
+  async loadInvitations() {
+    let hasInvite = false
+    let hasRankApp = false
+    try {
+      const invites = await api.getMyInvitations()
+      this.setData({ invitations: invites || [] })
+      hasInvite = (invites || []).length > 0
+    } catch (err) {
+      this.setData({ invitations: [] })
+    }
+    try {
+      const apps = await api.getMyRankApplications()
+      this.setData({ rankApplications: apps || [] })
+      hasRankApp = (apps || []).some(a => a.status === 'pending' || a.status === 'rejected')
+    } catch (err) {
+      this.setData({ rankApplications: [] })
+    }
+    if (hasInvite || hasRankApp) {
+      wx.showTabBarRedDot({ index: 1 })
+    } else {
+      wx.hideTabBarRedDot({ index: 1 })
+    }
+  },
+
+  // 同意邀请入队
+  async acceptInv(e) {
+    const id = e.currentTarget.dataset.id
+    try {
+      await api.acceptInvitation(id)
+      wx.showToast({ title: '已入队', icon: 'success' })
+      await this.loadInvitations()
+      await this.refreshAll()
+    } catch (err) {
+      wx.showToast({ title: err.detail || '操作失败', icon: 'error' })
+    }
+  },
+
+  // 拒绝邀请
+  async rejectInv(e) {
+    const id = e.currentTarget.dataset.id
+    try {
+      await api.rejectInvitation(id)
+      wx.showToast({ title: '已拒绝', icon: 'none' })
+      await this.loadInvitations()
+    } catch (err) {
+      wx.showToast({ title: err.detail || '操作失败', icon: 'error' })
+    }
   },
 
   async applyJoin(e) {

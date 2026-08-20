@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///" + os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cs2_competition.db")
     SECRET_KEY: str = "change-me-in-env-file"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 令牌有效期（分钟），默认 10080 = 7 天
     DB_ECHO: bool = True
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "123456"

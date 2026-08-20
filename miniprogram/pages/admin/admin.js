@@ -15,8 +15,11 @@ Page({
     userKeyword: '',
     // 认证审核
     verifyUsers: [],
+    // 段位更新申请
+    rankApplications: [],
     // 队伍管理
     teams: [],
+    pendingTeamCount: 0,
     // 赛事管理
     matches: [],
     // 创建赛事表单
@@ -37,6 +40,7 @@ Page({
         this.loadTeams()
         this.loadMatches()
         this.loadVerifyList()
+        this.loadRankApplications()
       } else {
         wx.showModal({
           title: '权限不足',
@@ -107,7 +111,7 @@ Page({
     const majors = ['D', 'C', 'B', 'A', 'S']
     wx.showActionSheet({
       itemList: majors,
-      success: (res) => {
+      success: async (res) => {
         const major = majors[res.tapIndex]
         if (major === 'S') {
           // S 段：输入星数 1-50
@@ -131,8 +135,17 @@ Page({
               }
             }
           })
+        } else if (major === 'D') {
+          // D 段只有 D（无 D+/D++），直接设置
+          try {
+            await api.adminUpdateUser(uid, { rank: 'D' })
+            wx.showToast({ title: '段位已更新，水平分已同步', icon: 'success' })
+            await this.loadUsers(this.data.userKeyword)
+          } catch (err) {
+            this.showErr(err, '设置失败')
+          }
         } else {
-          // D/C/B/A：选小段
+          // C/B/A：选小段
           const subs = [major, major + '+', major + '++']
           wx.showActionSheet({
             itemList: subs,
@@ -235,13 +248,83 @@ Page({
     })
   },
 
+  // ===== 段位更新申请 =====
+  async loadRankApplications() {
+    try {
+      const data = await api.getRankApplications()
+      const list = (data || []).map(a => Object.assign({}, a, {
+        rank_image_full: a.rank_image
+          ? (a.rank_image.startsWith('http') ? a.rank_image : api.BASE + a.rank_image)
+          : '',
+        ai_conf_text: (a.ai_confidence != null) ? Math.round(a.ai_confidence * 100) + '%' : '',
+        display_ai_rank: a.ai_rank ? rankDisplay(a.ai_rank) : '-'
+      }))
+      this.setData({ rankApplications: list })
+    } catch (err) {
+      this.setData({ rankApplications: [] })
+    }
+  },
+
+  // 预览段位截图
+  previewRankShot(e) {
+    const url = e.currentTarget.dataset.url
+    if (url) wx.previewImage({ urls: [url], current: url })
+  },
+
+  // 通过段位更新申请（可修改 AI 识别段位）
+  async approveRankApp(e) {
+    const id = e.currentTarget.dataset.id
+    const aiRank = e.currentTarget.dataset.rank
+    wx.showModal({
+      title: '确认段位',
+      editable: true,
+      placeholderText: '输入段位，如 A++ 或 S20',
+      content: aiRank || '',
+      success: async (res) => {
+        if (!res.confirm) return
+        const rank = (res.content || '').trim()
+        if (!rank) return
+        try {
+          await api.approveRankApplication(id, rank)
+          wx.showToast({ title: '已通过，段位已更新', icon: 'success' })
+          await this.loadRankApplications()
+          await this.loadUsers(this.data.userKeyword)
+        } catch (err) {
+          this.showErr(err, '操作失败')
+        }
+      }
+    })
+  },
+
+  // 驳回段位更新申请（可填写驳回原因）
+  async rejectRankApp(e) {
+    const id = e.currentTarget.dataset.id
+    wx.showModal({
+      title: '驳回原因',
+      editable: true,
+      placeholderText: '填写驳回原因（可选）',
+      success: async (res) => {
+        if (!res.confirm) return
+        const reason = (res.content || '').trim()
+        try {
+          await api.rejectRankApplication(id, reason)
+          wx.showToast({ title: '已驳回', icon: 'none' })
+          await this.loadRankApplications()
+        } catch (err) {
+          this.showErr(err, '操作失败')
+        }
+      }
+    })
+  },
+
   // ===== 队伍管理 =====
   async loadTeams() {
     try {
       const data = await api.getTeams()
-      this.setData({ teams: data || [] })
+      const pendingTeamCount = (data || []).filter(t => t.status === 'pending').length
+      this.setData({ teams: data || [], pendingTeamCount })
     } catch (err) {
-      this.setData({ teams: [] })
+      this.setData({ teams: [], pendingTeamCount: 0 })
     }
   },
 
@@ -265,6 +348,24 @@ Page({
     } catch (err) {
       this.showErr(err, '驳回失败')
     }
+  },
+
+  async deleteTeam(e) {
+    const id = e.currentTarget.dataset.id
+    wx.showModal({
+      title: '删除队伍',
+      content: '确定删除吗?',
+      success: async (res) => {
+        if (!res.confirm) return
+        try {
+          await api.deleteTeam(id)
+          wx.showToast({ title: '已删除', icon: 'success'})
+          await this.loadTeams()
+        } catch (err) {
+          this.showErr(err, '删除失败')
+        }
+      }
+    })
   },
 
   // ===== 赛事管理 =====

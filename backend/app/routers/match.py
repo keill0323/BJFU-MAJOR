@@ -16,6 +16,7 @@ from app.schemas.match import MatchCreateRequest, MatchInfo, RoundInfo, RoundUpd
 from app.models.match import MatchStatus
 from app.services import match_service
 from app.services.auth_service import get_current_user, require_admin
+from app.models.team import Team, TeamStatus
 
 router = APIRouter(prefix="/api/matches", tags=["赛事"])
 
@@ -255,6 +256,8 @@ def register_team(
         raise HTTPException(status_code=404, detail="队伍不存在")
     if team.captain_id != current_user.id:
         raise HTTPException(status_code=403, detail="只有队长才能发起队伍报名")
+    if team.status != TeamStatus.APPROVED:
+        raise HTTPException(status_code=403, detail="队伍未通过审核，无法报名")
 
     match_service.register_team(db, match_id, team_id)
     return {"message": "报名成功"}
@@ -383,3 +386,28 @@ def advance_knockout(match_id: int, db=Depends(get_db), admin=Depends(require_ad
     """推进淘汰赛：1/4打完生成半决赛，半决赛打完生成决赛"""
     result = match_service.advance_knockout(db, match_id)
     return {"message": "淘汰赛已推进", "data": result}
+
+
+@router.delete("/{match_id}")
+def delete_match(
+    match_id: int,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin),
+):
+    """管理员删除比赛"""
+    match = match_service.delete_match(db, match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail="赛事不存在")
+    return {"message": "比赛已删除"}
+
+
+@router.delete("/{match_id}/teams/{team_id}")
+def remove_team_from_match(
+    match_id: int,
+    team_id: int,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin),
+):
+    """管理员将某队伍从赛事中移除"""
+    match_service.remove_team_from_match(db, match_id, team_id)
+    return {"message": "已移除该队伍"}

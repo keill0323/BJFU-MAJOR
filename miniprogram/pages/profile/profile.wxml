@@ -8,7 +8,7 @@
   <view wx:else>
     <!-- 渐变用户卡 -->
     <view wx:if="{{user}}" class="profile-hero">
-      <view class="avatar"><image class="avatar-img" src="/images/icons/gamepad.svg"/></view>
+      <view class="avatar"><image class="avatar-img" src="{{user.avatar_full || '/images/icons/gamepad.svg'}}"/></view>
       <view class="hero-info">
         <text class="hero-name">{{user.nickname || '未设置昵称'}}</text>
         <text class="hero-id">ID {{user.id}} · {{user.display_rank || '暂无段位'}}</text>
@@ -59,26 +59,35 @@
         </view>
       </view>
 
-      <!-- AI 审核结果（有 AI 审核记录时显示，三种状态都展示） -->
-      <view wx:if="{{user && user.ai_review_status}}" class="ai-review {{user.ai_review_class}}">
-        <text class="ai-review-status">{{user.ai_review_text}}</text>
-        <text wx:if="{{user.ai_review_reason}}" class="ai-review-reason">AI 判断：{{user.ai_review_reason}}</text>
-      </view>
+      <!-- AI 审核结果不展示给用户 -->
 
       <!-- 在校认证：未认证用户上传学信网截图 -->
       <view wx:if="{{!editMode && user && !user.is_verified}}" class="verify-box">
-        <text class="verify-tip">{{user.verify_image ? '已提交截图，等待管理员审核' : '上传学信网/教务系统截图完成在校认证'}}</text>
+        <text class="verify-tip">{{user.verify_image ? '已提交截图，等待管理员审核' : '请上传学信网/教务系统截图，或校园卡/电子校园卡截图（建议在校生使用）；需点进学校资料卡片，包含姓名、学号、学校名；务必码住身份证号和照片，小心信息泄露'}}</text>
         <view wx:if="{{user.verify_image}}" class="verify-img-row">
           <image class="verify-thumb" src="{{user.verify_image_full}}" bindtap="previewVerifyImage"/>
           <view class="btn-outline small-btn" bindtap="chooseVerifyImage">重新上传</view>
         </view>
-        <view wx:else class="btn-primary" bindtap="chooseVerifyImage">{{uploading ? '上传中...' : '上传学信网截图'}}</view>
+        <view wx:else class="btn-primary" bindtap="chooseVerifyImage">{{uploading ? '上传中...' : '上传认证截图'}}</view>
       </view>
+
+      <!-- 游戏段位认证：上传完美/5E平台段位截图，AI 自动识别 -->
+      <view wx:if="{{!editMode && user}}" class="verify-box rank-box">
+        <text class="verify-tip">{{user.rank_image ? '已上传段位截图，AI 识别后可自动设置段位' : '上传完美平台/5E平台段位截图（历史最高），AI 自动识别段位'}}</text>
+        <view wx:if="{{user.rank_image}}" class="verify-img-row">
+          <image class="verify-thumb" src="{{user.rank_image_full}}" bindtap="previewRankImage"/>
+          <view class="btn-outline small-btn" bindtap="chooseRankImage">重新上传</view>
+        </view>
+        <view wx:else class="btn-primary" bindtap="chooseRankImage">{{uploading ? '上传中...' : '上传段位截图'}}</view>
+      </view>
+
+      <!-- 我的段位申请已移至队伍页信息 tab -->
 
       <view wx:if="{{!editMode && user}}" class="btn-outline edit-btn" bindtap="enableEdit">修改资料</view>
 
       <!-- 编辑态 -->
       <view wx:if="{{editMode}}">
+        <button class="btn-outline edit-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">更换头像</button>
         <input class="input" placeholder="昵称" value="{{nickname}}" bindinput="onNickInput"/>
         <input class="input" placeholder="游戏ID" value="{{gameId}}" bindinput="onGameIdInput"/>
         <view class="btn-primary" bindtap="saveProfile">保存</view>
@@ -92,11 +101,12 @@
       <image class="menu-arrow" src="/images/icons/chevron-right.svg"/>
     </view>
 
-    <!-- 入队邀请入口 -->
-    <view class="card menu-entry" bindtap="openInvites">
-      <image class="menu-icon" src="/images/icons/mail.svg"/>
-      <text class="menu-text">入队邀请</text>
-      <text wx:if="{{invitations.length > 0}}" class="invite-badge">{{invitations.length}}</text>
+    <!-- 入队邀请已移至队伍页 -->
+
+    <!-- 赛事规则与隐私政策入口 -->
+    <view class="card menu-entry" bindtap="goRules">
+      <image class="menu-icon" src="/images/icons/settings.svg"/>
+      <text class="menu-text">赛事规则与隐私政策</text>
       <image class="menu-arrow" src="/images/icons/chevron-right.svg"/>
     </view>
 

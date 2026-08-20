@@ -16,8 +16,9 @@ from sqlalchemy import cast, String
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, RankApplication
 from app.database import get_db
+from app.services import team_service
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -38,12 +39,12 @@ def wx_code_to_openid(code: str) -> Optional[str]:
         return data["openid"]
     return None
 
-# 段位体系：D/C/B/A 各3小段 + S 段50星（总分100，段位越高水平分越高）
-RANK_ORDER = ["D", "D+", "D++", "C", "C+", "C++", "B", "B+", "B++", "A", "A+", "A++"]
+# 段位体系：D + C/C+/C++ + B/B+/B++ + A/A+/A++ + S 段50星（总分100，段位越高水平分越高）
+RANK_ORDER = ["D", "C", "C+", "C++", "B", "B+", "B++", "A", "A+", "A++"]
 
 
 def _rank_rating(rank: str) -> Optional[int]:
-    """根据段位计算水平分（0-100）：D/C/B/A 每档 +3（4~37），S 段从 40 升到 100。"""
+    """根据段位计算水平分（0-100）：D~A++ 每档 +3（4~31），S 段从 40 升到 100。"""
     if rank in RANK_ORDER:
         return 4 + RANK_ORDER.index(rank) * 3
     if rank.startswith("S"):
@@ -166,6 +167,7 @@ def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = Non
             user.verify_image = verify_image or None   # 空字符串表示清除截图
         db.commit()
         db.refresh(user)
+        team_service.recalc_user_team_rating(db, user_id)  # 用户段位/评分变动时，重新计算其所在队伍的 rating
     return user
 
 
@@ -185,6 +187,84 @@ def update_user_role(db: Session, user_id: int, role: str, operator: User) -> Op
     db.commit()
     db.refresh(target)
     return target
+
+
+def create_rank_application(db: Session, user_id: int, rank_image: Optional[str] = None,
+                            ai_rank: Optional[str] = None, ai_confidence: float = 0,
+                            ai_reason: Optional[str] = None) -> RankApplication:
+    """创建段位更新申请（用户已有段位后再次上传截图）"""
+    app = RankApplication(
+        user_id=user_id,
+        rank_image=rank_image,
+        ai_rank=ai_rank,
+        ai_confidence=ai_confidence,
+        ai_reason=ai_reason,
+        status="pending",
+    )
+    db.add(app)
+    db.commit()
+    db.refresh(app)
+    return app
+
+
+def get_pending_rank_applications(db: Session) -> list:
+    """列出待审批的段位更新申请"""
+    return (
+        db.query(RankApplication)
+        .filter(RankApplication.status == "pending")
+        .order_by(RankApplication.created_at.asc())
+        .all()
+    )
+
+
+def get_my_rank_applications(db: Session, user_id: int) -> list:
+    """查询某用户的段位更新申请（按时间倒序，含驳回原因）"""
+    return (
+        db.query(RankApplication)
+        .filter(RankApplication.user_id == user_id)
+        .order_by(RankApplication.created_at.desc())
+        .all()
+    )
+
+
+def approve_rank_application(db: Session, app_id: int, rank: Optional[str] = None) -> Optional[RankApplication]:
+    """审批通过段位更新申请：更新用户段位 + 同步水平分
+
+    rank 为管理员手动指定的段位（AI 识别错误时可覆盖），不传则用 AI 识别结果。
+    """
+    app = db.query(RankApplication).filter(RankApplication.id == app_id).first()
+    if not app:
+        return None
+    if app.status == "pending":
+        user = get_user_by_id(db, app.user_id)
+        if user:
+            if app.rank_image:
+                user.rank_image = app.rank_image
+            final_rank = rank or app.ai_rank
+            if final_rank:
+                user.rank = final_rank
+                rating = _rank_rating(final_rank)
+                if rating is not None:
+                    user.individual_rating = rating
+        app.status = "approved"
+        db.commit()
+        db.refresh(app)
+        team_service.recalc_user_team_rating(db, app.user_id)  # 用户段位/评分变动时，重新计算其所在队伍的 rating
+    return app
+
+
+def reject_rank_application(db: Session, app_id: int, reject_reason: Optional[str] = None) -> Optional[RankApplication]:
+    """驳回段位更新申请（可填写驳回原因）"""
+    app = db.query(RankApplication).filter(RankApplication.id == app_id).first()
+    if not app:
+        return None
+    if app.status == "pending":
+        app.status = "rejected"
+        if reject_reason:
+            app.reject_reason = reject_reason
+        db.commit()
+        db.refresh(app)
+    return app
 
 
 def get_current_user(db: Session = Depends(get_db), authorization: str = Header(None)) -> User:

@@ -6,6 +6,6 @@
 Author: keill
 Since: 2026-07-21
 """
-from app.models.user import User
+from app.models.user import User, RankApplication
 from app.models.team import Team, TeamMember, TeamApplication, TeamInvitation
 from app.models.match import Match, MatchRound, TeamProgress, Registration

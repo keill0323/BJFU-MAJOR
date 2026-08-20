@@ -1,5 +1,13 @@
-<!-- ============ 有队伍：显示我的队伍 ============ -->
-<view wx:if="{{myTeam}}" class="page">
+<!-- tab 栏 -->
+<view class="team-tabs">
+  <view class="team-tab {{tab === 'mine' ? 'active' : ''}}" data-tab="mine" bindtap="switchTab">我的队伍</view>
+  <view class="team-tab {{tab === 'all' ? 'active' : ''}}" data-tab="all" bindtap="switchTab">所有队伍</view>
+  <view class="team-tab {{tab === 'info' ? 'active' : ''}}" data-tab="info" bindtap="switchTab">信息</view>
+</view>
+
+<!-- ============ 我的队伍 ============ -->
+<view wx:if="{{tab === 'mine'}}" class="page">
+<view wx:if="{{myTeam}}">
   <!-- 队伍信息卡片 -->
   <view class="card">
     <view class="team-top">
@@ -13,13 +21,14 @@
   <view class="card">
     <text class="section-title">成员 ({{members.length}}/{{myTeam.member_count || members.length}})</text>
     <view wx:for="{{members}}" wx:key="id" class="member-row">
+      <image class="member-avatar" src="{{item.avatar_full || '/images/icons/gamepad.svg'}}"/>
       <view class="member-info">
         <view class="member-name-col">
           <view class="member-name-row">
             <text class="member-name">{{item.nickname || '玩家' + item.user_id}}</text>
             <text class="tag {{item.role === 'captain' ? 'tag-orange' : 'tag-gray'}}">{{item.role === 'captain' ? '队长' : '队员'}}</text>
           </view>
-          <text class="member-meta">游戏ID: {{item.game_id || '未设置'}} · ID: {{item.user_id}}</text>
+          <text class="member-meta">游戏ID: {{item.game_id || '未设置'}} · 段位: {{item.display_rank || '未设置'}}</text>
         </view>
       </view>
       <!-- 队长踢人按钮（非队长成员可见） -->
@@ -83,27 +92,84 @@
       </view>
     </view>
   </view>
-</view>
+  </view>
 
-<!-- ============ 没队伍：创建 + 浏览 ============ -->
-<view wx:else class="page">
-  <!-- 创建队伍 -->
+  <!-- 没队伍：创建 -->
+  <view wx:else>
   <view class="card">
     <text class="section-title">创建队伍</text>
     <input class="team-input" placeholder="输入队名（最多20字）" value="{{teamName}}" bindinput="onNameInput" maxlength="20"/>
     <view class="btn-primary" bindtap="createTeam">创建队伍</view>
   </view>
+  </view>
+</view>
 
-  <!-- 全部队伍列表 -->
+<!-- ============ 所有队伍 ============ -->
+<view wx:if="{{tab === 'all'}}" class="page">
   <view class="card">
     <text class="section-title">所有队伍</text>
     <view wx:if="{{teams.length === 0}}" class="empty">还没有队伍</view>
     <view wx:for="{{teams}}" wx:key="id" class="team-list-row">
       <view class="team-list-info">
         <text class="team-list-name">{{item.name}}</text>
-        <text class="team-list-meta">队长: {{item.captain_name || '未知'}} | {{item.member_count}}人 | 评分{{item.rating || 1000}}</text>
+        <text class="team-list-meta">队长: {{item.captain_name || '未知'}} | {{item.member_count}}人 | 评分{{item.rating || 0}}</text>
       </view>
+      <view class="btn-outline small-btn" bindtap="viewTeam" data-id="{{item.id}}">详情</view>
       <view class="btn-outline small-btn" bindtap="applyJoin" data-id="{{item.id}}" data-name="{{item.name}}">申请加入</view>
+    </view>
+  </view>
+</view>
+
+<!-- ============ 信息 ============ -->
+<view wx:if="{{tab === 'info'}}" class="page">
+  <view class="card">
+    <text class="section-title">入队邀请</text>
+    <view wx:if="{{invitations.length === 0}}" class="empty">暂无邀请</view>
+    <view wx:for="{{invitations}}" wx:key="id" class="invite-row">
+      <view class="invite-info">
+        <text class="invite-team">{{item.team_name || '某队伍'}}</text>
+        <text class="invite-msg">队长: {{item.captain_name || '未知'}}{{item.message ? ' | ' + item.message : ''}}</text>
+      </view>
+      <view class="invite-actions">
+        <view class="btn-primary small-btn" bindtap="acceptInv" data-id="{{item.id}}">同意</view>
+        <view class="btn-danger small-btn" bindtap="rejectInv" data-id="{{item.id}}">拒绝</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <text class="section-title">段位申请</text>
+    <view wx:if="{{rankApplications.length === 0}}" class="empty">暂无申请</view>
+    <view wx:for="{{rankApplications}}" wx:key="id" class="invite-row">
+      <view class="invite-info">
+        <text class="invite-team">申请段位: {{item.ai_rank || '-'}}</text>
+        <text class="invite-msg">{{item.status === 'approved' ? '已通过' : item.status === 'rejected' ? '已驳回' : '待审批'}}</text>
+        <text wx:if="{{item.reject_reason}}" class="invite-msg">驳回原因: {{item.reject_reason}}</text>
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- 队伍详情弹层 -->
+<view wx:if="{{showTeamDetail}}" class="mask" bindtap="closeTeamDetail">
+  <view class="market-panel" catchtap="">
+    <view class="market-header">
+      <text class="section-title">{{detailTeam.name}}</text>
+      <image class="market-close" src="/images/icons/x.svg" bindtap="closeTeamDetail"/>
+    </view>
+    <text class="team-desc">{{detailTeam.description || '暂无简介'}}</text>
+    <text class="section-title" style="margin-top:24rpx">成员 ({{detailMembers.length}})</text>
+    <view wx:for="{{detailMembers}}" wx:key="id" class="member-row">
+      <image class="member-avatar" src="{{item.avatar_full || '/images/icons/gamepad.svg'}}"/>
+      <view class="member-info">
+        <view class="member-name-col">
+          <view class="member-name-row">
+            <text class="member-name">{{item.nickname || '玩家' + item.user_id}}</text>
+            <text class="tag {{item.role === 'captain' ? 'tag-orange' : 'tag-gray'}}">{{item.role === 'captain' ? '队长' : '队员'}}</text>
+          </view>
+          <text class="member-meta">游戏ID: {{item.game_id || '未设置'}} · 段位: {{item.display_rank || '未设置'}}</text>
+        </view>
+      </view>
     </view>
   </view>
 </view>

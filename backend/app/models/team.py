@@ -45,7 +45,7 @@ class Team(Base):
     status = Column(SAEnum(TeamStatus), default=TeamStatus.PENDING, index=True, comment="审核状态 pending/approved/rejected")
     created_at = Column(DateTime, default=datetime.now, index=True, comment="创建时间")
     members = relationship("TeamMember", back_populates="team")
-    rating = Column(Integer, default=1000, comment="队伍水平分")
+    rating = Column(Integer, default=0, comment="队伍水平分")
 
 
 class MemberRole(str, enum.Enum):
@@ -85,6 +85,18 @@ class TeamMember(Base):
     @property
     def game_id(self):
         return self.user.game_id if self.user else None
+
+    @property
+    def avatar(self):
+        return self.user.avatar if self.user else None
+
+    @property
+    def rating(self):
+        return self.user.individual_rating if self.user else None
+
+    @property
+    def rank(self):
+        return self.user.rank if self.user else None
 
 
 class ApplicationStatus(str, enum.Enum):
