@@ -26,6 +26,7 @@ class UserInfo(BaseModel):
     role: str
     identity: Optional[str] = None    # new_student新生/senior老登
     verify_image: Optional[str] = None   # 学信网截图URL
+    verify_reject_reason: Optional[str] = None   # 认证驳回原因
     avatar: Optional[str] = None         # 头像URL
     # AI 审核结果（auto_pass 自动通过 / auto_reject 自动驳回 / pending 待人工复核）
     ai_review_status: Optional[str] = None
@@ -49,6 +50,7 @@ class AdminUpdateUserRequest(BaseModel):
     individual_rating: Optional[int] = None
     identity: Optional[str] = None       # new_student新生/senior老登（研1/博1由管理员认证）
     verify_image: Optional[str] = None   # 传空字符串表示清除截图
+    verify_reject_reason: Optional[str] = None   # 认证驳回原因（传空字符串表示清除）
 
 
 class UpdateRoleRequest(BaseModel):

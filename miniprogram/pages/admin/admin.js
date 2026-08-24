@@ -300,16 +300,18 @@ Page({
     }
   },
 
-  // 认证驳回：清除截图并保持未认证
+  // 认证驳回：填写原因（用户可见），清除截图并保持未认证
   async verifyReject(e) {
     const id = e.currentTarget.dataset.id
     wx.showModal({
       title: '驳回认证',
-      content: '确定驳回该用户的认证申请吗？截图将被清除。',
+      editable: true,
+      placeholderText: '填写驳回原因（用户可见，可选）',
       success: async (res) => {
         if (!res.confirm) return
+        const reason = (res.content || '').trim()
         try {
-          await api.adminUpdateUser(id, { is_verified: false, verify_image: '' })
+          await api.adminUpdateUser(id, { is_verified: false, verify_image: '', verify_reject_reason: reason || '' })
           wx.showToast({ title: '已驳回', icon: 'none' })
           await this.loadVerifyList()
           await this.loadUsers(this.data.userKeyword)

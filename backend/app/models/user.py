@@ -49,6 +49,7 @@ class User(Base):
     game_id = Column(String(64), nullable=True, comment="游戏ID")
     student_id = Column(String(64), unique=True, nullable=True, comment="学号（需上传截图人工审核）")
     verify_image = Column(String(256), nullable=True, comment="学信网/教务系统截图URL")
+    verify_reject_reason = Column(String(200), nullable=True, comment="认证驳回原因（用户可见）")
     is_verified = Column(Boolean, default=False, index=True, comment="管理员是否审核通过")
     role = Column(SAEnum(UserRole), default=UserRole.USER, comment="用户角色 user/admin/reviewer/commentator")
     created_at = Column(DateTime, default=datetime.now, index=True, comment="注册时间")

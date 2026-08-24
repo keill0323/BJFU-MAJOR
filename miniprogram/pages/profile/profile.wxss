@@ -81,6 +81,14 @@ button.edit-btn::after {
   margin-bottom: 16rpx;
 }
 
+.verify-reject-reason {
+  display: block;
+  font-size: 26rpx;
+  color: var(--color-danger);
+  font-weight: 600;
+  margin-bottom: 12rpx;
+}
+
 .verify-img-row {
   display: flex;
   align-items: center;

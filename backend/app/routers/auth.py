@@ -100,6 +100,7 @@ def admin_update_user(
         individual_rating=request.individual_rating,
         identity=request.identity,
         verify_image=request.verify_image,
+        verify_reject_reason=request.verify_reject_reason,
     )
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")

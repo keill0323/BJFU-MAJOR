@@ -169,7 +169,8 @@ def update_self_profile(db: Session, user_id: int, nickname: Optional[str] = Non
 
 def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = None, is_verified: Optional[bool] = None,
                       rank: Optional[str] = None, individual_rating: Optional[int] = None,
-                      identity: Optional[str] = None, verify_image: Optional[str] = None) -> Optional[User]:
+                      identity: Optional[str] = None, verify_image: Optional[str] = None,
+                      verify_reject_reason: Optional[str] = None) -> Optional[User]:
     """管理员修改用户资料（学号、审核状态、段位、身份等）"""
     user = get_user_by_id(db, user_id)
     if user:
@@ -190,6 +191,8 @@ def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = Non
             user.individual_rating = individual_rating
         if verify_image is not None:
             user.verify_image = verify_image or None   # 空字符串表示清除截图
+        if verify_reject_reason is not None:
+            user.verify_reject_reason = verify_reject_reason or None   # 空字符串表示清除驳回原因
         db.commit()
         db.refresh(user)
         team_service.recalc_user_team_rating(db, user_id)  # 用户段位/评分变动时，重新计算其所在队伍的 rating
