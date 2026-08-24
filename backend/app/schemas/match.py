@@ -15,6 +15,7 @@ class MatchCreateRequest(BaseModel):
     description: Optional[str] = None
     max_teams: int = 16
     team_size: int = 5
+    match_type: str = "major"   # freshman新生赛 / major大赛
     register_start: Optional[datetime] = None
     register_end: Optional[datetime] = None
     match_start: Optional[datetime] = None
@@ -27,6 +28,7 @@ class MatchInfo(BaseModel):
     description: Optional[str] = None
     max_teams: int
     team_size: int
+    match_type: str = "major"
     status: str
     register_start: Optional[datetime] = None
     register_end: Optional[datetime] = None

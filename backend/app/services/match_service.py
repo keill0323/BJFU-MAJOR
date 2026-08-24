@@ -21,6 +21,7 @@ def create_match(
     description: Optional[str] = None,
     max_teams: int = 16,
     team_size: int = 5,
+    match_type: str = "major",
     register_start: Optional[datetime] = None,
     register_end: Optional[datetime] = None,
     match_start: Optional[datetime] = None,
@@ -31,6 +32,7 @@ def create_match(
         description=description,
         max_teams=max_teams,
         team_size=team_size,
+        match_type=match_type,
         register_start=register_start,
         register_end=register_end,
         match_start=match_start,
@@ -60,6 +62,7 @@ def get_all_matches(db: Session) -> list:
             "description": m.description,
             "max_teams": m.max_teams,
             "team_size": m.team_size,
+            "match_type": m.match_type or "major",
             "status": m.status.value if hasattr(m.status, "value") else m.status,
             "register_start": m.register_start,
             "register_end": m.register_end,
@@ -85,6 +88,7 @@ def search_matches(db: Session, keyword: str) -> list:
             "description": m.description,
             "max_teams": m.max_teams,
             "team_size": m.team_size,
+            "match_type": m.match_type or "major",
             "status": m.status.value if hasattr(m.status, "value") else m.status,
             "register_start": m.register_start,
             "register_end": m.register_end,
@@ -386,6 +390,9 @@ def register_team(db: Session, match_id: int, team_id: int) -> list:
     避免同一用户产生多条报名记录。
     """
     from app.models.team import TeamMember
+    from app.services import team_service
+    from app.services.auth_service import effective_identity
+    from app.services.auth_service import _auto_identity
 
     # 队伍级校验：该队伍是否已报名此赛事（防止队长重复报名）
     team_registered = db.query(Registration).filter(
@@ -407,6 +414,17 @@ def register_team(db: Session, match_id: int, team_id: int) -> list:
     if unverified:
         raise HTTPException(status_code=400, detail=f"以下队员未完成学籍认证，无法报名：{'、'.join(unverified)}")
 
+    # 新生赛校验：队伍至少 3 名新生（现场动态算，跨年自动正确）
+    match = get_match_by_id(db, match_id)
+    if match and (match.match_type or "major") == "freshman":
+        new_count = 0
+        for member in members:
+            user = db.query(User).filter(User.id == member.user_id).first()
+            if user and effective_identity(user) == "new_student":
+                new_count += 1
+        if new_count < 3:
+            raise HTTPException(status_code=400, detail=f"新生赛要求队伍至少 3 名新生，当前仅 {new_count} 名")
+
     registrations = []
     for member in members:
         # 该队员是否已报名此赛事（个人或其它队伍）
@@ -423,6 +441,7 @@ def register_team(db: Session, match_id: int, team_id: int) -> list:
     db.commit()
     for reg in registrations:
         db.refresh(reg)
+    team_service.recalc_team_rating(db, team_id)
     return registrations
 
 

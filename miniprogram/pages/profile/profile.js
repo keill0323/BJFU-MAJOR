@@ -29,6 +29,17 @@ Page({
     }
   },
 
+  // 下拉刷新
+  async onPullDownRefresh() {
+    const token = wx.getStorageSync('token') || ''
+    this.setData({ token })
+    if (token) {
+      await this.loadUser()
+      await this.loadInvitations()
+    }
+    wx.stopPullDownRefresh()
+  },
+
   // AI 审核状态 → 展示文本和样式
   AI_STATUS_MAP: {
     auto_pass: { text: 'AI 已自动通过', cls: 'ai-pass' },

@@ -57,6 +57,28 @@ def _rank_rating(rank: str) -> Optional[int]:
     return None
 
 
+def _auto_identity(student_id: Optional[str]) -> Optional[str]:
+    """根据学号自动识别身份（新生/老登）"""
+    if not student_id or len(student_id) < 2 or not student_id[:2].isdigit():
+        return None
+    enroll_year = 2000 + int(student_id[:2])
+    current_year = datetime.now().year
+    if enroll_year >= current_year - 1:
+        return "new_student"   # 新生
+    return "senior"            # 老登
+
+
+def effective_identity(user) -> Optional[str]:
+    """获取用户有效身份（动态刷新）。
+
+    管理员手动设置的 identity（如研1/博1认证）优先；
+    否则按学号现场计算，跨年自动变化（大二新生→大三老登）。
+    """
+    if user.identity:
+        return user.identity
+    return _auto_identity(user.student_id)
+
+
 def hash_password(password: str) -> str:
     """对密码进行 bcrypt 哈希加密"""
     return pwd_context.hash(password)
@@ -147,12 +169,15 @@ def update_self_profile(db: Session, user_id: int, nickname: Optional[str] = Non
 
 def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = None, is_verified: Optional[bool] = None,
                       rank: Optional[str] = None, individual_rating: Optional[int] = None,
-                      verify_image: Optional[str] = None) -> Optional[User]:
-    """管理员修改用户资料（学号、审核状态、段位等）"""
+                      identity: Optional[str] = None, verify_image: Optional[str] = None) -> Optional[User]:
+    """管理员修改用户资料（学号、审核状态、段位、身份等）"""
     user = get_user_by_id(db, user_id)
     if user:
         if student_id is not None:
             user.student_id = student_id
+        # 身份：仅管理员显式指定（研1/博1认证）时写入；设学号不写死，读取时动态算
+        if identity is not None:
+            user.identity = identity
         if is_verified is not None:
             user.is_verified = is_verified
         if rank is not None:

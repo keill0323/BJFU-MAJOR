@@ -20,10 +20,16 @@ Page({
     // 队伍管理
     teams: [],
     pendingTeamCount: 0,
+    // 详情弹层
+    showUserDetailPanel: false,
+    detailUser: null,
+    showTeamDetailPanel: false,
+    detailTeam: null,
+    detailMembers: [],
     // 赛事管理
     matches: [],
     // 创建赛事表单
-    newMatch: { name: '', max_teams: 16, team_size: 5, description: '' }
+    newMatch: { name: '', max_teams: 16, team_size: 5, match_type: 'major', description: '' }
   },
 
   onLoad() {
@@ -60,6 +66,16 @@ Page({
     this.setData({ tab: e.currentTarget.dataset.tab })
   },
 
+  // 下拉刷新：重新拉取当前各 tab 数据
+  async onPullDownRefresh() {
+    await this.loadUsers(this.data.userKeyword)
+    await this.loadTeams()
+    await this.loadMatches()
+    await this.loadVerifyList()
+    await this.loadRankApplications()
+    wx.stopPullDownRefresh()
+  },
+
   // 统一错误提示：toast 会截断长文本，改用弹窗完整显示
   showErr(err, fallback) {
     const msg = (err && err.detail) || fallback || '操作失败'
@@ -84,6 +100,44 @@ Page({
       this.showErr(err, '加载用户失败')
     }
   },
+
+  // 点击用户卡片看详情
+  showUserDetail(e) {
+    const id = e.currentTarget.dataset.id
+    const user = this.data.users.find(u => u.id == id)
+    if (!user) return
+    const u = Object.assign({}, user)
+    if (u.verify_image && !u.verify_image.startsWith('http')) {
+      u.verify_image_full = api.BASE + u.verify_image
+    }
+    if (u.avatar && !u.avatar.startsWith('http')) {
+      u.avatar_full = api.BASE + u.avatar
+    }
+    this.setData({ detailUser: u, showUserDetailPanel: true })
+  },
+
+  closeUserDetail() {
+    this.setData({ showUserDetailPanel: false })
+  },
+
+  // 点击队伍卡片看详情（拉成员列表）
+  async showTeamDetail(e) {
+    const id = e.currentTarget.dataset.id
+    try {
+      const team = await api.getTeam(id)
+      const members = (team.members || []).map(m => Object.assign({}, m, { display_rank: rankDisplay(m.rank) }))
+      this.setData({ detailTeam: team, detailMembers: members, showTeamDetailPanel: true })
+    } catch (err) {
+      this.showErr(err, '加载队伍详情失败')
+    }
+  },
+
+  closeTeamDetail() {
+    this.setData({ showTeamDetailPanel: false })
+  },
+
+  // 空处理器：阻止弹层内点击冒泡到遮罩
+  noop() {},
 
   // 设置学号 + 认证
   setStudentId(e) {
@@ -174,6 +228,24 @@ Page({
         try {
           await api.adminUpdateRole(uid, roles[res.tapIndex])
           wx.showToast({ title: '权限已更新', icon: 'success' })
+          await this.loadUsers(this.data.userKeyword)
+        } catch (err) {
+          this.showErr(err, '设置失败')
+        }
+      }
+    })
+  },
+
+  // 设置用户身份（新生/老登，研1/博1由管理员认证为新生）
+  setIdentity(e) {
+    const uid = e.currentTarget.dataset.id
+    wx.showActionSheet({
+      itemList: ['设为新生', '设为老登'],
+      success: async (res) => {
+        const identity = res.tapIndex === 0 ? 'new_student' : 'senior'
+        try {
+          await api.adminUpdateUser(uid, { identity })
+          wx.showToast({ title: '身份已更新', icon: 'success' })
           await this.loadUsers(this.data.userKeyword)
         } catch (err) {
           this.showErr(err, '设置失败')
@@ -393,6 +465,11 @@ Page({
     this.setData({ 'newMatch.description': e.detail.value })
   },
 
+  // 选择赛事类型
+  onMatchType(e) {
+    this.setData({ 'newMatch.match_type': e.currentTarget.dataset.type })
+  },
+
   async createMatch() {
     const m = this.data.newMatch
     if (!m.name) {
@@ -402,7 +479,7 @@ Page({
     try {
       await api.createMatch(m)
       wx.showToast({ title: '创建成功', icon: 'success' })
-      this.setData({ newMatch: { name: '', max_teams: 16, team_size: 5, description: '' } })
+      this.setData({ newMatch: { name: '', max_teams: 16, team_size: 5, match_type: 'major', description: '' } })
       await this.loadMatches()
     } catch (err) {
       this.showErr(err, '创建失败')

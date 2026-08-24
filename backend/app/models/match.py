@@ -20,6 +20,12 @@ class MatchStatus(str, enum.Enum):
     FINISHED = "finished"               # 已结束
 
 
+class MatchType(str, enum.Enum):
+    """赛事类型"""
+    FRESHMAN = "freshman"               # 新生赛
+    MAJOR = "major"                     # 大赛
+
+
 class Match(Base):
     """赛事信息表
 
@@ -42,6 +48,7 @@ class Match(Base):
     description = Column(Text, nullable=True, comment="赛事描述")
     max_teams = Column(Integer, default=16, comment="最大参赛队伍数")
     team_size = Column(Integer, default=5, comment="每队人数上限")
+    match_type = Column(String(20), default="major", comment="赛事类型 freshman新生赛/major大赛")
     status = Column(SAEnum(MatchStatus), default=MatchStatus.DRAFT, comment="赛事状态 draft/registering/in_progress/finished")
     register_start = Column(DateTime, nullable=True, comment="报名开始时间")
     register_end = Column(DateTime, nullable=True, comment="报名截止时间")

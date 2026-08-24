@@ -32,7 +32,7 @@
       <view class="btn-primary small-btn" bindtap="searchUsers">搜索</view>
     </view>
 
-    <view wx:for="{{users}}" wx:key="id" class="card user-card">
+    <view wx:for="{{users}}" wx:key="id" class="card user-card" bindtap="showUserDetail" data-id="{{item.id}}">
       <view class="user-top">
         <text class="user-id">#{{item.id}}</text>
         <text class="tag {{item.role === 'admin' ? 'tag-red' : item.role === 'reviewer' ? 'tag-orange' : 'tag-gray'}}">{{item.role === 'admin' ? '管理员' : item.role === 'reviewer' ? '审核员' : '用户'}}</text>
@@ -40,9 +40,10 @@
       <text class="user-name">{{item.nickname || '未设昵称'}} {{item.game_id ? '(' + item.game_id + ')' : ''}}</text>
       <text class="user-meta">学号: {{item.student_id || '未认证'}} | {{item.is_verified ? '已认证' : '未认证'}} | 段位: {{item.display_rank || '-'}} | 评分: {{item.individual_rating || 0}}</text>
       <view class="user-actions">
-        <view class="btn-outline small-btn" bindtap="setStudentId" data-id="{{item.id}}">设学号</view>
-        <view class="btn-outline small-btn" bindtap="setRank" data-id="{{item.id}}">设段位</view>
-        <view class="btn-outline small-btn" bindtap="setRole" data-id="{{item.id}}">修改权限</view>
+        <view class="btn-outline small-btn" catchtap="setStudentId" data-id="{{item.id}}">设学号</view>
+        <view class="btn-outline small-btn" catchtap="setRank" data-id="{{item.id}}">设段位</view>
+        <view class="btn-outline small-btn" catchtap="setIdentity" data-id="{{item.id}}">设身份</view>
+        <view class="btn-outline small-btn" catchtap="setRole" data-id="{{item.id}}">修改权限</view>
       </view>
     </view>
 
@@ -96,18 +97,18 @@
 
   <!-- ===== 队伍管理 ===== -->
   <view wx:if="{{tab === 'teams'}}">
-    <view wx:for="{{teams}}" wx:key="id" class="card team-card">
+    <view wx:for="{{teams}}" wx:key="id" class="card team-card" bindtap="showTeamDetail" data-id="{{item.id}}">
       <view class="team-top">
         <text class="team-name">{{item.name}}</text>
         <text class="tag {{item.status === 'pending' ? 'tag-orange' : item.status === 'approved' ? 'tag-green' : 'tag-red'}}">{{item.status === 'pending' ? '待审核' : item.status === 'approved' ? '已通过' : '已驳回'}}</text>
       </view>
       <text class="team-meta">队长: {{item.captain_name || '#' + item.captain_id}} | 成员: {{item.member_count}} | 评分: {{item.rating || 0}}</text>
       <view wx:if="{{item.status === 'pending'}}" class="user-actions">
-        <view class="btn-primary small-btn" bindtap="approveTeam" data-id="{{item.id}}">通过</view>
-        <view class="btn-danger small-btn" bindtap="rejectTeam" data-id="{{item.id}}">驳回</view>
+        <view class="btn-primary small-btn" catchtap="approveTeam" data-id="{{item.id}}">通过</view>
+        <view class="btn-danger small-btn" catchtap="rejectTeam" data-id="{{item.id}}">驳回</view>
       </view>
       <view class="user-actions">
-        <view class="btn-danger small-btn" bindtap="deleteTeam" data-id="{{item.id}}">删除</view>
+        <view class="btn-danger small-btn" catchtap="deleteTeam" data-id="{{item.id}}">删除</view>
       </view>
     </view>
     <view wx:if="{{teams.length === 0}}" class="empty">暂无队伍</view>
@@ -119,6 +120,10 @@
     <view class="card">
       <text class="section-title">创建赛事</text>
       <input class="input" placeholder="赛事名称" value="{{newMatch.name}}" bindinput="onMatchName"/>
+      <view class="type-row">
+        <view class="type-option {{newMatch.match_type === 'major' ? 'active' : ''}}" bindtap="onMatchType" data-type="major">大赛</view>
+        <view class="type-option {{newMatch.match_type === 'freshman' ? 'active' : ''}}" bindtap="onMatchType" data-type="freshman">新生赛</view>
+      </view>
       <view class="input-row">
         <input class="input half" type="number" placeholder="队伍上限" value="{{newMatch.max_teams}}" bindinput="onMatchMax"/>
         <input class="input half" type="number" placeholder="每队人数" value="{{newMatch.team_size}}" bindinput="onMatchSize"/>
@@ -139,5 +144,43 @@
       </view>
     </view>
     <view wx:if="{{matches.length === 0}}" class="empty">暂无赛事</view>
+  </view>
+
+  <!-- 用户详情弹层 -->
+  <view wx:if="{{showUserDetailPanel}}" class="mask" bindtap="closeUserDetail">
+    <view class="detail-panel" catchtap="noop">
+      <view class="detail-header">
+        <text class="section-title">用户详情</text>
+        <text class="detail-close" bindtap="closeUserDetail">✕</text>
+      </view>
+      <view wx:if="{{detailUser}}">
+        <text class="user-name">{{detailUser.nickname || '未设昵称'}} {{detailUser.game_id ? '(' + detailUser.game_id + ')' : ''}}</text>
+        <text class="user-meta">ID: {{detailUser.id}} | 学号: {{detailUser.student_id || '未认证'}}</text>
+        <text class="user-meta">认证: {{detailUser.is_verified ? '已认证' : '未认证'}} | 段位: {{detailUser.display_rank || '-'}} | 评分: {{detailUser.individual_rating || 0}}</text>
+        <text class="user-meta">身份: {{detailUser.identity === 'new_student' ? '新生' : detailUser.identity === 'senior' ? '老登' : '未设置'}}</text>
+        <text class="user-meta">角色: {{detailUser.role === 'admin' ? '管理员' : detailUser.role === 'reviewer' ? '审核员' : '普通用户'}}</text>
+        <image wx:if="{{detailUser.avatar_full}}" class="detail-avatar" src="{{detailUser.avatar_full}}" mode="aspectFill"/>
+        <image wx:if="{{detailUser.verify_image_full}}" class="verify-shot" src="{{detailUser.verify_image_full}}" mode="aspectFit" bindtap="previewVerify" data-url="{{detailUser.verify_image_full}}"/>
+      </view>
+    </view>
+  </view>
+
+  <!-- 队伍详情弹层 -->
+  <view wx:if="{{showTeamDetailPanel}}" class="mask" bindtap="closeTeamDetail">
+    <view class="detail-panel" catchtap="noop">
+      <view class="detail-header">
+        <text class="section-title">队伍详情</text>
+        <text class="detail-close" bindtap="closeTeamDetail">✕</text>
+      </view>
+      <view wx:if="{{detailTeam}}">
+        <text class="team-name">{{detailTeam.name}}</text>
+        <text class="team-meta">队长: {{detailTeam.captain_name || '#' + detailTeam.captain_id}} | 评分: {{detailTeam.rating || 0}}</text>
+        <text class="section-title">成员（{{detailMembers.length}}）</text>
+        <view wx:for="{{detailMembers}}" wx:key="user_id" class="member-row">
+          <text class="member-name">{{item.nickname || item.game_id || '用户' + item.user_id}}</text>
+          <text class="member-rank">{{item.display_rank || '-'}} · {{item.rating || 0}}分</text>
+        </view>
+      </view>
+    </view>
   </view>
 </view>

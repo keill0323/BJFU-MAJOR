@@ -6,13 +6,20 @@
 const api = require('../../utils/api.js')
 
 Page({
-  data: {},
+  data: {
+    agreed: false
+  },
 
   // 进入登录页时：已有 token 则直接进首页，无需重复登录
   onLoad() {
     if (wx.getStorageSync('token')) {
       wx.switchTab({ url: '/pages/index/index' })
     }
+  },
+
+  // 勾选 / 取消勾选协议
+  toggleAgree() {
+    this.setData({ agreed: !this.data.agreed })
   },
 
   // 查看赛事规则与参赛须知
@@ -22,6 +29,11 @@ Page({
 
   // 点登录按钮触发
   async handleLogin() {
+    // 未勾选协议禁止登录
+    if (!this.data.agreed) {
+      wx.showToast({ title: '请先阅读并同意用户服务协议和隐私政策', icon: 'none' })
+      return
+    }
     try {
       // ① 每次登录都重新取 code（code 是一次性、5 分钟有效的，不能缓存）
       const wxRes = await wx.login()

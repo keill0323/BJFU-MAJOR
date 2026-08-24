@@ -32,6 +32,7 @@ def create_match(request: MatchCreateRequest,
         description=request.description,
         max_teams=request.max_teams,
         team_size=request.team_size,
+        match_type=request.match_type,
         register_start=request.register_start,
         register_end=request.register_end,
         match_start=request.match_start

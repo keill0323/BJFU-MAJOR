@@ -55,6 +55,7 @@ class User(Base):
     memberships = relationship("TeamMember", back_populates="user")
     individual_rating = Column(Integer, default=0, comment="个人水平得分")
     rank = Column(String(10), nullable=True, comment="个人段位")
+    identity = Column(String(20), nullable=True, comment="用户身份 new_student新生/senior老登（新生由学号自动识别，研1博1由管理员认证）")
     user_description = Column(String(200), nullable=True, comment="个人介绍")
     ai_review_status = Column(String(20), nullable=True, comment="AI审核状态 auto_pass/auto_reject/pending")
     ai_review_reason = Column(String(500), nullable=True, comment="AI判断理由")

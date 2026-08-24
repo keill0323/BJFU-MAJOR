@@ -295,9 +295,16 @@ def delete_team(db: Session, team_id: int) -> Optional[Team]:
     return team
 
 
-def get_all_teams(db: Session) -> list:
-    """获取全部队伍（带成员数）"""
-    teams = db.query(Team).order_by(Team.created_at.desc()).all()
+def get_all_teams(db: Session, only_approved: bool = False) -> list:
+    """获取全部队伍（带成员数）。
+
+    only_approved=True 时只返回审核通过的队伍（用户端公开列表）；
+    默认返回全部（管理后台审核用，含待审核/已驳回）。
+    """
+    query = db.query(Team)
+    if only_approved:
+        query = query.filter(Team.status == TeamStatus.APPROVED)
+    teams = query.order_by(Team.created_at.desc()).all()
     result = []
     for team in teams:
         member_count = db.query(TeamMember).filter(

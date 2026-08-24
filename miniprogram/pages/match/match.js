@@ -43,10 +43,60 @@ Page({
         match: Object.assign({}, detail.match, { statusText: this.statusText(detail.match.status) })
       })
       this.buildData(detail)
-      await this.loadMyStatus()
+      // 已登录才拉我的报名状态；未登录允许先浏览详情，不强制登录
+      if (wx.getStorageSync('token')) {
+        await this.loadMyStatus()
+      }
+      this.checkRulePrompt()
     } catch (err) {
       wx.showToast({ title: '加载失败', icon: 'error' })
     }
+  },
+
+  // 下拉刷新（重新拉详情，不重复弹规则）
+  async onPullDownRefresh() {
+    const match = this.data.match
+    if (!match || !match.id) {
+      wx.stopPullDownRefresh()
+      return
+    }
+    try {
+      const detail = await api.getMatchDetail(match.id)
+      this.setData({
+        match: Object.assign({}, detail.match, { statusText: this.statusText(detail.match.status) })
+      })
+      this.buildData(detail)
+      if (wx.getStorageSync('token')) {
+        await this.loadMyStatus()
+      }
+    } catch (err) {
+      wx.showToast({ title: '刷新失败', icon: 'error' })
+    }
+    wx.stopPullDownRefresh()
+  },
+
+  // 打开比赛卡片时弹出规则提示（「不再提示」按每场比赛独立记忆）
+  checkRulePrompt() {
+    const match = this.data.match
+    if (!match || !match.id) return
+    const key = `no_rule_prompt_${match.id}`   // 每场比赛一个开关
+    if (wx.getStorageSync(key)) return
+    const isFreshman = match.match_type === 'freshman'
+    const QQ = '3761215994'
+    const content = isFreshman
+      ? `这是新生赛，要求队伍至少 3 名新生（大一、大二为新生）。\n研一、博一需联系管理员认证为新生。\n管理员QQ：${QQ}`
+      : `请遵守比赛规则，文明竞技。报名需完成学籍认证。\n如有问题请联系管理员QQ：${QQ}`
+    wx.showModal({
+      title: isFreshman ? '新生赛规则' : '赛事规则',
+      content,
+      confirmText: '知道了',
+      cancelText: '不再提示',
+      success: (res) => {
+        if (res.cancel) {
+          wx.setStorageSync(key, true)
+        }
+      }
+    })
   },
 
   statusText(status) {
@@ -280,6 +330,17 @@ Page({
   async handleRegister() {
     if (!this.data.match) return
     const match = this.data.match
+
+    // 未登录：先引导登录（浏览详情不强制，报名时才需要）
+    if (!wx.getStorageSync('token')) {
+      wx.showModal({
+        title: '请先登录',
+        content: '报名需要先登录小程序。',
+        confirmText: '去登录',
+        success: (r) => { if (r.confirm) wx.navigateTo({ url: '/pages/login/login' }) }
+      })
+      return
+    }
 
     // 只有报名中的赛事能报
     if (match.status !== 'registering') {

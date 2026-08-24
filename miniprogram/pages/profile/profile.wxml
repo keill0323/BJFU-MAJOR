@@ -15,6 +15,7 @@
         <view class="hero-badges">
           <text class="hero-badge {{user.is_verified ? 'hero-badge-ok' : 'hero-badge-no'}}">{{user.is_verified ? '已认证' : '未认证'}}</text>
           <text class="hero-badge hero-badge-role">{{user.role === 'admin' ? '管理员' : user.role === 'reviewer' ? '审核员' : '普通用户'}}</text>
+          <text class="hero-badge hero-badge-id">{{user.identity === 'new_student' ? '新生' : user.identity === 'senior' ? '老登' : '未设身份'}}</text>
         </view>
       </view>
     </view>
@@ -63,7 +64,7 @@
 
       <!-- 在校认证：未认证用户上传学信网截图 -->
       <view wx:if="{{!editMode && user && !user.is_verified}}" class="verify-box">
-        <text class="verify-tip">{{user.verify_image ? '已提交截图，等待管理员审核' : '请上传学信网/教务系统截图，或校园卡/电子校园卡截图（建议在校生使用）；需点进学校资料卡片，包含姓名、学号、学校名；务必码住身份证号和照片，小心信息泄露'}}</text>
+        <text class="verify-tip">{{user.verify_image ? '已提交截图，等待管理员审核' : '请上传学信网/教务系统截图，或校园卡/电子校园卡截图（建议在校生使用）；需点进学校资料卡片，包含姓名、学号、学校名；务必码住身份证号和照片，小心信息泄露；如有疑问联系管理员QQ：3761215994'}}</text>
         <view wx:if="{{user.verify_image}}" class="verify-img-row">
           <image class="verify-thumb" src="{{user.verify_image_full}}" bindtap="previewVerifyImage"/>
           <view class="btn-outline small-btn" bindtap="chooseVerifyImage">重新上传</view>

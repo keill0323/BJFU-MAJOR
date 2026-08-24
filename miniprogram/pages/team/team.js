@@ -36,14 +36,20 @@ Page({
     await this.loadInvitations()
   },
 
+  // 下拉刷新
+  async onPullDownRefresh() {
+    await this.refreshAll()
+    await this.loadInvitations()
+    wx.stopPullDownRefresh()
+  },
+
   // 刷新所有数据
   async refreshAll() {
     const token = wx.getStorageSync('token')
-    if (!token) {
-      wx.redirectTo({ url: '/pages/login/login' })
-      return
+    // 已登录才拉我的队伍；未登录允许先浏览队伍列表，不强制登录
+    if (token) {
+      await this.loadMyTeam()
     }
-    await this.loadMyTeam()
     if (!this.data.myTeam) {
       await this.loadTeams()
     }

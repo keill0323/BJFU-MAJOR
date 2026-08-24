@@ -24,6 +24,7 @@ class UserInfo(BaseModel):
     rank: Optional[str] = None
     individual_rating: int = 0
     role: str
+    identity: Optional[str] = None    # new_student新生/senior老登
     verify_image: Optional[str] = None   # 学信网截图URL
     avatar: Optional[str] = None         # 头像URL
     # AI 审核结果（auto_pass 自动通过 / auto_reject 自动驳回 / pending 待人工复核）
@@ -46,6 +47,7 @@ class AdminUpdateUserRequest(BaseModel):
     is_verified: Optional[bool] = None
     rank: Optional[str] = None
     individual_rating: Optional[int] = None
+    identity: Optional[str] = None       # new_student新生/senior老登（研1/博1由管理员认证）
     verify_image: Optional[str] = None   # 传空字符串表示清除截图
 
 

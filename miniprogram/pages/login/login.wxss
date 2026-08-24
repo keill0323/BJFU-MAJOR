@@ -77,3 +77,53 @@ page {
   font-size: 22rpx;
   margin-top: 28rpx;
 }
+
+/* 协议勾选行 */
+.agree-row {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 28rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.agree-checkbox {
+  width: 32rpx;
+  height: 32rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+  margin-top: 2rpx;
+  box-sizing: border-box;
+}
+
+.agree-checkbox.checked {
+  background: #2fce7a;
+  border-color: #2fce7a;
+}
+
+.agree-check-icon {
+  color: #06281c;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.agree-text-wrap {
+  flex: 1;
+  line-height: 1.6;
+}
+
+.agree-plain {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 22rpx;
+}
+
+.agree-link {
+  color: #2fce7a;
+  font-size: 22rpx;
+}

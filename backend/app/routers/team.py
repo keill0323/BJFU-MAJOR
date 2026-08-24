@@ -33,7 +33,13 @@ def create_team(
 
 @router.get("", response_model=List[TeamListInfo])
 def get_teams(db: Session = Depends(get_db)):
-    """获取全部队伍列表"""
+    """获取公开队伍列表（仅审核通过的队伍）"""
+    return team_service.get_all_teams(db, only_approved=True)
+
+
+@router.get("/admin", response_model=List[TeamListInfo])
+def get_admin_teams(db: Session = Depends(get_db), admin=Depends(require_admin)):
+    """管理后台获取全部队伍（含待审核/已驳回）"""
     return team_service.get_all_teams(db)
 
 

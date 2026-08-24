@@ -10,7 +10,17 @@
     <view class="login-btn" bindtap="handleLogin">
       <text class="login-btn-text">微信一键登录</text>
     </view>
-    <text class="login-agree" bindtap="showRules">登录即代表同意《赛事规则与参赛须知》</text>
-    <text class="login-agree" bindtap="showRules">《校内活动声明》与《隐私保护指引》</text>
+
+    <view class="agree-row">
+      <view class="agree-checkbox {{agreed ? 'checked' : ''}}" bindtap="toggleAgree">
+        <text wx:if="{{agreed}}" class="agree-check-icon">✓</text>
+      </view>
+      <view class="agree-text-wrap">
+        <text class="agree-plain">我已阅读并同意</text>
+        <text class="agree-link" catchtap="showRules">《用户服务协议》</text>
+        <text class="agree-plain">和</text>
+        <text class="agree-link" catchtap="showRules">《隐私政策》</text>
+      </view>
+    </view>
   </view>
 </view>

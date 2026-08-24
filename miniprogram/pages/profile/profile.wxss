@@ -209,6 +209,7 @@ button.edit-btn::after {
 .hero-badge-ok { background: var(--color-primary-light); color: var(--color-primary); }
 .hero-badge-no { background: var(--color-gray-100); color: var(--color-gray-500); }
 .hero-badge-role { background: var(--color-gray-100); color: var(--color-gray-700); }
+.hero-badge-id { background: rgba(88, 166, 255, 0.15); color: #7db8ff; }
 
 /* 功能菜单项 */
 .menu-entry {

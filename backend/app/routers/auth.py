@@ -44,6 +44,8 @@ def get_me(
     current_user = Depends(get_current_user),
 ):
     """获取当前登录用户完整信息（含 id/学号/段位/评分/认证状态）"""
+    # 身份动态刷新：不写库，请求结束自动回滚
+    current_user.identity = auth_service.effective_identity(current_user)
     return current_user
 
 
@@ -75,7 +77,11 @@ def admin_list_users(
     admin = Depends(require_admin),
 ):
     """管理员获取用户列表，可按 id/昵称/游戏ID/学号 搜索"""
-    return auth_service.get_all_users(db, keyword)
+    users = auth_service.get_all_users(db, keyword)
+    # 身份动态刷新：不写库
+    for u in users:
+        u.identity = auth_service.effective_identity(u)
+    return users
 
 
 @router.put("/admin/users/{user_id}", response_model=UserInfo)
@@ -92,6 +98,7 @@ def admin_update_user(
         is_verified=request.is_verified,
         rank=request.rank,
         individual_rating=request.individual_rating,
+        identity=request.identity,
         verify_image=request.verify_image,
     )
     if not user:

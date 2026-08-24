@@ -243,6 +243,31 @@
   padding: 10rpx 24rpx;
 }
 
+/* 赛事类型选择 */
+.type-row {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.type-option {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
+  font-size: 26rpx;
+  color: var(--color-gray-600);
+  border: 2rpx solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-gray-100);
+}
+
+.type-option.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  font-weight: 600;
+}
+
 /* 赛事详情弹层 */
 .mask {
   position: fixed;
@@ -348,4 +373,36 @@
   padding: 16rpx 0;
   font-size: 28rpx;
   text-align: center;
+}
+
+/* 用户详情头像 */
+.detail-avatar {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  background: var(--color-gray-100);
+  display: block;
+  margin: 16rpx 0;
+}
+
+/* 队伍成员行 */
+.member-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-row);
+  border-radius: var(--radius-md);
+  padding: 16rpx 20rpx;
+  margin-bottom: 12rpx;
+}
+
+.member-name {
+  font-size: 26rpx;
+  color: var(--color-gray-800);
+  flex: 1;
+}
+
+.member-rank {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
 }

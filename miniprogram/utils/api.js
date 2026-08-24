@@ -64,10 +64,12 @@ function request(path, method = 'GET', data = {}) {
         if (res.statusCode < 400) {
           resolve(normalizeRole(res.data))      // 2xx/3xx：成功，返回数据（role 统一转小写）
         } else {
-          // 401 = 令牌无效或用户不存在（如删库后），清 token 回登录页
+          // 401 = 未登录或令牌过期：清 token，但不强制跳登录页
+          // （让用户先浏览内容，只有主动操作时才引导登录，符合登录规范）
           if (res.statusCode === 401) {
             wx.removeStorageSync('token')
-            wx.redirectTo({ url: '/pages/login/login' })
+            reject({ detail: '请先登录', unauthorized: true })
+            return
           }
           // 统一错误信息：422 校验错误的 detail 是数组，转成可读字符串
           let detail = res.data && res.data.detail
