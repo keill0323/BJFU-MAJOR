@@ -128,6 +128,10 @@ def upload_verify(
     current_user = Depends(get_current_user),
 ):
     """上传学信网/教务系统截图（开启AI时自动预审）"""
+    # 已认证用户无需重复上传，避免产生「已认证 + 审核中」的矛盾状态
+    if current_user.is_verified:
+        raise HTTPException(status_code=400, detail="你已通过在校认证，无需重复上传")
+
     # 仅允许图片类型
     allowed = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
     if file.content_type not in allowed:

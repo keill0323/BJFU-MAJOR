@@ -56,6 +56,12 @@ class RoundInfo(BaseModel):
     group_name: Optional[str] = None
     scheduled_time: Optional[datetime] = None
     bo3_scores: Optional[List[dict]] = None   # 淘汰赛 BO3 三局小分
+    # 时间协商
+    team1_confirmed: bool = False
+    team2_confirmed: bool = False
+    window_start: Optional[datetime] = None
+    window_end: Optional[datetime] = None
+    schedule_status: str = "unconfirmed"   # unconfirmed未约定 / pending待确认 / confirmed已确定
 
     class Config:
         from_attributes = True
@@ -105,4 +111,32 @@ class MatchAdminDetail(BaseModel):
     match: MatchInfo
     teams: List[RegistrationDetail] = []
     rounds: List[RoundInfo] = []
+
+
+class StageWindowInfo(BaseModel):
+    """阶段时间窗口"""
+    id: int
+    match_id: int
+    group_name: str
+    window_start: datetime
+    window_end: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class StageWindowUpdate(BaseModel):
+    """设置/更新阶段时间窗口请求"""
+    window_start: datetime
+    window_end: datetime
+
+
+class RoundScheduleRequest(BaseModel):
+    """队长提交约定比赛时间请求"""
+    scheduled_time: datetime
+
+
+class RoundScheduleActionRequest(BaseModel):
+    """确认/拒绝约定时间请求（带客户端所见的提议时间，用于防竞态）"""
+    expected_time: Optional[datetime] = None
     

@@ -1,6 +1,6 @@
-/* 页面根背景也设深绿：即使内容区有亚像素缝隙，露出的也是同色，不会出现竖线 */
+/* 页面根背景与内容区同色，避免亚像素缝隙露出竖线 */
 page {
-  background: #133a35;
+  background: #f5f8fb;
 }
 
 .page {
@@ -8,7 +8,7 @@ page {
   height: 100vh;
   box-sizing: border-box;
   /* 纯色背景（不用渐变：WebView 渲染渐变时左边缘可能出现插值竖线） */
-  background: #133a35;
+  background: #f5f8fb;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -39,7 +39,7 @@ page {
 
 .title {
   display: block;
-  color: #fff;
+  color: #0f172a;
   font-size: 52rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
@@ -47,19 +47,19 @@ page {
 
 .subtitle {
   display: block;
-  color: rgba(255, 255, 255, 0.6);
+  color: #64748b;
   font-size: 26rpx;
   margin-top: 14rpx;
 }
 
 .login-btn {
   width: 100%;
-  background: linear-gradient(135deg, #186958, #026234);
-  color: #fff;
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+  color: #ffffff;
   border-radius: 999rpx;
   padding: 30rpx;
   text-align: center;
-  box-shadow: 0 12rpx 30rpx rgba(2, 98, 52, 0.4);
+  box-shadow: 0 12rpx 30rpx rgba(8, 145, 178, 0.35);
 }
 .login-btn:active {
   opacity: 0.88;
@@ -73,7 +73,7 @@ page {
 .login-agree {
   display: block;
   text-align: center;
-  color: rgba(255, 255, 255, 0.4);
+  color: #94a3b8;
   font-size: 22rpx;
   margin-top: 28rpx;
 }
@@ -90,7 +90,7 @@ page {
 .agree-checkbox {
   width: 32rpx;
   height: 32rpx;
-  border: 2rpx solid rgba(255, 255, 255, 0.5);
+  border: 2rpx solid rgba(15, 23, 42, 0.4);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -102,12 +102,12 @@ page {
 }
 
 .agree-checkbox.checked {
-  background: #2fce7a;
-  border-color: #2fce7a;
+  background: #0891b2;
+  border-color: #0891b2;
 }
 
 .agree-check-icon {
-  color: #06281c;
+  color: #ffffff;
   font-size: 22rpx;
   font-weight: 700;
   line-height: 1;
@@ -119,11 +119,11 @@ page {
 }
 
 .agree-plain {
-  color: rgba(255, 255, 255, 0.6);
+  color: #64748b;
   font-size: 22rpx;
 }
 
 .agree-link {
-  color: #2fce7a;
+  color: #0891b2;
   font-size: 22rpx;
 }

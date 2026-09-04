@@ -1,0 +1,112 @@
+.page {
+  padding: 0 0 40rpx;
+}
+
+/* 空状态 */
+.empty {
+  padding: 140rpx 40rpx;
+}
+.empty-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+}
+.empty-ic {
+  width: 96rpx;
+  height: 96rpx;
+  opacity: 0.5;
+}
+.empty-title {
+  font-size: 30rpx;
+  color: var(--color-gray-500);
+  font-weight: 600;
+}
+.empty-sub {
+  font-size: 24rpx;
+  color: var(--color-gray-400);
+}
+
+/* 分组标题 */
+.group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8rpx;
+}
+.group-name {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--color-gray-800);
+}
+.group-count {
+  font-size: 24rpx;
+  color: var(--color-gray-400);
+}
+
+/* 消息行 */
+.msg-row {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid var(--color-border);
+}
+.msg-row:last-child {
+  border-bottom: none;
+}
+.msg-icon {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.msg-icon.invite { background: rgba(8, 145, 178, 0.12); }
+.msg-icon.rank { background: rgba(245, 158, 11, 0.14); }
+.msg-ic { width: 40rpx; height: 40rpx; }
+.msg-main {
+  flex: 1;
+  min-width: 0;
+}
+.msg-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--color-gray-800);
+}
+.msg-sub {
+  display: block;
+  font-size: 22rpx;
+  color: var(--color-gray-500);
+  margin-top: 6rpx;
+}
+.msg-actions {
+  display: flex;
+  gap: 12rpx;
+  flex-shrink: 0;
+}
+.msg-btn {
+  font-size: 24rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 999rpx;
+}
+.msg-btn.accept {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+.msg-btn.reject {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--color-gray-600);
+}
+.msg-status {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+}
+.msg-status.ok { background: rgba(22, 163, 74, 0.12); color: #15803d; }
+.msg-status.reject { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
+.msg-status.pending { background: rgba(217, 119, 6, 0.12); color: #b45309; }

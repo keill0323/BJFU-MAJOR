@@ -13,7 +13,7 @@ Page({
   // 进入登录页时：已有 token 则直接进首页，无需重复登录
   onLoad() {
     if (wx.getStorageSync('token')) {
-      wx.switchTab({ url: '/pages/index/index' })
+      wx.reLaunch({ url: '/pages/index/index' })
     }
   },
 
@@ -40,7 +40,7 @@ Page({
       const code = wxRes.code
       const data = await api.login(code)          // ② 交给后端换 JWT token
       wx.setStorageSync('token', data.access_token) // ③ 存本地，下次免登录
-      wx.switchTab({ url: '/pages/index/index' })   // ④ 跳首页（tab 页必须用 switchTab）
+      wx.reLaunch({ url: '/pages/index/index' })   // ④ 跳首页（tab 页必须用 switchTab）
     } catch (err) {
       console.error('登录失败', err)
       wx.showToast({ title: '登录失败', icon: 'error' })

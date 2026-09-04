@@ -1,0 +1,44 @@
+<view class="page">
+  <nav-drawer title="设置"></nav-drawer>
+
+  <!-- 账户 -->
+  <view wx:if="{{isManager}}" class="group">
+    <text class="group-label">账户</text>
+    <view class="card group-card">
+      <view class="set-row" bindtap="goAdmin">
+        <image class="set-ic" src="/images/icons/settings.svg"/>
+        <text class="set-text">管理后台</text>
+        <image class="set-arrow" src="/images/icons/chevron-right.svg"/>
+      </view>
+    </view>
+  </view>
+
+  <!-- 通用 -->
+  <view class="group">
+    <text class="group-label">通用</text>
+    <view class="card group-card">
+      <view class="set-row" bindtap="goRules">
+        <image class="set-ic" src="/images/icons/settings.svg"/>
+        <text class="set-text">赛事规则与隐私政策</text>
+        <image class="set-arrow" src="/images/icons/chevron-right.svg"/>
+      </view>
+    </view>
+  </view>
+
+  <!-- 关于 -->
+  <view class="group">
+    <text class="group-label">关于</text>
+    <view class="card group-card">
+      <view class="set-row">
+        <image class="set-ic" src="/images/icons/trophy.svg"/>
+        <text class="set-text">北林CS2校赛报名系统</text>
+        <text class="set-version">v1.1</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 退出 -->
+  <view class="logout-wrap">
+    <view class="btn-danger" bindtap="logout">退出登录</view>
+  </view>
+</view>

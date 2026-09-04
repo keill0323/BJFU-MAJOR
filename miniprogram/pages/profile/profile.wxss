@@ -1,5 +1,5 @@
 .page {
-  padding: 20rpx;
+  padding: 0 20rpx 20rpx;
 }
 
 .section-title {
@@ -9,12 +9,53 @@
   margin-bottom: 20rpx;
 }
 
+/* ===== 分段 tab ===== */
+.seg-tabs {
+  display: flex;
+  background: #ffffff;
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-full);
+  margin: 20rpx;
+  padding: 6rpx;
+}
+.seg-tab {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
+  font-size: 27rpx;
+  color: var(--color-gray-500);
+  border-radius: 999rpx;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.seg-tab.active {
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* 认证通过提示 */
+.verified-tip {
+  display: block;
+  font-size: 26rpx;
+  color: var(--color-success);
+  padding: 8rpx 0;
+  font-weight: 600;
+}
+
 .input {
   background: var(--color-gray-100);
   border-radius: var(--radius-md);
   padding: 20rpx;
   margin-bottom: 16rpx;
   font-size: 28rpx;
+}
+
+/* 信息分组标题 */
+.info-group-title {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+  margin: 20rpx 0 12rpx;
+  font-weight: 600;
 }
 
 /* 信息卡片：两栏网格 */
@@ -111,8 +152,8 @@ button.edit-btn::after {
 }
 
 .ai-pass {
-  background: rgba(47, 206, 122, 0.08);
-  border-color: rgba(47, 206, 122, 0.35);
+  background: rgba(8, 145, 178, 0.08);
+  border-color: rgba(8, 145, 178, 0.35);
 }
 
 .ai-reject {
@@ -153,11 +194,11 @@ button.edit-btn::after {
   line-height: 1.5;
 }
 
-/* 顶部用户卡（深绿渐变 + 亮绿描边，电竞感） */
+/* 顶部用户卡（浅青渐变 + 青色描边） */
 .profile-hero {
   margin: 20rpx;
-  background: linear-gradient(135deg, #1a4a41 0%, #133a35 60%, #102f2a 100%);
-  border: 1rpx solid rgba(47, 206, 122, 0.25);
+  background: linear-gradient(135deg, #e6f4f6 0%, #f1f4f8 60%, #ffffff 100%);
+  border: 1rpx solid rgba(8, 145, 178, 0.25);
   border-radius: 28rpx;
   padding: 36rpx 32rpx;
   display: flex;
@@ -172,7 +213,7 @@ button.edit-btn::after {
   width: 120rpx;
   height: 120rpx;
   border-radius: 50%;
-  background: rgba(47, 206, 122, 0.14);
+  background: rgba(8, 145, 178, 0.14);
   overflow: hidden;
   flex-shrink: 0;
 }

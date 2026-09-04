@@ -7,7 +7,10 @@
     <view class="card">
       <view class="detail-header">
         <text class="section-title">{{match.name}}</text>
-        <view class="btn-outline small-btn" bindtap="exportAll">导出对阵</view>
+        <view class="header-actions">
+          <view class="btn-outline small-btn" bindtap="openWindowPanel">⏱ 时间窗口</view>
+          <view class="btn-outline small-btn" bindtap="exportAll">导出对阵</view>
+        </view>
       </view>
       <text class="team-meta">状态: {{match.statusText}} | 队伍: {{teams.length}}/{{match.max_teams}}</text>
     </view>
@@ -311,6 +314,58 @@
         <view class="btn-outline" bindtap="closeScoreInput">取消</view>
         <view class="btn-primary" bindtap="submitScore">确认</view>
       </view>
+    </view>
+  </view>
+
+  <!-- 时间窗口管理面板 -->
+  <view wx:if="{{showWindowPanel}}" class="mask" bindtap="closeWindowPanel">
+    <view class="history-panel" catchtap="noop">
+      <view class="detail-header">
+        <text class="section-title">时间窗口设置</text>
+        <image class="detail-close" src="/images/icons/x.svg" bindtap="closeWindowPanel"/>
+      </view>
+      <text class="team-meta">为各阶段设置限定时段，双方队长需在该时段内约定比赛时间</text>
+
+      <view wx:if="{{stageWindows.length === 0}}" class="empty">暂无对阵阶段（请先生成对阵）</view>
+      <view wx:for="{{stageWindows}}" wx:key="group_name" class="history-row">
+        <view class="detail-header">
+          <text class="team-name">{{item.group_name}}</text>
+          <view class="btn-outline small-btn" bindtap="openWindowEdit" data-group="{{item.group_name}}">{{item.has_window ? '修改' : '设置'}}</view>
+        </view>
+        <text class="team-meta">{{item.window_text}}</text>
+      </view>
+
+      <block wx:if="{{windowEditGroup}}">
+        <text class="group-title">设置「{{windowEditGroup}}」时段</text>
+        <view class="win-row">
+          <text class="win-label">开始日期</text>
+          <picker mode="date" value="{{windowStartDate}}" bindchange="onStartDateChange">
+            <view class="win-picker">{{windowStartDate || '选择日期'}}</view>
+          </picker>
+        </view>
+        <view class="win-row">
+          <text class="win-label">开始时间</text>
+          <picker mode="time" value="{{windowStartTime}}" bindchange="onStartTimeChange">
+            <view class="win-picker">{{windowStartTime || '选择时间'}}</view>
+          </picker>
+        </view>
+        <view class="win-row">
+          <text class="win-label">结束日期</text>
+          <picker mode="date" value="{{windowEndDate}}" bindchange="onEndDateChange">
+            <view class="win-picker">{{windowEndDate || '选择日期'}}</view>
+          </picker>
+        </view>
+        <view class="win-row">
+          <text class="win-label">结束时间</text>
+          <picker mode="time" value="{{windowEndTime}}" bindchange="onEndTimeChange">
+            <view class="win-picker">{{windowEndTime || '选择时间'}}</view>
+          </picker>
+        </view>
+        <view class="score-btns">
+          <view class="btn-outline" bindtap="cancelWindowEdit">取消</view>
+          <view class="btn-primary" bindtap="saveWindow">保存</view>
+        </view>
+      </block>
     </view>
   </view>
 </view>

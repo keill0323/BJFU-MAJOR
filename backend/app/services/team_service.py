@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models.team import Team, TeamMember, TeamStatus, MemberRole, TeamApplication, TeamInvitation, ApplicationStatus
 from app.models.user import User
-from app.models.match import Registration, RegistrationStatus, TeamProgress
+from app.models.match import Match, Registration, RegistrationStatus, TeamProgress
 
 
 def create_team(db: Session, name: str, captain_id: int, description: Optional[str] = None) -> Team:
@@ -79,9 +79,33 @@ def get_my_team(db: Session, user_id: int) -> Optional[Team]:
     return db.query(Team).filter(Team.id == member.team_id).first()
 
 
+def _ensure_can_join(db: Session, team_id: int, user_id: int) -> None:
+    """入队前校验：若队伍已报名赛事，新成员必须完成学籍认证 + 段位认证
+
+    报名时全队校验 is_verified 与 rank，但报名后入队（拉人/申请/邀请）
+    会触发自动补报名，因此入队入口必须同步拦截未认证用户，
+    否则未认证成员会绕过报名校验直接获得报名记录。
+
+    学籍与段位都必须通过：仅学籍通过但无段位（未认证段位）的玩家
+    仍可被拉入已报名队伍并自动补报名，反而绕过了段位认证（防炸鱼）。
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if user.is_verified and user.rank:
+        return
+    team_regs = db.query(Registration).filter(
+        Registration.team_id == team_id
+    ).first()
+    if team_regs:
+        # 队伍已报名赛事，入队成员必须学籍 + 段位都认证
+        if not user.is_verified:
+            raise HTTPException(status_code=400, detail="该用户未完成学籍认证，无法加入已报名的队伍")
+        raise HTTPException(status_code=400, detail="该用户未完成段位认证，无法加入已报名的队伍")
+
+
 def _team_member_limit(db: Session, team_id: int) -> Optional[int]:
     """队伍人数上限：取所有已报名赛事 team_size 的最小值；未报名任何赛事返回 None（不限制）"""
-    from app.models.match import Match
     team_regs = db.query(Registration).filter(Registration.team_id == team_id).all()
     sizes = []
     for reg in team_regs:
@@ -99,6 +123,9 @@ def join_team(db: Session, team_id: int, user_id: int) -> TeamMember:
     ).first()
     if already_in_team:
         raise HTTPException(status_code=400, detail="该用户已在其他队伍中")
+    
+    # 队伍已报名赛事时，新成员必须完成学籍认证
+    _ensure_can_join(db, team_id, user_id)
     
     # 检查是否已在此队伍中（理论上不会到这，但保留）
     existing = db.query(TeamMember).filter(
@@ -324,6 +351,7 @@ def get_all_teams(db: Session, only_approved: bool = False) -> list:
             "status": team.status.value if hasattr(team.status, "value") else team.status,
             "member_count": member_count,
             "rating": team.rating,
+            "logo": team.logo,
             "created_at": team.created_at,
         }
         result.append(team_data)
@@ -412,6 +440,9 @@ def approve_application(db: Session, application_id: int, captain_id: int) -> No
     already = db.query(TeamMember).filter(TeamMember.user_id == app.user_id).first()
     if already:
         raise HTTPException(status_code=400, detail="申请人已加入其他队伍")
+
+    # 队伍已报名赛事时，申请人必须完成学籍认证
+    _ensure_can_join(db, app.team_id, app.user_id)
 
     # 入队
     member = TeamMember(team_id=app.team_id, user_id=app.user_id, role=MemberRole.MEMBER)
@@ -515,6 +546,9 @@ def accept_invitation(db: Session, invitation_id: int, user_id: int) -> None:
     already = db.query(TeamMember).filter(TeamMember.user_id == user_id).first()
     if already:
         raise HTTPException(status_code=400, detail="你已在队伍中，不能接受邀请")
+
+    # 队伍已报名赛事时，新成员必须完成学籍认证
+    _ensure_can_join(db, inv.team_id, user_id)
 
     # 入队
     member = TeamMember(team_id=inv.team_id, user_id=user_id, role=MemberRole.MEMBER)

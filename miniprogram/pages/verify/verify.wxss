@@ -1,0 +1,147 @@
+.page {
+  padding: 0 0 40rpx;
+}
+.section-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 20rpx;
+  color: var(--color-gray-800);
+}
+
+/* 信息网格 */
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16rpx;
+}
+.info-cell {
+  background: var(--color-row);
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 20rpx 24rpx;
+}
+.info-label {
+  display: block;
+  font-size: 22rpx;
+  color: var(--color-gray-500);
+  margin-bottom: 8rpx;
+}
+.info-value {
+  display: block;
+  font-size: 28rpx;
+  color: var(--color-gray-800);
+  font-weight: 600;
+}
+.text-green { color: var(--color-success); }
+.text-red { color: var(--color-danger); }
+
+/* 认证上传区 */
+.verify-box {
+  margin-top: 12rpx;
+  background: var(--color-row);
+  border: 1rpx dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 24rpx;
+}
+.verify-tip {
+  display: block;
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+  margin-bottom: 16rpx;
+}
+.verify-reject-reason {
+  display: block;
+  font-size: 26rpx;
+  color: var(--color-danger);
+  font-weight: 600;
+  margin-bottom: 12rpx;
+}
+.verify-img-row {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+.verify-thumb {
+  width: 160rpx;
+  height: 220rpx;
+  border-radius: var(--radius-md);
+  background: var(--color-gray-100);
+}
+.verified-tip {
+  display: block;
+  font-size: 26rpx;
+  color: var(--color-success);
+  font-weight: 600;
+  padding: 8rpx 0;
+}
+
+/* 段位认证：参赛必审 */
+.rank-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.rank-box-required {
+  border-color: rgba(217, 119, 6, 0.45);
+  background: rgba(255, 251, 235, 0.6);
+}
+.rank-required-head {
+  margin-bottom: 16rpx;
+}
+.rank-required-note {
+  display: block;
+  font-size: 22rpx;
+  color: rgba(180, 83, 9, 0.9);
+  margin-top: 6rpx;
+}
+
+/* 认证状态 Hero */
+.verify-hero {
+  background: linear-gradient(160deg, #ffffff, #f1f4f8);
+}
+.vh-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+.vh-label {
+  font-size: 26rpx;
+  color: var(--color-gray-500);
+}
+.vh-rank {
+  font-size: 44rpx;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+.vh-grid {
+  display: flex;
+  gap: 16rpx;
+}
+.vh-cell {
+  flex: 1;
+  background: var(--color-row);
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 14rpx;
+  text-align: center;
+}
+.vh-cell-label {
+  display: block;
+  font-size: 22rpx;
+  color: var(--color-gray-500);
+  margin-bottom: 6rpx;
+}
+.vh-cell-value {
+  display: block;
+  font-size: 26rpx;
+  color: var(--color-gray-800);
+  font-weight: 600;
+}
+
+/* 紧凑按钮 */
+.small-btn {
+  font-size: 24rpx;
+  padding: 10rpx 24rpx;
+}

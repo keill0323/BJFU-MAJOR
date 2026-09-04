@@ -46,6 +46,7 @@ class Team(Base):
     created_at = Column(DateTime, default=datetime.now, index=True, comment="创建时间")
     members = relationship("TeamMember", back_populates="team")
     rating = Column(Integer, default=0, comment="队伍水平分")
+    logo = Column(String(255), nullable=True, comment="队伍Logo图片路径")
 
 
 class MemberRole(str, enum.Enum):

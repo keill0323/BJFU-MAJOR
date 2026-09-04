@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.match import MatchCreateRequest, MatchInfo, RoundInfo, RoundUpdateRequest, MatchStatusUpdateRequest, MatchAdminDetail
+from app.schemas.match import MatchCreateRequest, MatchInfo, RoundInfo, RoundUpdateRequest, MatchStatusUpdateRequest, MatchAdminDetail, StageWindowInfo, StageWindowUpdate, RoundScheduleRequest, RoundScheduleActionRequest
 from app.models.match import MatchStatus
 from app.services import match_service
 from app.services.auth_service import get_current_user, require_admin
@@ -412,3 +412,62 @@ def remove_team_from_match(
     """管理员将某队伍从赛事中移除"""
     match_service.remove_team_from_match(db, match_id, team_id)
     return {"message": "已移除该队伍"}
+
+
+# ===== 阶段时间窗口 + 对阵时间协商 =====
+
+@router.put("/{match_id}/stage-windows/{group_name}", response_model=StageWindowInfo)
+def set_stage_window(
+    match_id: int,
+    group_name: str,
+    request: StageWindowUpdate,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin),
+):
+    """管理员设置某阶段的时间窗口（限定时段）"""
+    return match_service.set_stage_window(
+        db, match_id, group_name, request.window_start, request.window_end
+    )
+
+
+@router.get("/{match_id}/stage-windows", response_model=list[StageWindowInfo])
+def get_stage_windows(
+    match_id: int,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin),
+):
+    """管理员查看某赛事所有阶段的时间窗口"""
+    return match_service.get_stage_windows(db, match_id)
+
+
+@router.put("/rounds/{round_id}/schedule", response_model=RoundInfo)
+def schedule_round(
+    round_id: int,
+    request: RoundScheduleRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """队长提交/修改约定比赛时间"""
+    return match_service.schedule_round(db, round_id, current_user.id, request.scheduled_time)
+
+
+@router.post("/rounds/{round_id}/schedule/confirm", response_model=RoundInfo)
+def confirm_round_schedule(
+    round_id: int,
+    request: RoundScheduleActionRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """队长确认约定比赛时间（带 expected_time 防竞态）"""
+    return match_service.confirm_round_schedule(db, round_id, current_user.id, request.expected_time)
+
+
+@router.post("/rounds/{round_id}/schedule/reject", response_model=RoundInfo)
+def reject_round_schedule(
+    round_id: int,
+    request: RoundScheduleActionRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """队长拒绝约定比赛时间（作废提议，带 expected_time 防竞态）"""
+    return match_service.reject_round_schedule(db, round_id, current_user.id, request.expected_time)

@@ -1,0 +1,140 @@
+const api = require('../../utils/api.js')
+const { rankDisplay } = require('../../utils/rank.js')
+
+// 队伍水平分（0-500，为 top5 队员 individual_rating 之和）→ 分级徽章
+function ratingTier(rating) {
+  const r = rating || 0
+  if (r >= 400) return { label: 'S', cls: 's' }
+  if (r >= 300) return { label: 'A', cls: 'a' }
+  if (r >= 200) return { label: 'B', cls: 'b' }
+  if (r >= 100) return { label: 'C', cls: 'c' }
+  if (r > 0)   return { label: 'D', cls: 'd' }
+  return { label: '未定', cls: 'x' }
+}
+
+// 队伍徽章用首字（可退化为 '?'）
+function teamInitial(name) {
+  const t = (name || '').trim()
+  return t ? t.charAt(0) : '?'
+}
+
+Page({
+  data: {
+    teams: [],        // 装饰后的全量队伍
+    filtered: [],     // 搜索过滤结果
+    keyword: '',
+    total: 0,
+    maxRating: 0,     // 最高队伍评分
+    // 详情弹层
+    showTeamDetail: false,
+    detailTeam: null,
+    detailMembers: []
+  },
+
+  onShow() {
+    this.loadTeams()
+  },
+
+  onPullDownRefresh() {
+    this.loadTeams().finally(() => wx.stopPullDownRefresh())
+  },
+
+  // 装饰：首字徽章 + 分级 + 人数 + logo 完整地址
+  decorateTeam(t) {
+    const tier = ratingTier(t.rating)
+    return Object.assign({}, t, {
+      initial: teamInitial(t.name),
+      tierLabel: tier.label,
+      tierCls: tier.cls,
+      memberCount: t.member_count || 0,
+      logo_full: t.logo ? (t.logo.indexOf('http') === 0 ? t.logo : api.BASE + t.logo) : ''
+    })
+  },
+
+  async loadTeams() {
+    try {
+      const data = await api.getTeams()
+      const teams = (data || []).map(t => this.decorateTeam(t))
+      teams.sort((a, b) => (b.rating || 0) - (a.rating || 0))  // 默认按评分降序
+      const maxRating = teams.length ? teams[0].rating || 0 : 0
+      this.setData({ teams, total: teams.length, maxRating })
+      this.applyFilter()
+    } catch (err) {
+      this.setData({ teams: [], total: 0, maxRating: 0 })
+      this.applyFilter()
+    }
+  },
+
+  onSearchInput(e) {
+    this.setData({ keyword: e.detail.value })
+    this.applyFilter()
+  },
+
+  clearSearch() {
+    this.setData({ keyword: '' })
+    this.applyFilter()
+  },
+
+  // 客户端过滤：按队名/队长模糊匹配
+  applyFilter() {
+    const kw = (this.data.keyword || '').trim().toLowerCase()
+    const filtered = !kw
+      ? this.data.teams
+      : this.data.teams.filter(t =>
+          (t.name || '').toLowerCase().indexOf(kw) >= 0 ||
+          (t.captain_name || '').toLowerCase().indexOf(kw) >= 0
+        )
+    this.setData({ filtered })
+  },
+
+  async viewTeam(e) {
+    const id = e.currentTarget.dataset.id
+    try {
+      const team = await api.getTeam(id)
+      const tier = ratingTier(team.rating)
+      const members = (team.members || []).map(m => {
+        const item = Object.assign({}, m, { display_rank: rankDisplay(m.rank) })
+        if (item.avatar && !item.avatar.startsWith('http')) item.avatar_full = api.BASE + item.avatar
+        return item
+      })
+      this.setData({
+        showTeamDetail: true,
+        detailTeam: Object.assign({}, team, {
+          initial: teamInitial(team.name),
+          tierLabel: tier.label,
+          tierCls: tier.cls,
+          logo_full: team.logo ? (team.logo.indexOf('http') === 0 ? team.logo : api.BASE + team.logo) : ''
+        }),
+        detailMembers: members
+      })
+    } catch (err) {
+      wx.showToast({ title: '加载失败', icon: 'error' })
+    }
+  },
+
+  closeTeamDetail() {
+    this.setData({ showTeamDetail: false, detailTeam: null, detailMembers: [] })
+  },
+
+  noop() {},   // 阻止面板内点击冒泡到遮罩
+
+  // 申请加入（弹确认，二次确认防误触）
+  async applyJoin(e) {
+    const teamId = e.currentTarget.dataset.id
+    const teamName = e.currentTarget.dataset.name || '该队伍'
+    wx.showModal({
+      title: '申请加入',
+      content: `确定申请加入「${teamName}」吗？`,
+      confirmText: '申请',
+      success: async (r) => {
+        if (!r.confirm) return
+        try {
+          await api.applyJoin(teamId, '')
+          wx.showToast({ title: `已向 ${teamName} 申请`, icon: 'success' })
+        } catch (err) {
+          wx.showToast({ title: err.detail || '申请失败', icon: 'error' })
+        }
+      }
+    })
+  }
+})

@@ -4,7 +4,7 @@ Author: keill
 Since: 2026-7-24
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -15,10 +15,24 @@ from app.schemas.team import (
     InviteRequest, InvitationInfo, RecruitByStudentRequest,
 )
 from app.models.user import User
-from app.services import team_service
+from app.models.team import Team
+from app.services import team_service, upload_service
 from app.services.auth_service import get_current_user, require_admin
 
 router = APIRouter(prefix="/api/teams", tags=["队伍"])
+
+
+def _require_captain(team: Team, user_id: int) -> Team:
+    """鉴权：队伍必须存在，且请求者是队长。
+
+    队伍相关的队长级操作（上传Logo/拉人/指派/踢人/解散等）都需要这个校验，
+    抽成公共函数避免每个接口重复写「404 + 403」两段判断。
+    """
+    if not team:
+        raise HTTPException(status_code=404, detail="队伍不存在")
+    if team.captain_id != user_id:
+        raise HTTPException(status_code=403, detail="只有队长才能执行该操作")
+    return team
 
 
 @router.post("", response_model=TeamInfo, status_code=201)
@@ -183,6 +197,22 @@ def get_team(team_id: int, db: Session = Depends(get_db)):
     team = team_service.get_team_by_id(db, team_id)
     if not team:
         raise HTTPException(status_code=404, detail="队伍不存在")
+    return team
+
+
+@router.post("/{team_id}/logo", response_model=TeamInfo)
+def upload_team_logo(
+    team_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """队长上传/更换队伍Logo"""
+    team = _require_captain(team_service.get_team_by_id(db, team_id), current_user.id)
+    url, _ = upload_service.save_upload_image(file, f"team_{team_id}", max_mb=5)
+    team.logo = url
+    db.commit()
+    db.refresh(team)
     return team
 
 

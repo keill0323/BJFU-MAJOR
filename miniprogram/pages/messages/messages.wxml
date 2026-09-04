@@ -1,0 +1,53 @@
+<view class="page">
+  <nav-drawer title="消息"></nav-drawer>
+
+  <!-- 空状态 -->
+  <view wx:if="{{invitations.length === 0 && rankApplications.length === 0}}" class="empty">
+    <view class="empty-box">
+      <image class="empty-ic" src="/images/icons/mail.svg"/>
+      <text class="empty-title">暂无消息</text>
+      <text class="empty-sub">入队邀请、段位申请会出现在这里</text>
+    </view>
+  </view>
+
+  <block wx:else>
+    <!-- 入队邀请 -->
+    <view wx:if="{{invitations.length > 0}}" class="card">
+      <view class="group-title">
+        <text class="group-name">入队邀请</text>
+        <text class="group-count">{{invitations.length}}</text>
+      </view>
+      <view wx:for="{{invitations}}" wx:key="id" class="msg-row">
+        <view class="msg-icon invite">
+          <image class="msg-ic" src="/images/icons/mail.svg"/>
+        </view>
+        <view class="msg-main">
+          <text class="msg-title">{{item.team_name || '某队伍'}} 邀请你入队</text>
+          <text class="msg-sub">队长: {{item.captain_name || '未知'}}{{item.message ? ' · ' + item.message : ''}}</text>
+        </view>
+        <view class="msg-actions">
+          <view class="msg-btn reject" bindtap="rejectInv" data-id="{{item.id}}">忽略</view>
+          <view class="msg-btn accept" bindtap="acceptInv" data-id="{{item.id}}">同意</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 段位申请 -->
+    <view wx:if="{{rankApplications.length > 0}}" class="card">
+      <view class="group-title">
+        <text class="group-name">段位申请</text>
+        <text class="group-count">{{rankApplications.length}}</text>
+      </view>
+      <view wx:for="{{rankApplications}}" wx:key="id" class="msg-row">
+        <view class="msg-icon rank">
+          <image class="msg-ic" src="/images/icons/trophy.svg"/>
+        </view>
+        <view class="msg-main">
+          <text class="msg-title">申请段位: {{item.ai_rank || '-'}}</text>
+          <text class="msg-sub">{{item.reject_reason ? '驳回原因: ' + item.reject_reason : '提交的段位更新申请'}}</text>
+        </view>
+        <view class="msg-status {{item.statusCls}}">{{item.statusText}}</view>
+      </view>
+    </view>
+  </block>
+</view>

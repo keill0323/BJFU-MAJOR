@@ -1,0 +1,6 @@
+{
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "nav-drawer": "/components/nav-drawer/nav-drawer"
+  }
+}

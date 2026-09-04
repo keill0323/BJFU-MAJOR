@@ -122,14 +122,14 @@
   gap: 8rpx;
   padding: 12rpx 8rpx;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(15, 23, 42, 0.04);
   border: 1rpx solid transparent;
   min-width: 0;
 }
 
 .vteam-win {
-  background: rgba(47, 206, 122, 0.10);
-  border: 1rpx solid rgba(47, 206, 122, 0.25);
+  background: rgba(8, 145, 178, 0.10);
+  border: 1rpx solid rgba(8, 145, 178, 0.25);
 }
 
 .vteam-name {
@@ -149,7 +149,7 @@
 }
 
 .score-win {
-  color: #2fce7a;
+  color: #0891b2;
 }
 
 .vs-text {
@@ -175,7 +175,7 @@
 }
 
 .big-score-text.score-win {
-  color: #2fce7a;
+  color: #0891b2;
 }
 
 .big-score-text.score-tbd {
@@ -221,8 +221,8 @@
 }
 
 .stage-tab.active {
-  background: linear-gradient(135deg, #2fce7a, #1fa361);
-  color: #06281c;
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -255,7 +255,7 @@
   width: 44rpx;
   height: 44rpx;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.10);
+  background: rgba(15, 23, 42, 0.10);
   color: var(--color-gray-600);
   font-size: 26rpx;
   font-weight: bold;
@@ -266,8 +266,8 @@
 }
 
 .rank-no.rank-top {
-  background: rgba(47, 206, 122, 0.22);
-  color: #4ade80;
+  background: rgba(8, 145, 178, 0.22);
+  color: #34d399;
 }
 
 /* 组分区标题（小组赛区块内 A组/B组/C组） */
@@ -283,8 +283,8 @@
 
 /* 灰色标签（胜场等） */
 .tag-gray {
-  background: rgba(255, 255, 255, 0.08);
-  color: #9dafaa;
+  background: rgba(15, 23, 42, 0.08);
+  color: #9aa9bd;
 }
 
 /* 流程提示条 */
@@ -305,8 +305,8 @@
 }
 
 .ko-title {
-  color: #ff6b6f;
-  border-left-color: #ff6b6f;
+  color: #fb7185;
+  border-left-color: #fb7185;
 }
 
 /* BO3 输入行 */
@@ -477,8 +477,8 @@
 }
 
 .big-score-tap:active {
-  background: rgba(47, 206, 122, 0.12);
-  border-color: rgba(47, 206, 122, 0.3);
+  background: rgba(8, 145, 178, 0.12);
+  border-color: rgba(8, 145, 178, 0.3);
 }
 
 .bo3-more {
@@ -493,4 +493,29 @@
   padding: 16rpx 0;
   font-size: 28rpx;
   text-align: center;
+}
+
+/* 时间窗口面板 */
+.win-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin: 16rpx 0;
+}
+
+.win-label {
+  width: 140rpx;
+  font-size: 26rpx;
+  color: var(--color-gray-600);
+  flex-shrink: 0;
+}
+
+.win-picker {
+  flex: 1;
+  background: var(--color-gray-100);
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+  color: var(--color-gray-800);
 }

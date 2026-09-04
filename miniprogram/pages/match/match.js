@@ -30,7 +30,13 @@ Page({
     isCaptain: false,
     // BO3 小局详情弹层
     showBo3: false,
-    bo3Detail: null
+    bo3Detail: null,
+    // 时间协商
+    myTeamId: null,
+    showSchedule: false,
+    scheduleRound: null,
+    scheduleDate: '',
+    scheduleTime: ''
   },
 
   // 页面加载：拉完整赛事资料 + 报名状态
@@ -39,10 +45,11 @@ Page({
     if (!id) return
     try {
       const detail = await api.getMatchDetail(id)
+      this.detail = detail
       this.setData({
         match: Object.assign({}, detail.match, { statusText: this.statusText(detail.match.status) })
       })
-      this.buildData(detail)
+      this.buildData(detail, null, false)
       // 已登录才拉我的报名状态；未登录允许先浏览详情，不强制登录
       if (wx.getStorageSync('token')) {
         await this.loadMyStatus()
@@ -62,10 +69,11 @@ Page({
     }
     try {
       const detail = await api.getMatchDetail(match.id)
+      this.detail = detail
       this.setData({
         match: Object.assign({}, detail.match, { statusText: this.statusText(detail.match.status) })
       })
-      this.buildData(detail)
+      this.buildData(detail, this.data.myTeamId, this.data.isCaptain)
       if (wx.getStorageSync('token')) {
         await this.loadMyStatus()
       }
@@ -105,9 +113,9 @@ Page({
   },
 
   // 组装展示数据（复用管理端逻辑，仅只读展示）
-  buildData(detail) {
+  buildData(detail, myTeamId, isCaptain) {
     const teams = detail.teams || []
-    const rounds = detail.rounds || []
+    const rounds = (detail.rounds || []).map(r => this.decorateRound(r, myTeamId, isCaptain))
     const knockoutRounds = rounds.filter(r => r.group_name === '淘汰赛')
     const koSorted = knockoutRounds.slice().sort((a, b) => a.round_number - b.round_number)
     const fmtBo3 = r => (r.bo3_scores ? r.bo3_scores.map(g => g.t1 + '-' + g.t2).join(' ') : '')
@@ -302,13 +310,19 @@ Page({
       // 查我的队伍（判断报名类型用）
       const team = await api.getMyTeam()
       let isCaptain = false
+      let myTeamId = null
       if (team) {
         // 用 /me 接口拿当前用户 id（比解析 JWT 更可靠）
         const me = await api.getMe()
         const userId = me ? me.id : null
         isCaptain = team.captain_id === userId
+        myTeamId = team.id
       }
-      this.setData({ myTeam: team || null, isCaptain: isCaptain })
+      this.setData({ myTeam: team || null, isCaptain: isCaptain, myTeamId: myTeamId })
+      // 拿到队长身份后重新装饰对阵（标记可操作的对阵）
+      if (this.detail) {
+        this.buildData(this.detail, myTeamId, isCaptain)
+      }
     } catch (err) {
       // 没登录等情况，忽略
     }
@@ -356,7 +370,17 @@ Page({
           title: '未完成认证',
           content: '报名需先完成学籍认证（上传学信网/教务系统/校园卡截图）。',
           confirmText: '去认证',
-          success: (r) => { if (r.confirm) wx.switchTab({ url: '/pages/profile/profile' }) }
+          success: (r) => { if (r.confirm) wx.reLaunch({ url: '/pages/profile/profile' }) }
+        })
+        return
+      }
+      // 报名前检查段位认证（防炸鱼）：未认证段位直接拦截
+      if (me && !me.rank) {
+        wx.showModal({
+          title: '未完成段位认证',
+          content: '报名需先完成段位认证（上传完美/5E 平台段位截图，AI 识别段位，防止炸鱼）。',
+          confirmText: '去认证',
+          success: (r) => { if (r.confirm) wx.reLaunch({ url: '/pages/verify/verify' }) }
         })
         return
       }
@@ -397,5 +421,122 @@ Page({
         }
       }
     })
+  },
+
+  // ===== 时间协商 =====
+  fmtTime(iso) {
+    const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
+    return m ? (m[2] + '-' + m[3] + ' ' + m[4] + ':' + m[5]) : (iso || '')
+  },
+  fmtDate(iso) {
+    const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+    return m ? (m[1] + '-' + m[2] + '-' + m[3]) : ''
+  },
+  fmtTimeOnly(iso) {
+    const m = String(iso || '').match(/[T ](\d{2}):(\d{2})/)
+    return m ? (m[1] + ':' + m[2]) : ''
+  },
+
+  // 装饰对阵：时间状态文本 + 我的操作权限
+  decorateRound(r, myTeamId, isCaptain) {
+    let schedule_text = '未约定时间'
+    if (r.schedule_status === 'confirmed') schedule_text = '已确定 ' + this.fmtTime(r.scheduled_time)
+    else if (r.schedule_status === 'pending') schedule_text = '待确认 ' + this.fmtTime(r.scheduled_time)
+    const window_text = (r.window_start && r.window_end)
+      ? (this.fmtTime(r.window_start) + ' ~ ' + this.fmtTime(r.window_end))
+      : ''
+    let can_operate = false
+    let my_side = null
+    let i_confirmed = false
+    if (isCaptain && myTeamId) {
+      if (r.team1_id === myTeamId) my_side = 'team1'
+      else if (r.team2_id === myTeamId) my_side = 'team2'
+      can_operate = !!my_side
+    }
+    if (my_side === 'team1') i_confirmed = !!r.team1_confirmed
+    else if (my_side === 'team2') i_confirmed = !!r.team2_confirmed
+    return Object.assign({}, r, { schedule_text, window_text, can_operate, my_side, i_confirmed })
+  },
+
+  // 打开时间协商面板
+  openSchedule(e) {
+    const rid = e.currentTarget.dataset.id
+    const r = (this.detail && this.detail.rounds || []).find(x => x.id == rid)
+    if (!r) return
+    this.setData({
+      showSchedule: true,
+      scheduleRound: this.decorateRound(r, this.data.myTeamId, this.data.isCaptain),
+      scheduleDate: r.scheduled_time ? this.fmtDate(r.scheduled_time) : '',
+      scheduleTime: r.scheduled_time ? this.fmtTimeOnly(r.scheduled_time) : ''
+    })
+  },
+  closeSchedule() { this.setData({ showSchedule: false, scheduleRound: null }) },
+  onScheduleDateChange(e) { this.setData({ scheduleDate: e.detail.value }) },
+  onScheduleTimeChange(e) { this.setData({ scheduleTime: e.detail.value }) },
+
+  async submitSchedule() {
+    const rid = this.data.scheduleRound ? this.data.scheduleRound.id : null
+    const { scheduleDate, scheduleTime } = this.data
+    if (!rid) return
+    if (!scheduleDate || !scheduleTime) {
+      wx.showToast({ title: '请选择日期和时间', icon: 'none' })
+      return
+    }
+    const iso = scheduleDate + 'T' + scheduleTime + ':00'
+    try {
+      await api.scheduleRound(rid, iso)
+      wx.showToast({ title: '已提交，等待对方确认', icon: 'success' })
+      this.setData({ showSchedule: false, scheduleRound: null })
+      this.refreshDetail()
+    } catch (err) {
+      wx.showToast({ title: err.detail || '提交失败', icon: 'none' })
+    }
+  },
+
+  async confirmSchedule() {
+    const r = this.data.scheduleRound
+    if (!r) return
+    try {
+      await api.confirmRoundSchedule(r.id, r.scheduled_time)
+      wx.showToast({ title: '已确认比赛时间', icon: 'success' })
+      this.setData({ showSchedule: false, scheduleRound: null })
+      this.refreshDetail()
+    } catch (err) {
+      wx.showToast({ title: err.detail || '确认失败', icon: 'none' })
+    }
+  },
+
+  async rejectSchedule() {
+    const r = this.data.scheduleRound
+    if (!r) return
+    // 二次确认，防止误触作废已确定的比赛时间
+    const res = await new Promise(resolve => wx.showModal({
+      title: '作废约定时间',
+      content: r.schedule_status === 'confirmed'
+        ? '确定要作废已确定的比赛时间吗？作废后需双方重新约定。'
+        : '确定要作废当前提议吗？作废后需重新约定。',
+      confirmText: '作废',
+      confirmColor: '#e64340',
+      success: resolve
+    }))
+    if (!res.confirm) return
+    try {
+      await api.rejectRoundSchedule(r.id, r.scheduled_time)
+      wx.showToast({ title: '已作废，可重新约定', icon: 'none' })
+      this.setData({ showSchedule: false, scheduleRound: null })
+      this.refreshDetail()
+    } catch (err) {
+      wx.showToast({ title: err.detail || '操作失败', icon: 'none' })
+    }
+  },
+
+  // 重新拉详情（保持我的队长权限标记）
+  refreshDetail() {
+    if (!this.data.match) return
+    api.getMatchDetail(this.data.match.id).then(detail => {
+      this.detail = detail
+      this.setData({ match: Object.assign({}, detail.match, { statusText: this.statusText(detail.match.status) }) })
+      this.buildData(detail, this.data.myTeamId, this.data.isCaptain)
+    }).catch(() => {})
   }
 })

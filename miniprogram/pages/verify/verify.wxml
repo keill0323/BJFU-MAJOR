@@ -1,0 +1,67 @@
+<view class="page">
+  <nav-drawer title="认证"></nav-drawer>
+
+  <block wx:if="{{user}}">
+    <!-- 我的认证汇总 -->
+    <view class="card verify-hero">
+      <view class="vh-row">
+        <text class="vh-label">当前段位</text>
+        <text class="vh-rank">{{user.display_rank || '未设置'}}</text>
+      </view>
+      <view class="vh-grid">
+        <view class="vh-cell">
+          <text class="vh-cell-label">学号</text>
+          <text class="vh-cell-value">{{user.student_id || '未认证'}}</text>
+        </view>
+        <view class="vh-cell">
+          <text class="vh-cell-label">在校认证</text>
+          <text class="vh-cell-value {{user.is_verified ? 'text-green' : 'text-red'}}">{{user.is_verified ? '已通过' : '未认证'}}</text>
+        </view>
+        <view class="vh-cell">
+          <text class="vh-cell-label">身份</text>
+          <text class="vh-cell-value">{{user.identity === 'new_student' ? '新生' : user.identity === 'senior' ? '老登' : '未设'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 在校认证 -->
+    <view class="card">
+      <text class="section-title">在校认证</text>
+      <view wx:if="{{user && !user.is_verified}}" class="verify-box">
+        <text wx:if="{{user.verify_reject_reason}}" class="verify-reject-reason">认证被驳回：{{user.verify_reject_reason}}</text>
+        <text class="verify-tip">{{user.verify_image ? '已提交截图，等待管理员审核' : '请上传学信网/教务系统截图，或校园卡/电子校园卡截图（建议在校生使用）；需点进学校资料卡片，包含姓名、学号、学校名；务必码住身份证号和照片，小心信息泄露；如有疑问联系管理员QQ：3761215994'}}</text>
+        <view wx:if="{{user.verify_image}}" class="verify-img-row">
+          <image class="verify-thumb" src="{{user.verify_image_full}}" bindtap="previewVerifyImage"/>
+          <view class="btn-outline small-btn" bindtap="chooseVerifyImage">重新上传</view>
+        </view>
+        <view wx:else class="btn-primary" bindtap="chooseVerifyImage">{{uploading ? '上传中...' : '上传认证截图'}}</view>
+      </view>
+      <view wx:else class="verified-tip">已通过在校认证 ✓</view>
+    </view>
+
+    <!-- 段位认证 -->
+    <view class="card">
+      <view class="rank-title-row">
+        <text class="section-title">段位认证</text>
+        <text class="tag {{user.display_rank ? 'tag-blue' : 'tag-red'}}">{{user.display_rank ? '已认证' : '参赛必审'}}</text>
+      </view>
+      <view class="verify-box rank-box {{user.display_rank ? '' : 'rank-box-required'}}">
+        <block wx:if="{{user.display_rank}}">
+          <text class="verify-tip">当前段位：{{user.display_rank}}{{user.rank_image ? '（已上传截图，可更新）' : ''}}</text>
+          <view wx:if="{{user.rank_image}}" class="verify-img-row">
+            <image class="verify-thumb" src="{{user.rank_image_full}}" bindtap="previewRankImage"/>
+            <view class="btn-outline small-btn" bindtap="chooseRankImage">更新段位</view>
+          </view>
+          <view wx:else class="btn-outline small-btn" bindtap="chooseRankImage">更新段位</view>
+        </block>
+        <block wx:else>
+          <view class="rank-required-head">
+            <text class="verify-tip">上传完美平台/5E平台段位截图（历史最高），AI 自动识别段位</text>
+            <text class="rank-required-note">未认证无法报名参赛，防止高段位炸鱼</text>
+          </view>
+          <view class="btn-primary" bindtap="chooseRankImage">{{uploading ? '上传中...' : '上传段位截图（参赛必审）'}}</view>
+        </block>
+      </view>
+    </view>
+  </block>
+</view>

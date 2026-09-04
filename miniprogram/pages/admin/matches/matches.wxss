@@ -86,14 +86,14 @@
   gap: 8rpx;
   padding: 12rpx 8rpx;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(15, 23, 42, 0.04);
   border: 1rpx solid transparent;
   min-width: 0;
 }
 
 .vteam-win {
-  background: rgba(47, 206, 122, 0.10);
-  border: 1rpx solid rgba(47, 206, 122, 0.25);
+  background: rgba(8, 145, 178, 0.10);
+  border: 1rpx solid rgba(8, 145, 178, 0.25);
 }
 
 .vteam-name {
@@ -113,7 +113,7 @@
 }
 
 .score-win {
-  color: #2fce7a;
+  color: #0891b2;
 }
 
 .vs-text {

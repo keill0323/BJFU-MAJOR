@@ -40,6 +40,7 @@ class TeamListInfo(BaseModel):
     status: str
     member_count: int = 0
     rating: Optional[int] = None
+    logo: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -55,6 +56,7 @@ class TeamInfo(BaseModel):
     status: str
     members: List[TeamMemberInfo] = []
     member_count: int = 0
+    logo: Optional[str] = None
     created_at: datetime
 
     class Config:

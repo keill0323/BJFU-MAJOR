@@ -30,10 +30,15 @@ Page({
     rankApplications: []   // 我的段位申请
   },
 
+  onLoad(options) {
+    if (options && options.tab !== undefined && ['mine', 'all', 'info'].indexOf(options.tab) >= 0) {
+      this.setData({ tab: options.tab })
+    }
+  },
+
   // 每次进入页面刷新
   async onShow() {
     await this.refreshAll()
-    await this.loadInvitations()
   },
 
   // 下拉刷新
@@ -74,6 +79,15 @@ Page({
   async loadMyTeam() {
     try {
       const team = await api.getMyTeam()
+      if (team) {
+        // 队伍 logo 完整地址 + 首字徽章（无 logo 时用）
+        if (team.logo && team.logo.indexOf('http') !== 0) {
+          team.logo_full = api.BASE + team.logo
+        } else {
+          team.logo_full = team.logo || ''
+        }
+        team.logo_initial = team.name ? team.name.trim().charAt(0) : '?'
+      }
       this.setData({ myTeam: team || null })
       if (team) {
         // 用 /me 接口拿当前用户 id（比解析 JWT 更可靠）
@@ -252,6 +266,39 @@ Page({
       await this.refreshAll()
     } catch (err) {
       wx.showToast({ title: err.detail || '创建失败', icon: 'error' })
+    }
+  },
+
+  // === 队长上传/更换队伍Logo ===
+  uploadLogo() {
+    const team = this.data.myTeam
+    if (!team || !this.data.isCaptain) return
+    wx.chooseMedia({
+      count: 1,
+      mediaType: ['image'],
+      sourceType: ['album', 'camera'],
+      success: (res) => {
+        const filePath = res.tempFiles[0].tempFilePath
+        wx.compressImage({
+          src: filePath,
+          quality: 80,
+          success: (cr) => {
+            const compressedPath = (cr && cr.tempFilePath) || filePath
+            this.uploadLogoPath(compressedPath)
+          },
+          fail: () => this.uploadLogoPath(filePath)
+        })
+      }
+    })
+  },
+  async uploadLogoPath(filePath) {
+    if (!this.data.myTeam) return
+    try {
+      await api.uploadTeamLogo(this.data.myTeam.id, filePath)
+      wx.showToast({ title: 'Logo 已更新', icon: 'success' })
+      await this.loadMyTeam()
+    } catch (err) {
+      wx.showToast({ title: err.detail || '上传失败', icon: 'none' })
     }
   },
 

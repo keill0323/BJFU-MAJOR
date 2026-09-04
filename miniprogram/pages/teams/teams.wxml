@@ -1,0 +1,118 @@
+<view class="page">
+  <nav-drawer title="所有队伍"></nav-drawer>
+
+  <!-- 搜索 -->
+  <view class="search-bar">
+    <image class="search-ic" src="/images/icons/search.svg"/>
+    <input class="search-input" placeholder="搜索队伍或队长..." value="{{keyword}}" bindinput="onSearchInput" confirm-type="search"/>
+    <view wx:if="{{keyword}}" class="search-clear" bindtap="clearSearch">
+      <image class="search-clear-ic" src="/images/icons/x.svg"/>
+    </view>
+  </view>
+
+  <!-- 统计概览 -->
+  <view class="stat-bar">
+    <view class="stat">
+      <text class="stat-num">{{total}}</text>
+      <text class="stat-label">全部队伍</text>
+    </view>
+    <view class="stat">
+      <text class="stat-num stat-dim">{{filtered.length}}</text>
+      <text class="stat-label">当前结果</text>
+    </view>
+    <view class="stat">
+      <text class="stat-num">{{maxRating}}</text>
+      <text class="stat-label">最高评分</text>
+    </view>
+  </view>
+
+  <!-- 队伍卡片列表 -->
+  <block wx:if="{{filtered.length > 0}}">
+    <view class="team-card" wx:for="{{filtered}}" wx:key="id" bindtap="viewTeam" data-id="{{item.id}}">
+      <view class="tc-avatar t-{{item.tierCls}}">
+        <image wx:if="{{item.logo_full}}" class="tc-logo" src="{{item.logo_full}}" mode="aspectFill"/>
+        <text wx:else class="tc-initial">{{item.initial}}</text>
+        <text class="tc-tier">{{item.tierLabel}}</text>
+      </view>
+      <view class="tc-body">
+        <view class="tc-top">
+          <text class="tc-name">{{item.name}}</text>
+        </view>
+        <text class="tc-meta">队长：{{item.captain_name || '未知'}}</text>
+        <view class="tc-foot">
+          <text class="tc-count">{{item.memberCount}} 名队员</text>
+          <text class="tc-rating">评分 {{item.rating || 0}}</text>
+          <view class="tc-apply" catchtap="applyJoin" data-id="{{item.id}}" data-name="{{item.name}}">申请加入</view>
+        </view>
+      </view>
+      <image class="tc-arrow" src="/images/icons/chevron-right.svg"/>
+    </view>
+  </block>
+
+  <!-- 空状态 -->
+  <view wx:elif="{{total === 0}}" class="empty">
+    <view class="empty-box">
+      <image class="empty-ic" src="/images/icons/swords.svg"/>
+      <text class="empty-title">还没有队伍</text>
+      <text class="empty-sub">下拉刷新，或去「我的队伍」创建一支</text>
+    </view>
+  </view>
+  <view wx:else class="empty">
+    <view class="empty-box">
+      <image class="empty-ic" src="/images/icons/search.svg"/>
+      <text class="empty-title">没有匹配的队伍</text>
+      <text class="empty-sub">换个关键词试试</text>
+    </view>
+  </view>
+</view>
+
+<!-- 队伍详情弹层 -->
+<view wx:if="{{showTeamDetail && detailTeam}}" class="mask" bindtap="closeTeamDetail">
+  <view class="detail-panel" catchtap="noop">
+    <view class="dp-header">
+      <view class="dp-avatar t-{{detailTeam.tierCls}}">
+        <image wx:if="{{detailTeam.logo_full}}" class="dp-logo" src="{{detailTeam.logo_full}}" mode="aspectFill"/>
+        <text wx:else class="dp-initial">{{detailTeam.initial}}</text>
+        <text class="tc-tier">{{detailTeam.tierLabel}}</text>
+      </view>
+      <view class="dp-title">
+        <text class="dp-name">{{detailTeam.name}}</text>
+        <text class="dp-caption">队长：{{detailTeam.captain_name || '未知'}}</text>
+      </view>
+      <image class="dp-close" src="/images/icons/x.svg" bindtap="closeTeamDetail"/>
+    </view>
+
+    <!-- 数据统计 -->
+    <view class="dp-stats">
+      <view class="dp-stat">
+        <text class="dp-stat-num">{{detailMembers.length}}</text>
+        <text class="dp-stat-label">成员</text>
+      </view>
+      <view class="dp-stat">
+        <text class="dp-stat-num">{{detailTeam.rating || 0}}</text>
+        <text class="dp-stat-label">队伍评分</text>
+      </view>
+      <view class="dp-stat">
+        <text class="dp-stat-num">{{detailTeam.tierLabel}}</text>
+        <text class="dp-stat-label">段位等级</text>
+      </view>
+    </view>
+
+    <text wx:if="{{detailTeam.description}}" class="dp-desc">{{detailTeam.description}}</text>
+
+    <!-- 成员花名册 -->
+    <text class="dp-section">成员花名册 ({{detailMembers.length}})</text>
+    <view wx:for="{{detailMembers}}" wx:key="id" class="member-row">
+      <image class="member-avatar" src="{{item.avatar_full || '/images/icons/gamepad.svg'}}"/>
+      <view class="member-info">
+        <view class="member-name-row">
+          <text class="member-name">{{item.nickname || '玩家' + item.user_id}}</text>
+          <text class="tag {{item.role === 'captain' ? 'tag-orange' : 'tag-gray'}}">{{item.role === 'captain' ? '队长' : '队员'}}</text>
+        </view>
+        <text class="member-meta">游戏ID {{item.game_id || '未设置'}} · 段位 {{item.display_rank || '未设置'}}</text>
+      </view>
+    </view>
+
+    <view class="dp-apply btn-primary" bindtap="applyJoin" data-id="{{detailTeam.id}}" data-name="{{detailTeam.name}}">申请加入</view>
+  </view>
+</view>

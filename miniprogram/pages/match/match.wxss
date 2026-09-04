@@ -2,28 +2,120 @@
   padding-bottom: 60rpx;
 }
 
-/* ===== 赛事信息 ===== */
-.match-title {
-  font-size: 40rpx;
-  font-weight: 700;
-  display: block;
-  margin-bottom: 16rpx;
-  color: var(--color-gray-900);
+/* ===== 赛事 Hero ===== */
+.hero {
+  position: relative;
+  margin: 20rpx;
+  padding: 36rpx 32rpx 32rpx;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(165deg, #ffffff 0%, #f1f4f8 100%);
+  border: 1rpx solid var(--color-border);
+  overflow: hidden;
 }
 
-.match-desc {
-  font-size: 28rpx;
-  color: var(--color-gray-600);
-  display: block;
-  margin-bottom: 20rpx;
+.hero-glow {
+  position: absolute;
+  top: -140rpx;
+  right: -100rpx;
+  width: 420rpx;
+  height: 420rpx;
+  background: radial-gradient(circle, rgba(8, 145, 178, 0.22), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
-.match-meta {
+.hero-top {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  gap: 30rpx;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 22rpx;
+}
+
+.hero-badge {
+  font-size: 20rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+  color: var(--color-primary);
+  background: rgba(8, 145, 178, 0.14);
+  border: 1rpx solid rgba(8, 145, 178, 0.3);
+  border-radius: 999rpx;
+  padding: 6rpx 20rpx;
+}
+
+.hero-status {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
   font-size: 24rpx;
+  color: var(--color-gray-600);
+}
+
+.hero-status-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: var(--color-gray-400);
+}
+
+.hero-status.st-registering .hero-status-dot { background: #34d399; }
+.hero-status.st-in_progress .hero-status-dot { background: var(--color-primary); }
+.hero-status.st-finished .hero-status-dot { background: var(--color-gray-300); }
+.hero-status.st-draft .hero-status-dot { background: #fbbf24; }
+
+.hero-title {
+  position: relative;
+  display: block;
+  font-size: 46rpx;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--color-gray-900);
+  margin-bottom: 14rpx;
+}
+
+.hero-desc {
+  position: relative;
+  display: block;
+  font-size: 26rpx;
+  line-height: 1.5;
+  color: var(--color-gray-600);
+  margin-bottom: 26rpx;
+}
+
+.hero-stats {
+  position: relative;
+  display: flex;
+  gap: 18rpx;
+}
+
+.hero-stat {
+  flex: 1;
+  background: rgba(15, 23, 42, 0.05);
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 18rpx 8rpx;
+  text-align: center;
+}
+
+.hero-stat-num {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 800;
+  color: var(--color-primary);
+  line-height: 1.2;
+}
+
+.hero-stat-den {
+  font-size: 24rpx;
+  font-weight: 600;
   color: var(--color-gray-500);
+}
+
+.hero-stat-label {
+  display: block;
+  font-size: 22rpx;
+  color: var(--color-gray-500);
+  margin-top: 8rpx;
 }
 
 .section-title {
@@ -62,6 +154,9 @@
 /* ===== 阶段 tab ===== */
 .tabs {
   display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 50;
   background: var(--color-card);
   border-radius: var(--radius-lg);
   margin: 20rpx;
@@ -75,12 +170,13 @@
   padding: 18rpx 0;
   font-size: 26rpx;
   color: var(--color-gray-600);
+  transition: color 0.2s ease;
 }
 
 .tab.active {
-  color: var(--color-primary);
-  font-weight: bold;
-  border-bottom: 4rpx solid var(--color-primary);
+  color: #ffffff;
+  font-weight: 700;
+  background: linear-gradient(135deg, #0891b2, #0e7490);
 }
 
 /* ===== 子阶段 tab（swiper 切换） ===== */
@@ -99,8 +195,8 @@
 }
 
 .stage-tab.active {
-  background: linear-gradient(135deg, #2fce7a, #1fa361);
-  color: #06281c;
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -159,7 +255,7 @@
   width: 44rpx;
   height: 44rpx;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.10);
+  background: rgba(15, 23, 42, 0.10);
   color: var(--color-gray-600);
   font-size: 26rpx;
   font-weight: bold;
@@ -170,8 +266,8 @@
 }
 
 .rank-no.rank-top {
-  background: rgba(47, 206, 122, 0.22);
-  color: #4ade80;
+  background: rgba(8, 145, 178, 0.22);
+  color: #34d399;
 }
 
 /* ===== 队伍 chips ===== */
@@ -203,15 +299,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--color-row);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0.01));
+  background-color: var(--color-row);
   border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 16rpx 20rpx;
-  margin-bottom: 12rpx;
+  border-radius: var(--radius-lg);
+  padding: 18rpx 22rpx;
+  margin-bottom: 14rpx;
   gap: 16rpx;
 }
 
-/* 竖排比分布局：队名在上，比分在下 */
+/* 记分牌：队名在两侧，比分靠中间对齐（左队名靠外/比分靠中，右队名反向） */
 .versus {
   flex: 1;
   display: flex;
@@ -224,19 +321,28 @@
 .vteam {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 8rpx;
-  padding: 12rpx 8rpx;
+  gap: 10rpx;
+  padding: 12rpx 10rpx;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(15, 23, 42, 0.04);
   border: 1rpx solid transparent;
   min-width: 0;
 }
 
+/* 记分牌对齐：左队名靠外/比分靠中，右队反向，形成 "队伍A 12 : 9 队伍B" */
+.vteam:first-child {
+  justify-content: flex-end;
+}
+.vteam:last-child {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
 .vteam-win {
-  background: rgba(47, 206, 122, 0.10);
-  border: 1rpx solid rgba(47, 206, 122, 0.25);
+  background: rgba(8, 145, 178, 0.10);
+  border: 1rpx solid rgba(8, 145, 178, 0.25);
 }
 
 .vteam-name {
@@ -250,13 +356,13 @@
 }
 
 .vteam-score {
-  font-size: 38rpx;
-  font-weight: 700;
+  font-size: 40rpx;
+  font-weight: 800;
   color: var(--color-gray-500);
 }
 
 .score-win {
-  color: #2fce7a;
+  color: #0891b2;
 }
 
 .vs-text {
@@ -282,7 +388,7 @@
 }
 
 .big-score-text.score-win {
-  color: #2fce7a;
+  color: #0891b2;
 }
 
 .big-score-text.score-tbd {
@@ -296,6 +402,15 @@
 
 .ko-row:active {
   background: var(--color-gray-100);
+}
+
+/* 淘汰赛 BO3 对阵保持队名居中，不套用普通记分牌对齐 */
+.ko-row .vteam {
+  justify-content: center;
+}
+.ko-row .vteam:last-child {
+  flex-direction: row;
+  justify-content: center;
 }
 
 .bo3-more {
@@ -316,8 +431,8 @@
 }
 
 .ko-title {
-  color: #ff6b6f;
-  border-left-color: #ff6b6f;
+  color: #fb7185;
+  border-left-color: #fb7185;
 }
 
 .ko-section {
@@ -402,4 +517,81 @@
   font-size: 32rpx;
   font-weight: 700;
   color: var(--color-gray-800);
+}
+
+/* ===== 时间协商 ===== */
+.round-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6rpx;
+  flex-shrink: 0;
+}
+
+.schedule-status {
+  font-size: 20rpx;
+  color: var(--color-gray-500);
+  max-width: 220rpx;
+  text-align: right;
+  word-break: break-all;
+}
+
+.schedule-status.unconfirmed { color: var(--color-gray-500); }
+.schedule-status.pending { color: var(--color-warning); }
+.schedule-status.confirmed { color: var(--color-primary); }
+.schedule-status.clickable { text-decoration: underline; }
+
+.team-meta {
+  font-size: 24rpx;
+  color: var(--color-gray-500);
+  display: block;
+  margin: 8rpx 0;
+}
+
+.schedule-panel {
+  width: 82%;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--color-card);
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 30rpx;
+}
+
+.win-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin: 16rpx 0;
+}
+
+.win-label {
+  width: 140rpx;
+  font-size: 26rpx;
+  color: var(--color-gray-600);
+  flex-shrink: 0;
+}
+
+.win-picker {
+  flex: 1;
+  background: var(--color-gray-100);
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+  color: var(--color-gray-800);
+}
+
+.score-btns {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 24rpx;
+}
+
+.score-btns .btn-outline,
+.score-btns .btn-primary {
+  flex: 1;
+  padding: 16rpx 0;
+  font-size: 28rpx;
+  text-align: center;
 }

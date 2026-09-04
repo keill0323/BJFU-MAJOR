@@ -1,0 +1,36 @@
+<!-- 顶部栏（自定义导航）：左上角头像 + 标题 -->
+<view class="topbar" style="padding-top: {{statusBarHeight}}px">
+  <view class="topbar-inner">
+    <view class="avatar-btn" bindtap="openDrawer">
+      <image class="avatar-img" src="{{user.avatar_full || '/images/icons/gamepad.svg'}}"/>
+    </view>
+    <text class="topbar-title">{{title}}</text>
+    <view class="topbar-capsule"></view>
+  </view>
+</view>
+
+<!-- 遮罩 -->
+<view wx:if="{{open}}" class="drawer-mask" bindtap="closeDrawer"></view>
+
+<!-- 左侧抽屉 -->
+<view class="drawer {{open ? 'drawer-open' : ''}}">
+  <view class="drawer-head" style="padding-top: {{statusBarHeight}}px">
+    <image class="drawer-avatar" src="{{user.avatar_full || '/images/icons/gamepad.svg'}}"/>
+    <text class="drawer-name">{{user.nickname || '未登录'}}</text>
+    <text class="drawer-sub">ID {{user.id || '-'}} · {{user.display_rank || '暂无段位'}}</text>
+  </view>
+  <scroll-view scroll-y class="drawer-body">
+    <view class="drawer-section">主导航</view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/index/index">赛事中心</view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/team/team">我的队伍</view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/teams/teams">所有队伍</view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/profile/profile">个人资料</view>
+    <view class="drawer-section">更多</view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/messages/messages">消息</view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/verify/verify">认证</view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/settings/settings">设置</view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/rules/rules">赛事规则</view>
+    <view wx:if="{{isManager}}" class="drawer-item" bindtap="go" data-url="/pages/admin/admin">管理后台</view>
+    <view class="drawer-item danger" bindtap="go" data-url="/pages/login/login">退出登录</view>
+  </scroll-view>
+</view>

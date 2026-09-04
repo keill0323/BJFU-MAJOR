@@ -7,7 +7,7 @@ Since: 2026-7-22
 from datetime import datetime
 import enum
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SAEnum, Text, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SAEnum, Text, UniqueConstraint, Boolean
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -100,6 +100,8 @@ class MatchRound(Base):
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
     group_name = Column(String(20), nullable=True, comment="组别(A组/上半区等)")
     bo3_scores = Column(Text, nullable=True, comment="淘汰赛BO3三局小分(JSON数组字符串)")
+    team1_confirmed = Column(Boolean, default=False, comment="队伍1是否已确认比赛时间")
+    team2_confirmed = Column(Boolean, default=False, comment="队伍2是否已确认比赛时间")
 
 
 class StageStatus(str, enum.Enum):
@@ -164,3 +166,30 @@ class Registration(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="用户ID(个人报名时填写)")
     status = Column(SAEnum(RegistrationStatus), default=RegistrationStatus.PENDING, comment="审核状态 pending/approved/rejected")
     created_at = Column(DateTime, default=datetime.now, comment="报名时间")
+
+
+class StageWindow(Base):
+    """阶段时间窗口表
+
+    管理员为某赛事的某个阶段（group_name：A/B/附加赛/上区/下区/淘汰赛）设定一个
+    限定时段。该阶段内所有对阵的约定比赛时间必须落在此窗口内。
+
+    Attributes:
+        id: 主键
+        match_id: 所属赛事ID
+        group_name: 阶段名
+        window_start: 限定时段开始
+        window_end: 限定时段结束
+        created_at: 创建时间
+    """
+    __tablename__ = "stage_windows"
+    __table_args__ = (
+        UniqueConstraint("match_id", "group_name", name="uq_stage_window_match_group"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="主键")
+    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False, comment="所属赛事ID")
+    group_name = Column(String(20), nullable=False, comment="阶段名(A/B/附加赛/上区/下区/淘汰赛)")
+    window_start = Column(DateTime, nullable=False, comment="限定时段开始")
+    window_end = Column(DateTime, nullable=False, comment="限定时段结束")
+    created_at = Column(DateTime, default=datetime.now, comment="创建时间")

@@ -1,0 +1,46 @@
+.page {
+  padding: 0 0 40rpx;
+}
+.group {
+  margin: 20rpx 20rpx 0;
+}
+.group-label {
+  display: block;
+  font-size: 22rpx;
+  color: var(--color-gray-400);
+  margin: 0 8rpx 12rpx;
+}
+.group-card {
+  margin: 0;
+  padding: 0;
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 28rpx 24rpx;
+  border-bottom: 1rpx solid var(--color-border);
+}
+.set-row:last-child {
+  border-bottom: none;
+}
+.set-ic {
+  width: 40rpx;
+  height: 40rpx;
+}
+.set-text {
+  flex: 1;
+  font-size: 28rpx;
+  color: var(--color-gray-800);
+}
+.set-arrow {
+  width: 32rpx;
+  height: 32rpx;
+}
+.set-version {
+  font-size: 26rpx;
+  color: var(--color-gray-400);
+}
+.logout-wrap {
+  margin: 40rpx 20rpx;
+}

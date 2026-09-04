@@ -10,7 +10,7 @@ from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.match import Match, MatchRound, MatchStatus, RoundStatus, StageStatus, TeamProgress, Registration, RegistrationStatus
+from app.models.match import Match, MatchRound, MatchStatus, RoundStatus, StageStatus, TeamProgress, Registration, RegistrationStatus, StageWindow
 from app.models.team import Team
 from app.models.user import User
 
@@ -191,10 +191,21 @@ def update_round_result(db: Session, round_id: int,
 
 
 def _round_to_dict(db: Session, r: MatchRound) -> dict:
-    """将对阵 ORM 转 dict（含队名与 BO3 小分解析），不改动实例属性"""
+    """将对阵 ORM 转 dict（含队名、BO3 小分、时间协商状态），不改动实例属性"""
     from app.models.team import Team
     t1 = db.query(Team).filter(Team.id == r.team1_id).first() if r.team1_id else None
     t2 = db.query(Team).filter(Team.id == r.team2_id).first() if r.team2_id else None
+    # 所属阶段的时间窗口（用于展示限定时段）
+    window = None
+    if r.group_name:
+        window = db.query(StageWindow).filter(
+            StageWindow.match_id == r.match_id,
+            StageWindow.group_name == r.group_name,
+        ).first()
+    if r.scheduled_time:
+        schedule_status = "confirmed" if (r.team1_confirmed and r.team2_confirmed) else "pending"
+    else:
+        schedule_status = "unconfirmed"
     return {
         "id": r.id,
         "match_id": r.match_id,
@@ -210,6 +221,11 @@ def _round_to_dict(db: Session, r: MatchRound) -> dict:
         "group_name": r.group_name,
         "scheduled_time": r.scheduled_time,
         "bo3_scores": json.loads(r.bo3_scores) if r.bo3_scores else None,
+        "team1_confirmed": bool(r.team1_confirmed),
+        "team2_confirmed": bool(r.team2_confirmed),
+        "window_start": window.window_start if window else None,
+        "window_end": window.window_end if window else None,
+        "schedule_status": schedule_status,
     }
 
 
@@ -414,8 +430,28 @@ def register_team(db: Session, match_id: int, team_id: int) -> list:
     if unverified:
         raise HTTPException(status_code=400, detail=f"以下队员未完成学籍认证，无法报名：{'、'.join(unverified)}")
 
-    # 新生赛校验：队伍至少 3 名新生（现场动态算，跨年自动正确）
+    # 校验：所有队员（含队长）必须完成段位认证（防炸鱼）
+    no_rank = []
+    for member in members:
+        user = db.query(User).filter(User.id == member.user_id).first()
+        if not user or not user.rank:
+            name = (user.nickname or user.game_id) if user else f"用户{member.user_id}"
+            no_rank.append(name)
+    if no_rank:
+        raise HTTPException(
+            status_code=400,
+            detail=f"以下队员未完成段位认证（上传段位截图），无法报名：{'、'.join(no_rank)}"
+        )
+
+    # 队伍人数上限校验：不能超过该赛事的每队人数（防止超编队伍整队报名）
     match = get_match_by_id(db, match_id)
+    if match and match.team_size and len(members) > match.team_size:
+        raise HTTPException(
+            status_code=400,
+            detail=f"队伍当前 {len(members)} 人，超过该赛事每队 {match.team_size} 人上限"
+        )
+
+    # 新生赛校验：队伍至少 3 名新生（现场动态算，跨年自动正确）
     if match and (match.match_type or "major") == "freshman":
         new_count = 0
         for member in members:
@@ -456,6 +492,8 @@ def register_user(db: Session, match_id: int, user_id: int) -> Registration:
         raise HTTPException(status_code=404, detail="用户不存在")
     if not user.is_verified:
         raise HTTPException(status_code=400, detail="未完成学籍认证，无法报名")
+    if not user.rank:
+        raise HTTPException(status_code=400, detail="未完成段位认证（上传段位截图），无法报名")
 
     # 检查是否已报名该赛事（无论个人还是随队伍）
     existing = db.query(Registration).filter(
@@ -828,3 +866,190 @@ def remove_team_from_match(db: Session, match_id: int, team_id: int) -> None:
         (MatchRound.team1_id == team_id) | (MatchRound.team2_id == team_id),
     ).delete()
     db.commit()
+
+
+# ===== 阶段时间窗口 + 对阵时间协商 =====
+
+def set_stage_window(db: Session, match_id: int, group_name: str,
+                     window_start: datetime, window_end: datetime) -> StageWindow:
+    """设置/更新某阶段（group_name）的时间窗口（幂等 upsert）
+
+    同一赛事同一阶段只有一个窗口，重复设置会覆盖旧值。
+    窗口变更后，落在新窗口之外的已有约定时间会被作废。
+    """
+    window_start = _strip_tz(window_start)
+    window_end = _strip_tz(window_end)
+    if window_start >= window_end:
+        raise HTTPException(status_code=400, detail="限定时段开始时间必须早于结束时间")
+    window = db.query(StageWindow).filter(
+        StageWindow.match_id == match_id,
+        StageWindow.group_name == group_name,
+    ).first()
+    if window:
+        window.window_start = window_start
+        window.window_end = window_end
+    else:
+        window = StageWindow(
+            match_id=match_id,
+            group_name=group_name,
+            window_start=window_start,
+            window_end=window_end,
+        )
+        db.add(window)
+    db.flush()
+    # 窗口变更后：作废落在新窗口之外的已有约定时间
+    affected_rounds = (
+        db.query(MatchRound)
+        .filter(
+            MatchRound.match_id == match_id,
+            MatchRound.group_name == group_name,
+            MatchRound.scheduled_time.isnot(None),
+        )
+        .all()
+    )
+    for r in affected_rounds:
+        st = _strip_tz(r.scheduled_time)
+        if st < window_start or st > window_end:
+            r.scheduled_time = None
+            r.team1_confirmed = False
+            r.team2_confirmed = False
+    db.commit()
+    db.refresh(window)
+    return window
+
+
+def get_stage_windows(db: Session, match_id: int) -> list:
+    """查询某赛事所有阶段的时间窗口"""
+    return (
+        db.query(StageWindow)
+        .filter(StageWindow.match_id == match_id)
+        .order_by(StageWindow.id.asc())
+        .all()
+    )
+
+
+def _strip_tz(dt):
+    """去掉时区信息，统一为 naive datetime（防御前后端传入带时区的时间）"""
+    if dt is None:
+        return None
+    return dt.replace(tzinfo=None) if dt.tzinfo else dt
+
+
+def _get_round_window(db: Session, match_round: MatchRound) -> Optional[StageWindow]:
+    """取对阵所属阶段的时间窗口，无则返回 None"""
+    if not match_round.group_name:
+        return None
+    return db.query(StageWindow).filter(
+        StageWindow.match_id == match_round.match_id,
+        StageWindow.group_name == match_round.group_name,
+    ).first()
+
+
+def _get_captain_side(db: Session, match_round: MatchRound, user_id: int) -> Optional[str]:
+    """判断 user_id 是对阵中哪一方的队长，返回 'team1'/'team2'，都不是返回 None"""
+    for side, team_id in (("team1", match_round.team1_id), ("team2", match_round.team2_id)):
+        if not team_id:
+            continue
+        team = db.query(Team).filter(Team.id == team_id).first()
+        if team and team.captain_id == user_id:
+            return side
+    return None
+
+
+def schedule_round(db: Session, round_id: int, user_id: int, scheduled_time: datetime) -> dict:
+    """队长提交/修改约定比赛时间（己方自动确认，对方重置为待确认）
+
+    约定时间必须落在管理员设定的阶段窗口内。
+    """
+    scheduled_time = _strip_tz(scheduled_time)
+    match_round = db.query(MatchRound).filter(MatchRound.id == round_id).first()
+    if not match_round:
+        raise HTTPException(status_code=404, detail="对阵不存在")
+    # 已开始/已结束的对阵不再协商时间
+    if match_round.status != RoundStatus.PENDING:
+        raise HTTPException(status_code=400, detail="该对阵已开始或已结束，无法约定比赛时间")
+    # 轮空场次不启用时间协商
+    if not match_round.team1_id or not match_round.team2_id:
+        raise HTTPException(status_code=400, detail="该对阵存在轮空，无需约定比赛时间")
+    side = _get_captain_side(db, match_round, user_id)
+    if not side:
+        raise HTTPException(status_code=403, detail="只有对阵双方的队长才能设定比赛时间")
+    # 双方已确认的时间不可单方修改，需先作废再重新约定
+    if match_round.team1_confirmed and match_round.team2_confirmed:
+        raise HTTPException(status_code=400, detail="比赛时间已确定，如需修改请先作废再重新约定")
+    window = _get_round_window(db, match_round)
+    if not window:
+        raise HTTPException(status_code=400, detail="管理员尚未设置该阶段的时间窗口，无法约定时间")
+    if scheduled_time < window.window_start or scheduled_time > window.window_end:
+        raise HTTPException(
+            status_code=400,
+            detail="约定时间必须在限定时段内（%s ~ %s）" % (
+                window.window_start.strftime("%m-%d %H:%M"),
+                window.window_end.strftime("%m-%d %H:%M"),
+            ),
+        )
+    match_round.scheduled_time = scheduled_time
+    if side == "team1":
+        match_round.team1_confirmed = True
+        match_round.team2_confirmed = False
+    else:
+        match_round.team2_confirmed = True
+        match_round.team1_confirmed = False
+    db.commit()
+    db.refresh(match_round)
+    return _round_to_dict(db, match_round)
+
+
+def confirm_round_schedule(db: Session, round_id: int, user_id: int,
+                           expected_time: Optional[datetime] = None) -> dict:
+    """一方队长确认约定时间（己方标记已确认，双方都确认后生效）
+
+    expected_time 为客户端发起确认时所看到的提议时间；
+    与数据库当前值不一致说明对方刚修改过，返回 409 提示刷新。
+    """
+    match_round = db.query(MatchRound).filter(MatchRound.id == round_id).first()
+    if not match_round:
+        raise HTTPException(status_code=404, detail="对阵不存在")
+    if match_round.status != RoundStatus.PENDING:
+        raise HTTPException(status_code=400, detail="该对阵已开始或已结束，无法确认比赛时间")
+    if not match_round.scheduled_time:
+        raise HTTPException(status_code=400, detail="尚未有人提交约定时间")
+    if expected_time is not None and _strip_tz(expected_time) != match_round.scheduled_time:
+        raise HTTPException(status_code=409, detail="约定时间已被对方修改，请刷新后重新确认")
+    side = _get_captain_side(db, match_round, user_id)
+    if not side:
+        raise HTTPException(status_code=403, detail="只有对阵双方的队长才能确认")
+    if side == "team1":
+        match_round.team1_confirmed = True
+    else:
+        match_round.team2_confirmed = True
+    db.commit()
+    db.refresh(match_round)
+    return _round_to_dict(db, match_round)
+
+
+def reject_round_schedule(db: Session, round_id: int, user_id: int,
+                          expected_time: Optional[datetime] = None) -> dict:
+    """一方队长拒绝/作废约定时间（清空提议，回到未约定状态）
+
+    expected_time 为客户端发起拒绝时所看到的提议时间；
+    与数据库当前值不一致说明对方刚修改过，返回 409 提示刷新。
+    """
+    match_round = db.query(MatchRound).filter(MatchRound.id == round_id).first()
+    if not match_round:
+        raise HTTPException(status_code=404, detail="对阵不存在")
+    if match_round.status != RoundStatus.PENDING:
+        raise HTTPException(status_code=400, detail="该对阵已开始或已结束，无法作废比赛时间")
+    if not match_round.scheduled_time:
+        raise HTTPException(status_code=400, detail="尚未有人提交约定时间")
+    if expected_time is not None and _strip_tz(expected_time) != match_round.scheduled_time:
+        raise HTTPException(status_code=409, detail="约定时间已被对方修改，请刷新后再操作")
+    side = _get_captain_side(db, match_round, user_id)
+    if not side:
+        raise HTTPException(status_code=403, detail="只有对阵双方的队长才能拒绝")
+    match_round.scheduled_time = None
+    match_round.team1_confirmed = False
+    match_round.team2_confirmed = False
+    db.commit()
+    db.refresh(match_round)
+    return _round_to_dict(db, match_round)

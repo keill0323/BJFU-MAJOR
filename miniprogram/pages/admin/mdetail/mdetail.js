@@ -42,7 +42,16 @@ Page({
     bo3Games: ['', '', ''],  // BO3 三局小分
     // BO3 小局详情弹层
     showBo3: false,
-    bo3Detail: null
+    bo3Detail: null,
+    // 时间窗口面板
+    showWindowPanel: false,
+    allRounds: [],
+    stageWindows: [],
+    windowEditGroup: null,
+    windowStartDate: '',
+    windowStartTime: '',
+    windowEndDate: '',
+    windowEndTime: ''
   },
 
   onLoad(options) {
@@ -80,7 +89,7 @@ Page({
       const detail = await api.adminMatchDetail(this.data.matchId)
       const teams = detail.teams || []
       const rounds = detail.rounds || []
-      const challengerRounds = rounds.filter(r => ['A', 'B', 'C', '附加赛'].indexOf(r.group_name) >= 0)
+      const challengerRounds = rounds.filter(r => ['A', 'B', 'C', 'D', 'E', 'F', '附加赛'].indexOf(r.group_name) >= 0)
       const legendRounds = rounds.filter(r => ['上区', '下区'].indexOf(r.group_name) >= 0)
       const knockoutRounds = rounds.filter(r => r.group_name === '淘汰赛')
       // 淘汰赛对阵按轮次分组：前2场1/4决赛，接着2场半决赛，最后1场决赛
@@ -254,7 +263,8 @@ Page({
         knockoutGroups: koGroups,
         knockoutHint,
         challengerSwiper,
-        legendSwiper
+        legendSwiper,
+        allRounds: rounds
       })
     } catch (err) {
       this.showErr(err, '加载失败')
@@ -577,5 +587,86 @@ Page({
     if (s === 'playoff') return '已晋级淘汰赛'
     if (s === 'eliminated') return '已淘汰'
     return '挑战者'
+  },
+
+  // ===== 时间窗口管理 =====
+  fmtDateTime(iso) {
+    const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
+    return m ? (m[2] + '-' + m[3] + ' ' + m[4] + ':' + m[5]) : (iso || '')
+  },
+  fmtDate(iso) {
+    const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+    return m ? (m[1] + '-' + m[2] + '-' + m[3]) : ''
+  },
+  fmtTime(iso) {
+    const m = String(iso || '').match(/[T ](\d{2}):(\d{2})/)
+    return m ? (m[1] + ':' + m[2]) : ''
+  },
+
+  // 打开时间窗口面板：固定阶段列表 + 对阵中出现的组名合并（对阵未生成也能预设窗口）
+  openWindowPanel() {
+    const allRounds = this.data.allRounds || []
+    const fixedGroups = ['A', 'B', 'C', 'D', 'E', 'F', '附加赛', '上区', '下区', '淘汰赛']
+    const roundGroups = allRounds.map(r => r.group_name).filter(Boolean)
+    const groupNames = [...new Set([...fixedGroups, ...roundGroups])]
+    const stageWindows = groupNames.map(g => {
+      const r = allRounds.find(x => x.group_name === g)
+      const ws = r ? r.window_start : null
+      const we = r ? r.window_end : null
+      return {
+        group_name: g,
+        window_start: ws,
+        window_end: we,
+        has_window: !!(ws && we),
+        window_text: (ws && we) ? (this.fmtDateTime(ws) + ' ~ ' + this.fmtDateTime(we)) : '未设置限定时段'
+      }
+    })
+    this.setData({ showWindowPanel: true, stageWindows, windowEditGroup: null })
+  },
+  closeWindowPanel() {
+    this.setData({ showWindowPanel: false, windowEditGroup: null })
+  },
+
+  // 打开某阶段的窗口编辑
+  openWindowEdit(e) {
+    const g = e.currentTarget.dataset.group
+    const w = this.data.stageWindows.find(x => x.group_name === g)
+    this.setData({
+      windowEditGroup: g,
+      windowStartDate: w && w.window_start ? this.fmtDate(w.window_start) : '',
+      windowStartTime: w && w.window_start ? this.fmtTime(w.window_start) : '',
+      windowEndDate: w && w.window_end ? this.fmtDate(w.window_end) : '',
+      windowEndTime: w && w.window_end ? this.fmtTime(w.window_end) : ''
+    })
+  },
+  cancelWindowEdit() {
+    this.setData({ windowEditGroup: null })
+  },
+  onStartDateChange(e) { this.setData({ windowStartDate: e.detail.value }) },
+  onStartTimeChange(e) { this.setData({ windowStartTime: e.detail.value }) },
+  onEndDateChange(e) { this.setData({ windowEndDate: e.detail.value }) },
+  onEndTimeChange(e) { this.setData({ windowEndTime: e.detail.value }) },
+
+  // 保存窗口
+  async saveWindow() {
+    const { windowStartDate, windowStartTime, windowEndDate, windowEndTime, windowEditGroup } = this.data
+    if (!windowStartDate || !windowStartTime || !windowEndDate || !windowEndTime) {
+      wx.showToast({ title: '请填写完整的起止时间', icon: 'none' })
+      return
+    }
+    const start = windowStartDate + 'T' + windowStartTime + ':00'
+    const end = windowEndDate + 'T' + windowEndTime + ':00'
+    if (start >= end) {
+      wx.showToast({ title: '开始时间需早于结束时间', icon: 'none' })
+      return
+    }
+    try {
+      await api.setStageWindow(this.data.matchId, windowEditGroup, { window_start: start, window_end: end })
+      wx.showToast({ title: '窗口已保存', icon: 'success' })
+      this.setData({ showWindowPanel: false, windowEditGroup: null })
+      this.load()
+    } catch (err) {
+      this.showErr(err, '保存失败')
+    }
   }
 })

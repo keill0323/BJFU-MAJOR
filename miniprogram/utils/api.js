@@ -88,6 +88,47 @@ function request(path, method = 'GET', data = {}) {
 
 
 /**
+ * 通用文件上传函数（multipart）
+ * @param path     上传接口路径，如 '/api/teams/12/logo'
+ * @param filePath 本地临时文件路径（wx.chooseMedia 返回的 tempFilePath）
+ * @param raw     是否原样返回后端 JSON（true 不归一化 role）——默认 true
+ * @returns Promise，成功 resolve 后端返回数据，失败 reject 错误信息
+ */
+function uploadFile(path, filePath, raw = true) {
+  const token = wx.getStorageSync('token')
+  return new Promise((resolve, reject) => {
+    wx.uploadFile({
+      url: BASE + path,
+      filePath: filePath,
+      name: 'file',
+      header: { 'Authorization': token ? 'Bearer ' + token : '' },
+      success(res) {
+        if (res.statusCode < 400) {
+          try {
+            resolve(raw ? JSON.parse(res.data) : normalizeRole(JSON.parse(res.data)))
+          } catch (e) {
+            reject({ detail: '上传响应解析失败' })
+          }
+        } else {
+          let detail = ''
+          try { detail = JSON.parse(res.data).detail || '' } catch (e) {}
+          if (res.statusCode === 401) {
+            wx.removeStorageSync('token')
+            wx.redirectTo({ url: '/pages/login/login' })
+          }
+          reject({ detail: detail || ('上传失败（' + res.statusCode + '）') })
+        }
+      },
+      fail(err) {
+        console.error('上传失败详情:', err)
+        reject({ detail: '网络错误：' + (err.errMsg || '请检查后端服务器是否启动') })
+      }
+    })
+  })
+}
+
+
+/**
  * 接口映射表
  * 每个方法对应后端一个路由，字段名与后端 Pydantic schema 保持一致
  */
@@ -213,6 +254,9 @@ module.exports = {
   approveApplication: (appId) => request('/api/teams/applications/' + appId + '/approve', 'POST'),  // 同意申请
   rejectApplication: (appId) => request('/api/teams/applications/' + appId + '/reject', 'POST'),  // 拒绝申请
 
+  // 队长上传/更换队伍Logo（multipart）
+  uploadTeamLogo: (teamId, filePath) => uploadFile('/api/teams/' + teamId + '/logo', filePath, false),
+
   // ===== 入队邀请 =====
   invitePlayer: (teamId, userId, message) => request('/api/teams/' + teamId + '/invite', 'POST', { user_id: userId, message: message || '' }),  // 队长发邀请
   getMyInvitations: () => request('/api/teams/invitations/my'),  // 我收到的邀请
@@ -289,4 +333,16 @@ module.exports = {
       }
     })
   }),
+
+  // ===== 阶段时间窗口 + 对阵时间协商 =====
+  // 管理员：设置某阶段（group_name）的限定时段
+  setStageWindow: (matchId, groupName, data) => request('/api/matches/' + matchId + '/stage-windows/' + encodeURIComponent(groupName), 'PUT', data),
+  // 管理员：查某赛事所有阶段窗口
+  getStageWindows: (matchId) => request('/api/matches/' + matchId + '/stage-windows'),
+  // 队长：提交/修改约定比赛时间（scheduledTime 传 ISO 字符串，如 '2026-09-03T19:00:00'）
+  scheduleRound: (roundId, scheduledTime) => request('/api/matches/rounds/' + roundId + '/schedule', 'PUT', { scheduled_time: scheduledTime }),
+  // 队长：确认约定时间（expectedTime 传客户端看到的提议时间，后端校验是否已被对方修改）
+  confirmRoundSchedule: (roundId, expectedTime) => request('/api/matches/rounds/' + roundId + '/schedule/confirm', 'POST', { expected_time: expectedTime }),
+  // 队长：拒绝/作废约定时间
+  rejectRoundSchedule: (roundId, expectedTime) => request('/api/matches/rounds/' + roundId + '/schedule/reject', 'POST', { expected_time: expectedTime }),
 }

@@ -1,118 +1,218 @@
 .page {
-  padding: 20rpx 0 40rpx;
+  padding: 0 0 40rpx;
 }
 
-/* 页面大标题（电竞徽章 + 大标题） */
-.page-head {
-  padding: 32rpx 40rpx 28rpx;
-}
-
-.page-eyebrow {
-  display: inline-block;
-  font-size: 20rpx;
-  font-weight: 700;
-  letter-spacing: 4rpx;
-  color: #2fce7a;
-  background: rgba(47, 206, 122, 0.12);
-  border: 1rpx solid rgba(47, 206, 122, 0.3);
-  border-radius: 999rpx;
-  padding: 6rpx 20rpx;
-  margin-bottom: 18rpx;
-}
-
-.page-title {
-  display: block;
-  font-size: 64rpx;
-  font-weight: 700;
-  color: var(--color-gray-900);
-  letter-spacing: 1rpx;
-}
-
-.page-sub {
-  display: block;
-  font-size: 28rpx;
-  color: var(--color-gray-500);
-  margin-top: 10rpx;
-}
-
-/* 赛事规则入口 */
-.rules-link {
-  margin: 0 40rpx 24rpx;
-  padding: 20rpx 28rpx;
-  font-size: 26rpx;
-  color: #2fce7a;
-  background: rgba(47, 206, 122, 0.08);
-  border: 1rpx solid rgba(47, 206, 122, 0.25);
-  border-radius: 20rpx;
-}
-.rules-link:active {
-  opacity: 0.8;
-}
-
-/* 搜索框（浅灰圆角，无边框） */
+/* ===== 顶部：搜索框 ===== */
 .search-bar {
-  margin: 0 40rpx 28rpx;
-  background: var(--color-gray-100);
-  border-radius: var(--radius-full);
-  padding: 6rpx;
+  display: flex;
+  align-items: center;
+  margin: 20rpx 40rpx 24rpx;
+  background: #ffffff;
+  border: 1rpx solid var(--color-border);
+  border-radius: 999rpx;
+  padding: 6rpx 8rpx 6rpx 22rpx;
+  box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.04);
 }
-
-.search-bar input {
+.search-ic { width: 32rpx; height: 32rpx; margin-right: 10rpx; }
+.search-input {
+  flex: 1;
   background: transparent;
-  border-radius: var(--radius-full);
-  padding: 18rpx 28rpx;
+  padding: 18rpx 0;
   font-size: 28rpx;
   color: var(--color-gray-800);
 }
 
-/* 赛事卡片（深色玻璃，点击亮绿描边） */
-.match-card {
-  background: var(--color-card);
-  border: 1rpx solid var(--color-border);
-  border-radius: 28rpx;
-  padding: 32rpx;
-  margin: 0 40rpx 20rpx;
+/* ===== 统计概览 ===== */
+.stat-bar {
+  display: flex;
+  gap: 16rpx;
+  margin: 0 40rpx 28rpx;
 }
-.match-card:active {
-  background: var(--color-gray-100);
-  border-color: rgba(47, 206, 122, 0.4);
+.stat {
+  flex: 1;
+  background: #ffffff;
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 20rpx 24rpx;
+}
+.stat-num {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 800;
+  color: var(--color-primary);
+  line-height: 1.2;
+}
+.stat-label {
+  display: block;
+  font-size: 22rpx;
+  color: var(--color-gray-500);
+  margin-top: 6rpx;
 }
 
-.match-top {
+/* ===== 分组标题 ===== */
+.group-title {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin: 8rpx 40rpx 16rpx;
+}
+.group-dot { width: 14rpx; height: 14rpx; border-radius: 50%; }
+.group-dot.registering { background: #16a34a; }
+.group-dot.in_progress { background: #0891b2; }
+.group-dot.draft { background: #f59e0b; }
+.group-dot.finished { background: #94a3b8; }
+.group-name {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--color-gray-800);
+}
+.group-count {
+  font-size: 22rpx;
+  color: var(--color-gray-400);
+}
+
+/* ===== 赛事卡片（发光边框 + 横向信息卡） ===== */
+.match-card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  padding: 28rpx 30rpx;
+  margin: 0 40rpx 20rpx;
+  border: 1rpx solid transparent;
+  background: linear-gradient(var(--color-card), var(--color-card)) padding-box,
+              linear-gradient(135deg, rgba(8, 145, 178, 0.55), rgba(20, 184, 166, 0.18), rgba(8, 145, 178, 0.55)) border-box;
+  animation: card-glow 3s ease-in-out infinite alternate;
+  transition: transform 0.2s ease;
+}
+.match-card:active {
+  transform: scale(0.98);
+}
+@keyframes card-glow {
+  from { box-shadow: 0 0 18rpx rgba(8, 145, 178, 0.10); }
+  to   { box-shadow: 0 0 42rpx rgba(8, 145, 178, 0.28); }
+}
+
+.mc-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 10rpx;
 }
 
-.match-name {
-  font-size: 34rpx;
-  font-weight: 600;
-  color: var(--color-gray-900);
-}
-
-.match-status {
+.mc-name-wrap {
   display: flex;
   align-items: center;
+  gap: 12rpx;
+  flex: 1;
+  min-width: 0;
+}
+
+.mc-type {
+  font-size: 20rpx;
+  font-weight: 600;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--color-gray-600);
+  flex-shrink: 0;
+}
+.mc-type.major { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+.mc-type.freshman { background: rgba(8, 145, 178, 0.15); color: #0891b2; }
+
+.mc-name {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: var(--color-gray-900);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-badge {
+  font-size: 22rpx;
+  font-weight: 600;
+  padding: 6rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--color-gray-600);
+  flex-shrink: 0;
+}
+.mc-badge.st-registering { background: rgba(52, 211, 153, 0.15); color: #16a34a; }
+.mc-badge.st-in_progress { background: rgba(8, 145, 178, 0.15); color: #0891b2; }
+.mc-badge.st-finished   { background: rgba(15, 23, 42, 0.08); color: var(--color-gray-500); }
+.mc-badge.st-draft      { background: rgba(245, 158, 11, 0.15); color: #b45309; }
+
+.mc-desc {
+  display: block;
+  font-size: 26rpx;
+  line-height: 1.5;
+  color: var(--color-gray-500);
+  margin-bottom: 22rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.mc-progress {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   gap: 10rpx;
 }
 
-.status-dot {
-  width: 14rpx;
-  height: 14rpx;
-  border-radius: 50%;
+.mc-track {
+  height: 10rpx;
+  background: var(--color-gray-100);
+  border-radius: 999rpx;
+  overflow: hidden;
 }
-.status-dot.registering { background: #16a34a; }
-.status-dot.in_progress { background: #58a6ff; }
-.status-dot.finished { background: var(--color-gray-300); }
-.status-dot.draft { background: #f5a623; }
 
-.status-text {
+.mc-fill {
+  height: 100%;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #0891b2, #0e7490);
+}
+
+.mc-progress-text {
+  font-size: 22rpx;
+  color: var(--color-gray-500);
+}
+
+.mc-team-size {
   font-size: 24rpx;
   color: var(--color-gray-500);
+  flex-shrink: 0;
 }
 
-.match-meta {
-  font-size: 26rpx;
+/* 空状态 */
+.empty {
+  padding: 140rpx 40rpx;
+}
+.empty-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+}
+.empty-ic {
+  width: 96rpx;
+  height: 96rpx;
+  opacity: 0.5;
+}
+.empty-title {
+  font-size: 30rpx;
   color: var(--color-gray-500);
-  margin-top: 14rpx;
+  font-weight: 600;
+}
+.empty-sub {
+  font-size: 24rpx;
+  color: var(--color-gray-400);
 }

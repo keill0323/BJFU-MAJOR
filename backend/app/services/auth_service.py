@@ -181,6 +181,8 @@ def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = Non
             user.identity = identity
         if is_verified is not None:
             user.is_verified = is_verified
+            # 人工审核同步 AI 状态，避免出现「已认证但状态仍为初审中」的矛盾
+            user.ai_review_status = "manual_pass" if is_verified else "manual_reject"
         if rank is not None:
             user.rank = rank
             # 水平分与段位挂钩：设置段位时自动计算评分
