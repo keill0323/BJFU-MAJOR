@@ -1,4 +1,6 @@
+<event-return />
 <view class="page">
+  <view class="page-intro"><text class="page-eyebrow">PLAY FAIR. PLAY TOGETHER.</text><text class="page-heading">参赛须知</text><text class="page-caption">公平竞技，尊重每一位参赛者。</text></view>
   <view class="card">
     <text class="rule-title">用户服务协议</text>
     <view class="rule-item">1. 本小程序为北京林业大学校内学生活动报名工具，非商业运营。</view>

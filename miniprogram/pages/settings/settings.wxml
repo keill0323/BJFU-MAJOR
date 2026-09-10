@@ -1,5 +1,6 @@
 <view class="page">
   <nav-drawer title="设置"></nav-drawer>
+  <view class="page-intro"><text class="page-eyebrow">PREFERENCES</text><text class="page-heading">设置与支持</text><text class="page-caption">账户、参赛规则与项目说明。</text></view>
 
   <!-- 账户 -->
   <view wx:if="{{isManager}}" class="group">
@@ -39,6 +40,7 @@
 
   <!-- 退出 -->
   <view class="logout-wrap">
-    <view class="btn-danger" bindtap="logout">退出登录</view>
+    <view wx:if="{{token}}" class="btn-danger" bindtap="logout">退出登录</view>
+    <view wx:else class="btn-primary" bindtap="goLogin">登录 / 注册</view>
   </view>
 </view>

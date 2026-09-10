@@ -1,0 +1,5 @@
+.event-return-wrap { padding: 6rpx 28rpx 10rpx; }
+.event-return-button { display: inline-flex; align-items: center; gap: 10rpx; height: 36px; margin: 0; padding: 0 16rpx 0 4rpx; border: 0; border-radius: 12rpx; background: transparent; color: #087f8c; font-size: 13px; line-height: 1; font-weight: 600; }
+.event-return-button::after { border: 0; }
+.event-return-arrow { font-size: 24px; line-height: 1; font-weight: 400; }
+.event-return-pressed { background: #e7f2f4; }

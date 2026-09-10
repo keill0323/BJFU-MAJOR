@@ -110,3 +110,13 @@
 .msg-status.ok { background: rgba(22, 163, 74, 0.12); color: #15803d; }
 .msg-status.reject { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
 .msg-status.pending { background: rgba(217, 119, 6, 0.12); color: #b45309; }
+
+/* 冰白消息中心 */
+.page { padding-bottom: calc(40rpx + env(safe-area-inset-bottom)); }.page-heading { font-size: 38rpx; }
+.page > .card { margin: 24rpx 28rpx; border-radius: 28rpx; padding: 28rpx; }
+.group-title { margin-bottom: 12rpx; }.group-count { background: #edf3f6; border-radius: 10rpx; padding: 4rpx 14rpx; color: #4c657a; }
+.msg-row { flex-wrap: wrap; gap: 16rpx; padding: 28rpx 0; align-items: flex-start; }.msg-icon { width: 64rpx; height: 64rpx; border-radius: 18rpx; }.msg-ic { width: 34rpx; height: 34rpx; }
+.msg-main { min-width: 240rpx; }.msg-title { line-height: 1.5; word-break: break-all; }.msg-sub { font-size: 23rpx; line-height: 1.7; word-break: break-all; }
+.msg-actions { width: 100%; justify-content: flex-end; }.msg-btn { border-radius: 12rpx; min-width: 88rpx; text-align: center; padding: 14rpx 20rpx; }
+.msg-status { margin-left: auto; }.empty-ic { opacity: .65; width: 76rpx; height: 76rpx; }.empty-title { color: #304d64; }.empty-sub { color: #62798c; }
+.guest-card { text-align: center; }.guest-card .empty-sub { display: block; margin: 16rpx 0 28rpx; font-size: 24rpx; }.retry-card { display: flex; justify-content: space-between; font-size: 24rpx; color: #62798c; }.retry-card view { color: #087f8c; }

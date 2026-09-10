@@ -4,13 +4,25 @@
  * 进入方式：首页点赛事卡片，带 ?id=xx 参数
  */
 const api = require('../../utils/api.js')
+const tournament = require('../../utils/tournament.js')
+
+// 只有后续赛段使用保留名称；挑战者小组采用赛事实际设置的名称与数量。
+function isChallengerGroup(groupName) {
+  return typeof groupName === 'string' && groupName.trim() !== '' &&
+    ['附加赛', '上区', '下区', '淘汰赛'].indexOf(groupName) < 0
+}
 
 Page({
   data: {
     match: null,
+    loadFailed: false,
+    roundCount: 0,
+    completedRoundCount: 0,
+    registerEndText: '',
     tab: 'teams',            // teams / challenger / legend / knockout
     // 队伍
     teams: [],
+    waitingTeams: [],
     challengerTeams: [],
     legendTeams: [],
     playoffTeams: [],
@@ -18,7 +30,9 @@ Page({
     teamsStage: 0,
     rankingTeams: [],        // 队伍排名
     // 对阵（按阶段）
-    challengerSwiper: [],    // 挑战者组：小组赛分组 + 附加赛
+    challengerSwiper: [],    // 挑战者组：小组赛分组，三组赛制另有附加赛
+    groupCount: 0,
+    hasPlayoffStage: false,
     legendSwiper: [],        // 传奇组：上区/下区
     knockoutGroups: [],      // 淘汰赛 BO3：1/4决赛/半决赛/决赛
     challengerStage: 0,
@@ -28,6 +42,8 @@ Page({
     registered: false,
     myTeam: null,
     isCaptain: false,
+    canRegisterTeam: false,
+    rosterLocked: false,
     // BO3 小局详情弹层
     showBo3: false,
     bo3Detail: null,
@@ -43,8 +59,11 @@ Page({
   async onLoad(options) {
     const id = options.id
     if (!id) return
+    this.matchId = id
+    const requestId = this._detailRequestId = (this._detailRequestId || 0) + 1
     try {
       const detail = await api.getMatchDetail(id)
+      if (requestId !== this._detailRequestId) return
       this.detail = detail
       this.setData({
         match: Object.assign({}, detail.match, { statusText: this.statusText(detail.match.status) })
@@ -56,19 +75,23 @@ Page({
       }
       this.checkRulePrompt()
     } catch (err) {
+      if (requestId !== this._detailRequestId) return
+      this.setData({ loadFailed: true })
       wx.showToast({ title: '加载失败', icon: 'error' })
     }
   },
 
   // 下拉刷新（重新拉详情，不重复弹规则）
   async onPullDownRefresh() {
-    const match = this.data.match
-    if (!match || !match.id) {
+    const matchId = (this.data.match && this.data.match.id) || this.matchId
+    if (!matchId) {
       wx.stopPullDownRefresh()
       return
     }
+    const requestId = this._detailRequestId = (this._detailRequestId || 0) + 1
     try {
-      const detail = await api.getMatchDetail(match.id)
+      const detail = await api.getMatchDetail(matchId)
+      if (requestId !== this._detailRequestId) return
       this.detail = detail
       this.setData({
         match: Object.assign({}, detail.match, { statusText: this.statusText(detail.match.status) })
@@ -78,9 +101,10 @@ Page({
         await this.loadMyStatus()
       }
     } catch (err) {
-      wx.showToast({ title: '刷新失败', icon: 'error' })
+      if (requestId === this._detailRequestId) wx.showToast({ title: '刷新失败', icon: 'error' })
+    } finally {
+      wx.stopPullDownRefresh()
     }
-    wx.stopPullDownRefresh()
   },
 
   // 打开比赛卡片时弹出规则提示（「不再提示」按每场比赛独立记忆）
@@ -116,6 +140,7 @@ Page({
   buildData(detail, myTeamId, isCaptain) {
     const teams = detail.teams || []
     const rounds = (detail.rounds || []).map(r => this.decorateRound(r, myTeamId, isCaptain))
+    const rosterLocked = tournament.isRosterLocked(detail.match || this.data.match, teams, rounds)
     const knockoutRounds = rounds.filter(r => r.group_name === '淘汰赛')
     const koSorted = knockoutRounds.slice().sort((a, b) => a.round_number - b.round_number)
     const fmtBo3 = r => (r.bo3_scores ? r.bo3_scores.map(g => g.t1 + '-' + g.t2).join(' ') : '')
@@ -151,18 +176,28 @@ Page({
     }
 
     // 小组赛对阵按组分区
-    const groupRounds = {}
-    rounds.filter(r => ['A', 'B', 'C', 'D', 'E', 'F'].indexOf(r.group_name) >= 0).forEach(r => {
+    const groupRounds = Object.create(null)
+    rounds.filter(r => isChallengerGroup(r.group_name)).forEach(r => {
       ;(groupRounds[r.group_name] = groupRounds[r.group_name] || []).push(r)
     })
-    const challengerSwiper = [
-      {
-        title: '小组赛',
-        groups: groupRounds,
-        count: Object.keys(groupRounds).reduce((s, k) => s + groupRounds[k].length, 0)
-      },
-      { title: '附加赛', rounds: rounds.filter(r => r.group_name === '附加赛') }
-    ]
+    // 晋级后队伍的 group_name 会变更，历史对阵仍保留最初的小组名称。
+    const groupNames = Object.create(null)
+    teams.concat(rounds).forEach(item => {
+      if (isChallengerGroup(item.group_name)) groupNames[item.group_name] = true
+    })
+    const groupCount = Object.keys(groupNames).length
+    const playoffRounds = rounds.filter(r => r.group_name === '附加赛')
+    // 已确认四组时不显示附加赛；仅未知原分组数的旧赛事兼容历史附加赛。
+    const hasPlayoffStage = groupCount === 3 || (groupCount === 0 && playoffRounds.length > 0)
+    const challengerSwiper = [{
+      title: '小组赛',
+      type: 'group',
+      groups: groupRounds,
+      count: Object.keys(groupRounds).reduce((s, k) => s + groupRounds[k].length, 0)
+    }]
+    if (hasPlayoffStage) challengerSwiper.push({ title: '附加赛', type: 'playoff', rounds: playoffRounds })
+    const previousStage = (this.data.challengerSwiper[this.data.challengerStage] || {}).type
+    const challengerStage = Math.max(0, challengerSwiper.findIndex(item => item.type === previousStage))
     const legendSwiper = [
       { title: '上区', rounds: rounds.filter(r => r.group_name === '上区') },
       { title: '下区', rounds: rounds.filter(r => r.group_name === '下区') }
@@ -172,7 +207,7 @@ Page({
     const koFinal = koSorted.length >= 5 ? koSorted[4] : null
     const koSemi = koSorted.slice(2, 4)
     const koRankOf = (teamId) => {
-      if (koFinal && (koFinal.team1_id == teamId || koFinal.team2_id == teamId)) {
+      if (koFinal && koFinal.status === 'finished' && koFinal.winner_id != null && (koFinal.team1_id == teamId || koFinal.team2_id == teamId)) {
         return koFinal.winner_id == teamId ? '冠军' : '亚军'
       }
       for (const r of koSemi) {
@@ -199,12 +234,14 @@ Page({
     }
 
     const legendTeams = teams.filter(t => t.stage === 'legend')
-    const challengerTeams = teams.filter(t => t.stage === 'challenger')
+    const waitingTeams = teams.filter(tournament.isWaitingForGroup)
+    const challengerTeams = teams.filter(t => t.stage === 'challenger' && !tournament.isWaitingForGroup(t))
     const playoffTeams = teams.filter(t => t.stage === 'playoff')
 
     const challengerTab = teams.filter(t => {
+      if (tournament.isWaitingForGroup(t)) return false
       if (t.stage === 'challenger') return true
-      if (['A', 'B', 'C', 'D', 'E', 'F', '附加赛'].indexOf(t.group_name) >= 0) return true
+      if (isChallengerGroup(t.group_name) || t.group_name === '附加赛') return true
       return t.seed > 4
     }).map(t => Object.assign({}, t, { stage_status: challengerStatusOf(t) }))
     const legendTab = teams.filter(t =>
@@ -229,6 +266,7 @@ Page({
       if (t.ko_rank === '四强') return 2
       if (t.ko_rank === '六强') return 3
       if (t.stage === 'legend') return 4
+      if (tournament.isWaitingForGroup(t)) return 6
       if (t.stage === 'challenger') return 5
       return 6
     }
@@ -238,6 +276,9 @@ Page({
         // 排名状态：淘汰赛名次 > 阶段状态 > 待分组
         let stage_text = '待分组'
         if (ko_rank) stage_text = ko_rank
+        else if (tournament.isWaitingForGroup(t)) stage_text = '待分组'
+        else if (t.registration_status === 'pending') stage_text = '报名待审核'
+        else if (t.registration_status === 'rejected') stage_text = '报名未通过'
         else if (t.stage === 'legend') stage_text = '传奇组'
         else if (t.stage === 'challenger') stage_text = '挑战者'
         else if (t.stage === 'playoff') stage_text = '已晋级'
@@ -253,13 +294,23 @@ Page({
       })
 
     this.setData({
+      loadFailed: false,
+      roundCount: rounds.length,
+      completedRoundCount: rounds.filter(r => r.status === 'finished').length,
+      registerEndText: this.fmtTime(detail.match && detail.match.register_end),
       teams,
+      waitingTeams,
+      rosterLocked,
+      canRegisterTeam: isCaptain && !rosterLocked && (!this.data.registered || !this.data.myReg || this.data.myReg.team_id !== myTeamId),
       challengerTeams,
       legendTeams,
       playoffTeams,
       teamsSwiper,
       rankingTeams,
       challengerSwiper,
+      challengerStage,
+      groupCount,
+      hasPlayoffStage,
       legendSwiper,
       knockoutGroups: koGroups
     })
@@ -268,8 +319,12 @@ Page({
   switchTab(e) { this.setData({ tab: e.currentTarget.dataset.tab }) },
   switchTeamsStage(e) { this.setData({ teamsStage: Number(e.currentTarget.dataset.idx) }) },
   onTeamsSwiper(e) { this.setData({ teamsStage: e.detail.current }) },
-  switchChallengerStage(e) { this.setData({ challengerStage: Number(e.currentTarget.dataset.idx) }) },
-  onChallengerSwiper(e) { this.setData({ challengerStage: e.detail.current }) },
+  selectChallengerStage(value) {
+    const index = Number(value)
+    this.setData({ challengerStage: Number.isInteger(index) && index >= 0 && index < this.data.challengerSwiper.length ? index : 0 })
+  },
+  switchChallengerStage(e) { this.selectChallengerStage(e.currentTarget.dataset.idx) },
+  onChallengerSwiper(e) { this.selectChallengerStage(e.detail.current) },
   switchLegendStage(e) { this.setData({ legendStage: Number(e.currentTarget.dataset.idx) }) },
   onLegendSwiper(e) { this.setData({ legendStage: e.detail.current }) },
 
@@ -301,24 +356,32 @@ Page({
   // 拉我的报名状态 + 我的队伍
   async loadMyStatus() {
     if (!this.data.match) return
+    const matchId = this.data.match.id
+    const requestId = this._statusRequestId = (this._statusRequestId || 0) + 1
+    const detailRequestId = this._detailRequestId
+    const isCurrent = () => requestId === this._statusRequestId && detailRequestId === this._detailRequestId &&
+      this.data.match && this.data.match.id === matchId
     try {
-      const regData = await api.getMyRegistration(this.data.match.id)
-      this.setData({
-        registered: regData.registered,
-        myReg: regData.registration
-      })
+      const regData = await api.getMyRegistration(matchId)
+      if (!isCurrent()) return
       // 查我的队伍（判断报名类型用）
       const team = await api.getMyTeam()
+      if (!isCurrent()) return
       let isCaptain = false
       let myTeamId = null
       if (team) {
         // 用 /me 接口拿当前用户 id（比解析 JWT 更可靠）
         const me = await api.getMe()
+        if (!isCurrent()) return
         const userId = me ? me.id : null
         isCaptain = team.captain_id === userId
         myTeamId = team.id
       }
-      this.setData({ myTeam: team || null, isCaptain: isCaptain, myTeamId: myTeamId })
+      // 个人报名不代表新创建的队伍已经报名，队长仍需提交整队审核。
+      const registration = regData.registration
+      const rosterLocked = tournament.isRosterLocked(this.data.match, this.data.teams, this.detail && this.detail.rounds)
+      const canRegisterTeam = isCaptain && !rosterLocked && (!regData.registered || !registration || registration.team_id !== myTeamId)
+      this.setData({ registered: regData.registered, myReg: registration, myTeam: team || null, isCaptain, myTeamId, canRegisterTeam, rosterLocked })
       // 拿到队长身份后重新装饰对阵（标记可操作的对阵）
       if (this.detail) {
         this.buildData(this.detail, myTeamId, isCaptain)
@@ -341,6 +404,12 @@ Page({
   },
 
   // 报名
+  isTeamRegistrationLocked() {
+    return !!this.data.myTeam && (this.data.rosterLocked || tournament.isRosterLocked(this.data.match, this.data.teams, this.detail && this.detail.rounds))
+  },
+  showRosterLocked() {
+    wx.showModal({ title: '参赛名单已锁定', content: '赛事已完成编排，不再接受新队伍报名。', showCancel: false })
+  },
   async handleRegister() {
     if (!this.data.match) return
     const match = this.data.match
@@ -362,6 +431,11 @@ Page({
       return
     }
 
+    if (this.isTeamRegistrationLocked()) {
+      this.showRosterLocked()
+      return
+    }
+
     // 报名前检查学籍认证（未认证直接拦截，体验优于等后端报错）
     try {
       const me = await api.getMe()
@@ -370,7 +444,7 @@ Page({
           title: '未完成认证',
           content: '报名需先完成学籍认证（上传学信网/教务系统/校园卡截图）。',
           confirmText: '去认证',
-          success: (r) => { if (r.confirm) wx.reLaunch({ url: '/pages/profile/profile' }) }
+          success: (r) => { if (r.confirm) wx.reLaunch({ url: '/pages/verify/verify' }) }
         })
         return
       }
@@ -408,6 +482,11 @@ Page({
       content: content,
       success: async (res) => {
         if (!res.confirm) return
+        // 确认弹窗打开后也可能刷新到已锁定名单，提交前再检查一次。
+        if (this.isTeamRegistrationLocked()) {
+          this.showRosterLocked()
+          return
+        }
         try {
           if (this.data.myTeam) {
             await api.registerTeam(match.id, this.data.myTeam.id)   // 队伍报名

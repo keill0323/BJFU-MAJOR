@@ -1,4 +1,5 @@
 {
   "navigationBarTitleText": "赛事详情",
+  "usingComponents": { "event-return": "/components/event-return/event-return" },
   "enablePullDownRefresh": true
 }

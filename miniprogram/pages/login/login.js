@@ -7,7 +7,8 @@ const api = require('../../utils/api.js')
 
 Page({
   data: {
-    agreed: false
+    agreed: false,
+    loggingIn: false
   },
 
   // 进入登录页时：已有 token 则直接进首页，无需重复登录
@@ -27,23 +28,32 @@ Page({
     wx.navigateTo({ url: '/pages/rules/rules' })
   },
 
+  browseMatches() {
+    if (this.data.loggingIn) return
+    wx.reLaunch({ url: '/pages/index/index' })
+  },
+
   // 点登录按钮触发
   async handleLogin() {
+    if (this.data.loggingIn) return
     // 未勾选协议禁止登录
     if (!this.data.agreed) {
       wx.showToast({ title: '请先阅读并同意用户服务协议和隐私政策', icon: 'none' })
       return
     }
+    this.setData({ loggingIn: true })
     try {
       // ① 每次登录都重新取 code（code 是一次性、5 分钟有效的，不能缓存）
       const wxRes = await wx.login()
       const code = wxRes.code
       const data = await api.login(code)          // ② 交给后端换 JWT token
       wx.setStorageSync('token', data.access_token) // ③ 存本地，下次免登录
-      wx.reLaunch({ url: '/pages/index/index' })   // ④ 跳首页（tab 页必须用 switchTab）
+      wx.reLaunch({ url: '/pages/index/index' })   // ④ 跳转首页
     } catch (err) {
       console.error('登录失败', err)
       wx.showToast({ title: '登录失败', icon: 'error' })
+    } finally {
+      this.setData({ loggingIn: false })
     }
   }
 })

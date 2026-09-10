@@ -1,0 +1,40 @@
+<event-return />
+<view class="archive-page">
+  <view class="archive-heading"><text class="eyebrow">CHAMPION ARCHIVE</text><text class="page-title">为历史冠军，留下名字。</text><text class="page-caption">补齐往届赛事的冠军资料，在名人堂公开展示。</text></view>
+  <view wx:if="{{loading}}" class="state-card">正在读取赛事与冠军档案…</view>
+  <view wx:elif="{{denied}}" class="state-card"><text class="state-title">仅管理员可补录冠军</text><text class="helper">认证审核员与普通用户没有此操作权限。</text><button class="secondary-button" bindtap="goManagement">返回管理页面</button></view>
+  <view wx:elif="{{loadError}}" class="state-card"><text class="state-title">暂时无法打开档案</text><text class="helper">{{loadError}}</text><button class="secondary-button" bindtap="load">重新加载</button></view>
+  <block wx:else>
+    <view class="event-card"><view class="event-icon"><image src="/images/brand/cup.svg" mode="aspectFit"/></view><view class="event-copy"><text class="field-caption">所选赛事</text><text class="event-name">{{match.name}}</text></view><text class="event-state">{{match.status === 'finished' ? '已结束' : '未结束'}}</text></view>
+    <view wx:if="{{!canEdit}}" class="state-card">
+      <block wx:if="{{champion && champion.snapshot_source !== 'manual'}}"><text class="state-title">本届已有赛程生成的冠军档案</text><text class="readonly-name">{{champion.champion_name}}</text><text class="helper">冠军与淘汰赛结果关联。如有错误，请在赛事详情修正比分，系统会同步更新档案。</text><button class="primary-button" bindtap="goMatchAdmin">前往赛事详情</button><button class="text-button" bindtap="goHall">查看名人堂 ↗</button></block>
+      <block wx:else><text class="state-title">赛事结束后才可补录</text><text class="helper">请先在管理页面核实赛事状态，补录不会改变赛程或自动结束赛事。</text><button class="secondary-button" bindtap="goManagement">返回管理页面</button></block>
+    </view>
+    <block wx:else>
+      <view wx:if="{{published}}" class="success-card"><text class="state-title">冠军档案已发布</text><text class="helper">名人堂已更新，来源标记为“管理员补录”。</text><view class="success-actions"><button class="text-button" bindtap="goHall">查看名人堂 ↗</button><button class="text-button" bindtap="goManagement">返回管理页面</button></view></view>
+      <view class="form-card">
+        <view class="section-heading"><text class="section-number">01</text><view><text class="section-title">冠军资料</text><text class="section-caption">{{champion ? '编辑已补录的历史档案' : '填写当届比赛的真实记录'}}</text></view></view>
+        <view class="team-import"><view class="team-import-copy"><text>从现有战队带入</text><text class="helper">历史战队已解散？直接在下方填写即可。</text></view><button wx:if="{{!teams.length}}" class="import-button" bindtap="loadTeams" loading="{{teamsLoading}}" disabled="{{teamsLoading || saving}}">选择战队</button><picker wx:else range="{{teams}}" range-key="name" value="{{teamIndex >= 0 ? teamIndex : 0}}" bindchange="onPickTeam" disabled="{{saving}}"><view class="import-button">{{teamLoading ? '正在带入…' : '选择战队'}} <text>⌄</text></view></picker></view>
+        <text wx:if="{{teamsError}}" class="inline-note">{{teamsError}}</text>
+        <text wx:if="{{fromCurrentTeam}}" class="source-warning">已带入战队当前资料。请逐项核对队名、队徽与夺冠阵容，修改为夺冠当时的记录。</text>
+        <view wx:if="{{hasAccountLinks}}" class="historical-links"><text class="helper">档案已关联平台队伍或账号。若原队伍已解散、账号已删除，可取消关联，保留已填写的历史资料。</text><button class="text-button" bindtap="keepHistoricalOnly" disabled="{{saving}}">仅保留历史资料</button></view>
+        <text wx:elif="{{historicalOnly}}" class="inline-note">已取消队伍与账号关联，队名、阵容和其他历史资料均已保留。</text>
+        <view class="field"><text class="field-label">冠军战队 <text class="required">*</text></text><input class="form-input" value="{{form.champion_name}}" data-field="champion_name" bindinput="onField" placeholder="夺冠时的战队名称" maxlength="64" disabled="{{saving}}"/></view>
+        <view class="field"><text class="field-label">夺冠日期 <text class="required">*</text></text><picker mode="date" value="{{form.event_date}}" start="1900-01-01" end="2100-12-31" data-field="event_date" bindchange="onField" disabled="{{saving}}"><view class="form-input picker-input {{form.event_date ? '' : 'placeholder'}}">{{form.event_date || '选择比赛夺冠日期'}}<text>⌄</text></view></picker></view>
+        <view class="field"><text class="field-label">队徽地址 <text class="optional">选填</text></text><input class="form-input" value="{{form.champion_logo}}" data-field="champion_logo" bindinput="onField" placeholder="图片链接或 /uploads/ 开头的路径" maxlength="255" disabled="{{saving}}"/><text class="helper">留空时展示战队名称首字。</text></view>
+      </view>
+      <view class="form-card">
+        <view class="section-heading"><text class="section-number">02</text><view><text class="section-title">决赛与阵容</text><text class="section-caption">未知资料留空，不影响补录</text></view></view>
+        <view class="field"><text class="field-label">亚军战队 <text class="optional">选填</text></text><input class="form-input" value="{{form.runner_up_name}}" data-field="runner_up_name" bindinput="onField" placeholder="决赛对手名称" maxlength="64" disabled="{{saving}}"/></view>
+        <view class="field"><text class="field-label">决赛比分 <text class="optional">选填</text></text><view class="score-fields"><view class="score-field"><text>冠军</text><input class="form-input score-input" type="number" value="{{form.champion_score}}" data-field="champion_score" bindinput="onField" placeholder="—" maxlength="3" disabled="{{saving}}"/></view><text class="score-divider">:</text><view class="score-field"><text>亚军</text><input class="form-input score-input" type="number" value="{{form.runner_up_score}}" data-field="runner_up_score" bindinput="onField" placeholder="—" maxlength="3" disabled="{{saving}}"/></view></view><text class="helper">双方比分须一起填写；不清楚时都留空。</text></view>
+        <view class="field"><view class="field-label roster-label"><text>夺冠阵容 <text class="optional">选填</text></text><text class="field-caption">{{rosterCount}} / 20 人</text></view><textarea class="form-input roster-input" value="{{form.rosterText}}" data-field="rosterText" bindinput="onField" placeholder="每行填写一名夺冠成员" maxlength="2000" auto-height="{{true}}" disabled="{{saving}}"/><text class="helper">仅填写可核实的夺冠成员。留空时显示“本届夺冠阵容暂无记录”；手动修改名单后只保留名字，不关联当前账号或段位。</text></view>
+      </view>
+      <view class="form-card">
+        <view class="section-heading"><text class="section-number">03</text><view><text class="section-title">补录依据</text><text class="section-caption">仅管理端可见，不展示到名人堂</text></view></view>
+        <view class="field"><text class="field-label">资料来源或补录原因 <text class="required">*</text></text><textarea class="form-input note-input" value="{{form.note}}" data-field="note" bindinput="onField" placeholder="例如：依据 2025 秋季赛公告补录，原赛程未录入系统。" maxlength="500" auto-height="{{true}}" disabled="{{saving}}"/></view>
+      </view>
+      <view wx:if="{{formError}}" class="form-error">{{formError}}</view>
+      <view class="publish-area"><text class="publish-note">发布前会再次确认赛事、冠军和阵容。补录只更新冠军档案，不改变选手段位与赛事成绩。</text><button class="primary-button" bindtap="submit" loading="{{saving}}" disabled="{{saving || teamLoading}}">{{saving ? '正在确认与发布…' : champion ? '核对并更新档案' : '核对并发布到名人堂'}}</button></view>
+    </block>
+  </block>
+</view>

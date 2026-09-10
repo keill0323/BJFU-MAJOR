@@ -1,0 +1,6 @@
+<view class="event-return-wrap">
+  <button class="event-return-button" bindtap="goEvents" hover-class="event-return-pressed" aria-label="返回赛事中心">
+    <text class="event-return-arrow" aria-hidden="true">‹</text>
+    <text>返回赛事</text>
+  </button>
+</view>

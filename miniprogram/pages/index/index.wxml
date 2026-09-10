@@ -1,61 +1,46 @@
 <view class="page">
-  <nav-drawer title="赛事"></nav-drawer>
-  <view class="search-bar">
-    <image class="search-ic" src="/images/icons/search.svg"/>
-    <input class="search-input" placeholder="搜索赛事..." value="{{keyword}}" bindinput="onSearchInput" bindconfirm="onSearch"/>
-  </view>
-
-  <!-- 统计概览 -->
-  <view class="stat-bar">
-    <view class="stat">
-      <text class="stat-num">{{total}}</text>
-      <text class="stat-label">全部赛事</text>
-    </view>
-    <view class="stat">
-      <text class="stat-num">{{registeringCount}}</text>
-      <text class="stat-label">报名中</text>
-    </view>
-    <view class="stat">
-      <text class="stat-num">{{inProgressCount}}</text>
-      <text class="stat-label">进行中</text>
-    </view>
-  </view>
-
-  <!-- 分组赛事列表 -->
-  <block wx:for="{{groups}}" wx:key="status">
-    <block wx:if="{{item.matches.length > 0}}">
-      <view class="group-title">
-        <view class="group-dot {{item.status}}"></view>
-        <text class="group-name">{{item.title}}</text>
-        <text class="group-count">{{item.matches.length}}</text>
+  <nav-drawer id="main-nav" title="北林 MAJOR" show-admin-notice="{{true}}" bind:userchange="onUserChange"></nav-drawer>
+  <view class="home-content">
+    <view class="player-card">
+      <image class="hero-mark" src="/images/brand/forest-crest.svg" mode="aspectFit"/>
+      <view class="hero-topline"><text class="hero-eyebrow">BJFU · CAMPUS COUNTER-STRIKE</text><view class="hero-live-dot"></view></view>
+      <view wx:if="{{user}}" class="player-identity" bindtap="goIdentity">
+        <image wx:if="{{user.avatar_full}}" class="player-avatar" src="{{user.avatar_full}}" mode="aspectFill"/>
+        <view wx:else class="player-avatar avatar-fallback"><image src="/images/brand/forest-crest.svg" mode="aspectFit"/></view>
+        <view class="player-copy"><text class="player-name">{{user.nickname || '北林选手'}}</text><text class="player-state">{{user.is_verified ? '在校认证已通过' : '完成认证，准备上场'}}</text></view><text class="player-arrow">›</text>
       </view>
-      <view wx:for="{{item.matches}}" wx:key="id" wx:for-item="m" class="match-card" bindtap="goMatch" data-id="{{m.id}}">
-        <view class="mc-top">
-          <view class="mc-name-wrap">
-            <text wx:if="{{m.typeLabel}}" class="mc-type {{m.match_type}}">{{m.typeLabel}}</text>
-            <text class="mc-name">{{m.name}}</text>
-          </view>
-          <view class="mc-badge st-{{m.status}}">{{m.statusText}}</view>
+      <view wx:else class="guest-copy"><text class="hero-title">为下一场，集结。</text><text class="hero-sub">你的队伍，你的主场。</text></view>
+      <view wx:if="{{user}}" class="player-bottom">
+        <view class="hero-rank-detail">
+          <image class="hero-rank-icon" src="{{user.rank_badge.icon}}" mode="aspectFit" aria-label="{{user.rank_badge.label}}"/>
+          <view class="hero-rank-copy"><text class="hero-metric-label">当前段位</text><text class="hero-rank">{{user.display_rank || '待认证'}}</text></view>
         </view>
-        <text wx:if="{{m.description}}" class="mc-desc">{{m.description}}</text>
-        <view class="mc-foot">
-          <view class="mc-progress">
-            <view class="mc-track">
-              <view class="mc-fill" style="width: {{m.progress}}%"></view>
-            </view>
-            <text class="mc-progress-text">{{m.registered_count || 0}}/{{m.max_teams || 16}} 队伍</text>
-          </view>
-          <text class="mc-team-size">每队 {{m.team_size || 5}} 人</text>
-        </view>
+        <view class="hero-rating"><text class="hero-metric-label">个人水平分</text><text class="hero-number">{{user.rank ? user.individual_rating : '—'}}</text></view>
       </view>
+      <view wx:else class="hero-bottom"><view class="hero-join" bindtap="goIdentity">登录，开启参赛之旅 <text>↗</text></view><text class="hero-note">北京林业大学 · CS2 校赛</text></view>
+    </view>
+    <view class="shortcut-grid">
+      <view wx:for="{{shortcuts}}" wx:key="url" class="shortcut" bindtap="goShortcut" data-url="{{item.url}}" aria-role="button" aria-label="{{item.title}}">
+        <view class="shortcut-icon"><image src="/images/brand/{{item.icon}}.svg" mode="aspectFit"/></view>
+        <text>{{item.title}}</text>
+      </view>
+    </view>
+    <view class="section-heading"><view><text class="section-kicker">THE COMPETITION</text><text class="section-title">赛事中心</text></view><view class="rules-link" bindtap="showRules">参赛须知 <text>↗</text></view></view>
+    <view class="search-bar"><image class="search-ic" src="/images/icons/search.svg"/><input class="search-input" placeholder="搜索你想参加的赛事" placeholder-class="search-placeholder" value="{{keyword}}" bindinput="onSearchInput" bindconfirm="onSearch" confirm-type="search"/><view wx:if="{{keyword}}" class="clear-search" bindtap="clearSearch" aria-label="清除搜索">×</view><view class="search-submit" bindtap="onSearch">搜索</view></view>
+    <view class="filter-row"><view wx:for="{{filters}}" wx:key="value" class="filter {{activeFilter === item.value ? 'active' : ''}}" bindtap="setFilter" data-value="{{item.value}}">{{item.label}}</view></view>
+    <view wx:if="{{loadError}}" class="list-notice"><text>赛事暂时未能加载</text><view bindtap="loadMatches">点击重试 ↻</view></view>
+    <view wx:elif="{{loading}}" class="list-loading">正在加载赛事…</view>
+    <block wx:else>
+      <block wx:for="{{groups}}" wx:key="status">
+        <view class="group-title"><view class="group-dot {{item.status}}"></view><text>{{item.title}}</text><text class="group-count">{{item.matches.length}} 场</text><view class="group-line"></view></view>
+        <view wx:for="{{item.matches}}" wx:key="id" wx:for-item="m" class="match-card" bindtap="goMatch" data-id="{{m.id}}">
+          <view class="mc-main"><view class="event-emblem {{m.match_type}}"><image src="/images/brand/{{m.match_type === 'freshman' ? 'forest-crest' : 'cup'}}.svg" mode="aspectFit"/><text>{{m.match_type === 'freshman' ? 'ROOKIES' : 'MAJOR'}}</text></view><view class="mc-copy"><view class="mc-labels"><text class="mc-type">{{m.typeLabel}}</text><text class="mc-badge st-{{m.status}}">{{m.statusText}}</text></view><text class="mc-name">{{m.name}}</text><text class="mc-timing">{{m.timing}}</text></view></view>
+          <text wx:if="{{m.description}}" class="mc-desc">{{m.description}}</text>
+          <view class="mc-foot"><view class="mc-capacity"><view><text class="mc-count">{{m.registered_count || 0}}</text><text class="mc-limit"> / {{m.max_teams || 16}} 队</text><text class="mc-size">每队 {{m.team_size || 5}} 人</text></view><view class="mc-track"><view class="mc-fill" style="width: {{m.progress}}%"></view></view></view><view class="mc-action {{m.status === 'registering' ? 'open' : ''}}">{{m.actionText}} <text>›</text></view></view>
+        </view>
+      </block>
+      <view wx:if="{{groups.length === 0}}" class="empty"><view class="empty-symbol"><image src="/images/brand/cup.svg"/></view><text class="empty-title">{{keyword ? '没有找到相关赛事' : '这个赛区，静待开场'}}</text><text class="empty-sub">{{keyword ? '试试其他关键词，或查看全部赛事' : '暂时没有符合筛选条件的赛事'}}</text><view class="empty-reset" bindtap="clearSearch">查看全部赛事</view></view>
     </block>
-  </block>
-
-  <view wx:if="{{matches.length === 0}}" class="empty">
-    <view class="empty-box">
-      <image class="empty-ic" src="/images/icons/search.svg"/>
-      <text class="empty-title">暂无赛事</text>
-      <text class="empty-sub">下拉刷新，或换个关键词搜索</text>
-    </view>
+    <view class="home-footer"><view></view><text>BJFU MAJOR · 让热爱上场</text><view></view></view>
   </view>
 </view>

@@ -1,26 +1,22 @@
+<event-return />
 <view class="page">
-  <image class="banner" src="/images/banner_dark.png" mode="aspectFill"/>
-
-  <view class="content">
-    <view class="brand">
-      <text class="title">北林 CS2 Major</text>
-      <text class="subtitle">北京林业大学 · 校内电竞赛事</text>
-    </view>
-
-    <view class="login-btn" bindtap="handleLogin">
-      <text class="login-btn-text">微信一键登录</text>
-    </view>
-
-    <view class="agree-row">
-      <view class="agree-checkbox {{agreed ? 'checked' : ''}}" bindtap="toggleAgree">
-        <text wx:if="{{agreed}}" class="agree-check-icon">✓</text>
-      </view>
-      <view class="agree-text-wrap">
-        <text class="agree-plain">我已阅读并同意</text>
-        <text class="agree-link" catchtap="showRules">《用户服务协议》</text>
-        <text class="agree-plain">和</text>
-        <text class="agree-link" catchtap="showRules">《隐私政策》</text>
-      </view>
-    </view>
+  <view class="brand-bar"><view class="brand-symbol"><image src="/images/brand/forest-crest.svg"/></view><text class="brand-name">BJFU MAJOR</text><text class="brand-tag">CAMPUS ESPORTS</text></view>
+  <view class="login-visual">
+    <view class="visual-frame frame-one"></view><view class="visual-frame frame-two"></view>
+    <view class="visual-top"><text class="visual-kicker">北京林业大学 · CS2 校赛</text><view class="visual-dot"></view></view>
+    <view class="visual-title"><text>为热爱，</text><text>一起上场。</text></view>
+    <view class="visual-bottom"><text class="visual-word">MAJOR</text><view class="visual-caption"><text>FIND YOUR TEAM.</text><text>PLAY YOUR GAME.</text></view></view>
   </view>
+  <view class="content">
+    <text class="welcome-title">欢迎来到北林 Major</text>
+    <text class="welcome-copy">认识队友，报名参赛，追踪每一场对决。</text>
+    <view class="journey"><view><text class="journey-number">01</text><text>完成认证</text></view><text class="journey-divider"></text><view><text class="journey-number">02</text><text>组建队伍</text></view><text class="journey-divider"></text><view><text class="journey-number">03</text><text>出发参赛</text></view></view>
+    <button class="login-btn" bindtap="handleLogin" loading="{{loggingIn}}" disabled="{{loggingIn}}">{{loggingIn ? '登录中' : '微信一键登录'}}</button>
+    <view class="agree-row">
+      <view class="agree-checkbox {{agreed ? 'checked' : ''}}" bindtap="toggleAgree"><view wx:if="{{agreed}}" class="agree-check-icon"></view></view>
+      <view class="agree-text-wrap"><text class="agree-plain">我已阅读并同意</text><text class="agree-link" catchtap="showRules">《用户服务协议》</text><text class="agree-plain">和</text><text class="agree-link" catchtap="showRules">《隐私政策》</text></view>
+    </view>
+    <view class="browse-link" bindtap="browseMatches"><text>先看看赛事</text><image src="/images/icons/chevron-right.svg"/></view>
+  </view>
+  <text class="login-footer">北京林业大学校内赛事报名平台</text>
 </view>

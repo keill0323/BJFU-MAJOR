@@ -68,7 +68,7 @@ function request(path, method = 'GET', data = {}) {
           // （让用户先浏览内容，只有主动操作时才引导登录，符合登录规范）
           if (res.statusCode === 401) {
             wx.removeStorageSync('token')
-            reject({ detail: '请先登录', unauthorized: true })
+            reject({ detail: '请先登录', unauthorized: true, statusCode: res.statusCode })
             return
           }
           // 统一错误信息：422 校验错误的 detail 是数组，转成可读字符串
@@ -76,7 +76,7 @@ function request(path, method = 'GET', data = {}) {
           if (Array.isArray(detail)) {
             detail = detail.map(d => d.msg || JSON.stringify(d)).join('；')
           }
-          reject({ detail: detail || ('请求失败（' + res.statusCode + '）') })
+          reject({ detail: detail || ('请求失败（' + res.statusCode + '）'), statusCode: res.statusCode })
         }
       },
       fail() {
@@ -84,6 +84,26 @@ function request(path, method = 'GET', data = {}) {
       }
     })
   })
+}
+
+
+// 整队审核要求后端同时验证阵容、批量通过报名并创建赛事进度。
+// 旧服务器只有单条报名审核接口，不能回退调用，否则会绕过这些约束。
+function backendVersionError(err, feature) {
+  // FastAPI 未匹配到路由的默认 404；业务 404（如队伍未报名）保留原文。
+  if (err.statusCode === 404 && err.detail === 'Not Found') {
+    throw {
+      detail: '当前服务器版本不支持' + feature + '，请更新后端后重试',
+      statusCode: err.statusCode,
+      code: 'BACKEND_UPGRADE_REQUIRED'
+    }
+  }
+  throw err
+}
+
+function approveTeamRegistration(matchId, teamId) {
+  return request('/api/matches/' + matchId + '/registrations/approve-team?team_id=' + teamId, 'POST')
+    .catch(err => backendVersionError(err, '整队报名审核'))
 }
 
 
@@ -113,8 +133,10 @@ function uploadFile(path, filePath, raw = true) {
           let detail = ''
           try { detail = JSON.parse(res.data).detail || '' } catch (e) {}
           if (res.statusCode === 401) {
+            // 与 request() 保持一致：只清 token，不强制跳登录页
             wx.removeStorageSync('token')
-            wx.redirectTo({ url: '/pages/login/login' })
+            reject({ detail: '请先登录', unauthorized: true })
+            return
           }
           reject({ detail: detail || ('上传失败（' + res.statusCode + '）') })
         }
@@ -135,109 +157,36 @@ function uploadFile(path, filePath, raw = true) {
 module.exports = {
   BASE: BASE,   // 后端地址（拼接上传图片完整 URL 用）
 
+  // 名人堂公开榜单，分页按服务端顺序展示。
+  getHallChampions: (offset = 0, limit = 20) => request('/api/hall/champions?offset=' + offset + '&limit=' + limit)
+    .catch(err => backendVersionError(err, '名人堂')),
+  getHallPlayers: (offset = 0, limit = 50) => request('/api/hall/players?offset=' + offset + '&limit=' + limit)
+    .catch(err => backendVersionError(err, '名人堂')),
+  getAdminChampion: matchId => request('/api/hall/admin/champions/' + matchId)
+    .catch(err => backendVersionError(err, '冠军补录')),
+  saveAdminChampion: (matchId, data) => request('/api/hall/admin/champions/' + matchId, 'PUT', data)
+    .catch(err => backendVersionError(err, '冠军补录')),
+  getAdminTodos: () => request('/api/admin/todos')
+    .catch(err => backendVersionError(err, '管理待办提醒')),
+
   // ===== 认证 =====
   login: (code) => request('/api/auth/login', 'POST', { code }),          // 登录，code 是微信登录凭证
   getMe: () => request('/api/auth/me'),                                    // 获取当前用户完整信息
   updateProfile: (data) => request('/api/auth/profile', 'PUT', data),     // 修改昵称/游戏ID
 
-  // 上传学信网截图（multipart，走 wx.uploadFile 不走通用 request）
-  uploadVerify: (filePath) => new Promise((resolve, reject) => {
-    const token = wx.getStorageSync('token')
-    wx.uploadFile({
-      url: BASE + '/api/auth/upload-verify',
-      filePath: filePath,
-      name: 'file',
-      header: { 'Authorization': token ? 'Bearer ' + token : '' },
-      success(res) {
-        if (res.statusCode < 400) {
-          try {
-            resolve(normalizeRole(JSON.parse(res.data)))
-          } catch (e) {
-            reject({ detail: '上传响应解析失败' })
-          }
-        } else {
-          let detail = ''
-          try { detail = JSON.parse(res.data).detail || '' } catch (e) {}
-          if (res.statusCode === 401) {
-            wx.removeStorageSync('token')
-            wx.redirectTo({ url: '/pages/login/login' })
-          }
-          reject({ detail: detail || ('上传失败（' + res.statusCode + '）') })
-        }
-      },
-      fail(err) {
-        console.error('uploadVerify 失败详情:', err)
-        reject({ detail: '网络错误：' + (err.errMsg || '请检查后端服务器是否启动') })
-      }
-    })
-  }),
+  // 上传学信网截图（multipart，走共享 uploadFile 函数）
+  uploadVerify: (filePath) => uploadFile('/api/auth/upload-verify', filePath, false),
 
   // 上传游戏段位截图（完美/5E平台，AI 识别段位）
-  uploadRank: (filePath) => new Promise((resolve, reject) => {
-    const token = wx.getStorageSync('token')
-    wx.uploadFile({
-      url: BASE + '/api/auth/upload-rank',
-      filePath: filePath,
-      name: 'file',
-      header: { 'Authorization': token ? 'Bearer ' + token : '' },
-      success(res) {
-        if (res.statusCode < 400) {
-          try {
-            resolve(JSON.parse(res.data))
-          } catch (e) {
-            reject({ detail: '上传响应解析失败' })
-          }
-        } else {
-          let detail = ''
-          try { detail = JSON.parse(res.data).detail || '' } catch (e) {}
-          if (res.statusCode === 401) {
-            wx.removeStorageSync('token')
-            wx.redirectTo({ url: '/pages/login/login' })
-          }
-          reject({ detail: detail || ('上传失败（' + res.statusCode + '）') })
-        }
-      },
-      fail(err) {
-        console.error('uploadRank 失败详情:', err)
-        reject({ detail: '网络错误：' + (err.errMsg || '请检查后端服务器是否启动') })
-      }
-    })
-  }),
+  uploadRank: (filePath) => uploadFile('/api/auth/upload-rank', filePath, true),
 
   // 上传头像
-  uploadAvatar: (filePath) => new Promise((resolve, reject) => {
-    const token = wx.getStorageSync('token')
-    wx.uploadFile({
-      url: BASE + '/api/auth/upload-avatar',
-      filePath: filePath,
-      name: 'file',
-      header: { 'Authorization': token ? 'Bearer ' + token : '' },
-      success(res) {
-        if (res.statusCode < 400) {
-          try {
-            resolve(normalizeRole(JSON.parse(res.data)))
-          } catch (e) {
-            reject({ detail: '上传响应解析失败' })
-          }
-        } else {
-          let detail = ''
-          try { detail = JSON.parse(res.data).detail || '' } catch (e) {}
-          if (res.statusCode === 401) {
-            wx.removeStorageSync('token')
-            wx.redirectTo({ url: '/pages/login/login' })
-          }
-          reject({ detail: detail || ('上传失败（' + res.statusCode + '）') })
-        }
-      },
-      fail(err) {
-        reject({ detail: '网络错误：' + (err.errMsg || '请检查后端服务器是否启动') })
-      }
-    })
-  }),
+  uploadAvatar: (filePath) => uploadFile('/api/auth/upload-avatar', filePath, false),
 
   // ===== 队伍 =====
   createTeam: (name) => request('/api/teams', 'POST', { name }),          // 创建队伍
   getTeams: () => request('/api/teams'),                                  // 队伍列表
+  getAdminTeams: () => request('/api/teams/admin'),                        // 全部队伍（需管理权限）
   getTeam: (id) => request('/api/teams/' + id),                           // 查某支队伍详情
   getMyTeam: () => request('/api/teams/my'),                              // 查我的队伍（按 token）
   getTalentMarket: (matchId) => request('/api/teams/talent-market?match_id=' + matchId),  // 人才市场：某赛事的自由人
@@ -274,6 +223,7 @@ module.exports = {
   registerTeam: (matchId, teamId) => request('/api/matches/' + matchId + '/register/team?team_id=' + teamId, 'POST'),  // 队伍报名
   registerUser: (matchId) => request('/api/matches/' + matchId + '/register/user', 'POST'),  // 个人报名
   getMyRegistration: (matchId) => request('/api/matches/' + matchId + '/my-registration'),  // 我是否已报名
+  approveTeamRegistration: approveTeamRegistration,  // 管理端：通过某队伍全部报名记录
 
   // ===== 管理后台（admin/reviewer） =====
   adminListUsers: (keyword) => request('/api/auth/admin/users' + (keyword ? '?keyword=' + keyword : '')),  // 用户列表/搜索
@@ -285,12 +235,19 @@ module.exports = {
   adminUpdateUser: (userId, data) => request('/api/auth/admin/users/' + userId, 'PUT', data),  // 改学号/段位/评分/认证
   adminUpdateRole: (userId, role) => request('/api/auth/admin/users/' + userId + '/role', 'PUT', { role: role }),  // 改角色
   createMatch: (data) => request('/api/matches', 'POST', data),  // 创建赛事
+  updateRegistrationWindow: (matchId, data) => request('/api/matches/' + matchId + '/registration-window', 'PUT', data)
+    .catch(err => backendVersionError(err, '报名时间设置')),
   updateMatchStatus: (matchId, status) => request('/api/matches/' + matchId + '/status', 'PUT', { status: status }),  // 改赛事状态
   approveTeam: (teamId) => request('/api/teams/' + teamId + '/approve', 'POST'),  // 审核通过队伍
   rejectTeam: (teamId) => request('/api/teams/' + teamId + '/reject', 'POST'),  // 驳回队伍
 
   // ===== 自动编排（管理员） =====
   autoSeeds: (matchId) => request('/api/matches/' + matchId + '/auto-seeds', 'POST'),  // 分配种子
+  seedAndGroup: (matchId, groupNames) => {
+    const qs = groupNames.map(g => 'group_names=' + encodeURIComponent(g)).join('&')
+    return request('/api/matches/' + matchId + '/seed-and-group?' + qs, 'POST')
+      .catch(err => backendVersionError(err, '一次完成种子分配与分组'))
+  },
   autoGroup: (matchId, groupNames) => {
     // 后端要多个 group_names query 参数，如 ?group_names=A&group_names=B
     const qs = groupNames.map(g => 'group_names=' + encodeURIComponent(g)).join('&')

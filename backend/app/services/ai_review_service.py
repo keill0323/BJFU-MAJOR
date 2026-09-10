@@ -5,6 +5,7 @@ Since: 2026-08-11
 """
 import base64
 import json
+import math
 import re
 import urllib.request
 
@@ -49,7 +50,12 @@ def _call_vision(image_path, prompt):
     with open(image_path, "rb") as f:
         image_b64 = base64.b64encode(f.read()).decode()
     ext = image_path.rsplit(".", 1)[-1].lower()
-    mime = "image/png" if ext == "png" else "image/jpeg"
+    if ext == "png":
+        mime = "image/png"
+    elif ext == "webp":
+        mime = "image/webp"     # 安全审查 #23：webp 不再误标为 jpeg
+    else:
+        mime = "image/jpeg"
 
     # ② 构造请求（OpenAI 兼容格式）
     payload = {
@@ -82,7 +88,37 @@ def _call_vision(image_path, prompt):
 
 def review_image(image_path):
     """审核学信网/校园卡截图"""
-    return _call_vision(image_path, REVIEW_PROMPT)
+    return validate_verify_result(_call_vision(image_path, REVIEW_PROMPT))
+
+
+def _review_fields(result):
+    """模型输出属于外部输入，不能将 JSON 解析成功等同于字段有效。"""
+    if not isinstance(result, dict):
+        raise ValueError("AI 审核结果必须为对象")
+    confidence = result.get("confidence")
+    if (type(confidence) not in (int, float)
+            or not math.isfinite(confidence) or not 0 <= confidence <= 1):
+        raise ValueError("AI 置信度必须为 0 到 1 的有限数值")
+    reason = result.get("reason", "")
+    if not isinstance(reason, str) or len(reason) > 500:
+        raise ValueError("AI 审核理由格式无效")
+    return float(confidence), reason
+
+
+def validate_verify_result(result):
+    confidence, reason = _review_fields(result)
+    is_valid = result.get("is_valid")
+    if is_valid is not None and type(is_valid) is not bool:
+        raise ValueError("AI 学籍审核结论格式无效")
+    student_id = result.get("student_id")
+    if student_id is not None and not isinstance(student_id, str):
+        raise ValueError("AI 学号必须为文本")
+    student_id = student_id.strip() if student_id else None
+    # 自动通过只接受常规数字学号；其他凭证交管理员确认，不直接拒绝。
+    if student_id and not re.fullmatch(r"[0-9]{6,20}", student_id):
+        student_id = None
+    return {"is_valid": is_valid, "confidence": confidence,
+            "reason": reason, "student_id": student_id}
 
 
 def normalize_rank(rank):
@@ -90,7 +126,7 @@ def normalize_rank(rank):
     if not rank:
         return None
     rank = str(rank).strip().upper().replace(" ", "")
-    m = re.match(r"^S(\d*)$", rank)
+    m = re.fullmatch(r"S([0-9]{0,2})", rank)
     if m:
         n_str = m.group(1)
         # S（无星数）或 S0 星 → 都归到最低 S1
@@ -105,13 +141,21 @@ def normalize_rank(rank):
 
 def review_rank(image_path):
     """识别游戏段位截图，返回 {rank, confidence, reason}"""
-    result = _call_vision(image_path, REVIEW_RANK_PROMPT)
-    result["rank"] = normalize_rank(result.get("rank"))
-    return result
+    return validate_rank_result(_call_vision(image_path, REVIEW_RANK_PROMPT))
+
+
+def validate_rank_result(result):
+    confidence, reason = _review_fields(result)
+    rank = result.get("rank")
+    if rank is not None and not isinstance(rank, str):
+        raise ValueError("AI 段位必须为文本")
+    return {"rank": normalize_rank(rank), "confidence": confidence, "reason": reason}
 
 
 def _parse_json(text):
     """从模型返回的文字里提取 JSON（容错处理）"""
+    if not isinstance(text, str):
+        raise ValueError("AI 回复必须为文本")
     try:
         return json.loads(text)
     except Exception:
@@ -119,4 +163,4 @@ def _parse_json(text):
         end = text.rfind("}") + 1
         if start >= 0 and end > start:
             return json.loads(text[start:end])
-        return {"is_valid": None, "confidence": 0, "reason": text, "student_id": None}
+        raise ValueError("AI 回复中没有有效 JSON")

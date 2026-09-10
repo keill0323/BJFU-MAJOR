@@ -1,0 +1,4 @@
+{
+  "navigationBarTitleText": "冠军补录",
+  "usingComponents": { "event-return": "/components/event-return/event-return" }
+}

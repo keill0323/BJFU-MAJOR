@@ -16,4 +16,28 @@ function rankDisplay(rank) {
   return rank
 }
 
-module.exports = { rankDisplay }
+// All badge names are local allowlisted assets; no user text becomes a path.
+// D has one level. C/B/A each have base, + and ++ levels.
+function rankBadge(rank) {
+  let key = 'unranked'
+  let stars = null
+  const standard = typeof rank === 'string' && /^(D|[CBA](?:\+{1,2})?)$/.exec(rank)
+  const starMatch = typeof rank === 'string' && /^S(\d+)$/.exec(rank)
+  if (standard) {
+    key = rank.charAt(0).toLowerCase() + (rank.endsWith('++') ? '-double-plus' : rank.endsWith('+') ? '-plus' : '')
+  } else if (rank === 'S') {
+    key = 's'
+  } else if (starMatch && Number(starMatch[1]) <= 50) {
+    stars = Number(starMatch[1])
+    key = stars >= 50 ? 's-demon' : stars >= 25 ? 's-diamond' : stars >= 10 ? 's-gold' : 's'
+  }
+  return {
+    key,
+    icon: '/images/ranks/' + key + '.svg',
+    label: key === 'unranked' ? '待认证' : rankDisplay(rank),
+    stars,
+    progress: stars === null ? 0 : stars * 2
+  }
+}
+
+module.exports = { rankDisplay, rankBadge }

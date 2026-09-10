@@ -8,7 +8,25 @@ const { rankDisplay } = require('../../utils/rank.js')
 
 Page({
   data: {
-    tab: 'users',         // 当前 tab: users/teams/matches
+    tab: 'overview',
+    tabs: [
+      { id: 'overview', label: '待办总览' }, { id: 'verify', label: '在校认证', countKey: 'verification_count' },
+      { id: 'rankapps', label: '段位审核', countKey: 'rank_application_count' }, { id: 'teams', label: '队伍管理', countKey: 'team_count' },
+      { id: 'matches', label: '赛事管理', countKey: 'registration_count' }, { id: 'users', label: '用户管理' }
+    ],
+    todos: null,
+    todoCards: [
+      { tab: 'verify', key: 'verification_count', title: '在校认证', subtitle: '审核在校证明', icon: 'shield' },
+      { tab: 'rankapps', key: 'rank_application_count', title: '段位审核', subtitle: '确认选手段位', icon: 'honor' },
+      { tab: 'teams', key: 'team_count', title: '队伍审核', subtitle: '审核新建队伍', icon: 'team' },
+      { tab: 'matches', key: 'registration_count', title: '赛事报名', subtitle: '查看各赛事报名', icon: 'grid' }
+    ],
+    todoLoading: false,
+    todoError: false,
+    listLoading: {},
+    listErrors: {},
+    listReady: {},
+    permissionLoading: true,
     user: null,           // 当前用户（用于权限校验）
     // 用户管理
     users: [],
@@ -29,24 +47,40 @@ Page({
     // 赛事管理
     matches: [],
     // 创建赛事表单
-    newMatch: { name: '', max_teams: 16, team_size: 5, match_type: 'major', description: '' }
+    newMatch: { name: '', max_teams: 16, team_size: 5, match_type: 'major', description: '' },
+    creatingMatch: false,
+    showCreateMatch: false,
+    registrationStartDate: '',
+    registrationStartTime: '',
+    registrationEndDate: '',
+    registrationEndTime: ''
   },
 
-  onLoad() {
-    this.checkPermission()
+  onLoad(options = {}) {
+    this._unloaded = false
+    const tab = this.data.tabs.some(item => item.id === options.tab) ? options.tab : 'overview'
+    this.setData({ tab })
+    return this.checkPermission()
+  },
+
+  onShow() {
+    // onLoad already starts the first request. Returning from a review/detail page refreshes current work.
+    if (!this._hasShown) { this._hasShown = true; return }
+    if (this.data.user) return this.refreshDashboard()
+  },
+
+  onUnload() {
+    this._unloaded = true
   },
 
   // 进入页面先校验权限：仅 admin/reviewer 可进入（后端已有鉴权，前端兜底拦截）
   async checkPermission() {
     try {
       const user = await api.getMe()
+      if (this._unloaded) return
       if (user && (user.role === 'admin' || user.role === 'reviewer')) {
-        this.setData({ user })
-        this.loadUsers()
-        this.loadTeams()
-        this.loadMatches()
-        this.loadVerifyList()
-        this.loadRankApplications()
+        this.setData({ user, permissionLoading: false })
+        await this.refreshDashboard()
       } else {
         wx.showModal({
           title: '权限不足',
@@ -56,24 +90,122 @@ Page({
         })
       }
     } catch (err) {
+      if (this._unloaded) return
       this.showErr(err, '权限校验失败')
       wx.navigateBack({ fail: () => wx.redirectTo({ url: '/pages/profile/profile' }) })
+    } finally {
+      if (!this._unloaded) this.setData({ permissionLoading: false })
     }
   },
 
   // 切换 tab
   switchTab(e) {
-    this.setData({ tab: e.currentTarget.dataset.tab })
+    const tab = e.currentTarget.dataset.tab
+    if (!this.data.tabs.some(item => item.id === tab)) return
+    this.setData({ tab })
+    if (this.data.user) return this.loadActiveTab()
   },
 
-  // 下拉刷新：重新拉取当前各 tab 数据
+  // 页面恢复和下拉刷新只更新计数及当前列表，避免首页下载全部用户与截图。
+  refreshDashboard() {
+    return Promise.all([this.loadTodos(true), this.loadActiveTab(true)])
+  },
+
   async onPullDownRefresh() {
-    await this.loadUsers(this.data.userKeyword)
-    await this.loadTeams()
-    await this.loadMatches()
-    await this.loadVerifyList()
-    await this.loadRankApplications()
-    wx.stopPullDownRefresh()
+    try { if (this.data.user) await this.refreshDashboard() }
+    finally { wx.stopPullDownRefresh() }
+  },
+
+  loadTodos(force = false) {
+    // Forced refresh consults the shared store again: another page may have invalidated
+    // the old request while this page was hidden. The store coalesces current API reads.
+    if (this._todoRequest && !force) return this._todoRequest
+    const version = (this._todoVersion || 0) + 1
+    this._todoVersion = version
+    this.setData({ todoLoading: true })
+    const request = Promise.resolve().then(() => require('../../utils/admin-todos.js').refresh(force))
+      .then(todos => {
+        if (todos && !this._unloaded && version === (this._todoVersion || 0)) this.setData({ todos, todoError: false })
+      }).catch(() => {
+        // Keep the last successful numbers visible, but explicitly mark them as stale.
+        if (!this._unloaded && version === (this._todoVersion || 0)) this.setData({ todoError: true })
+      }).finally(() => {
+        if (this._todoRequest === request) {
+          this._todoRequest = null
+          if (!this._unloaded) this.setData({ todoLoading: false })
+        }
+      })
+    this._todoRequest = request
+    return request
+  },
+
+  retryTodos() { return this.loadTodos(true) },
+
+  loadActiveTab(force = false) {
+    const tab = this.data.tab
+    if (!force && this.data.listReady[tab]) return Promise.resolve()
+    const loaders = { users: () => this.loadUsers(this.data.userKeyword), verify: () => this.loadVerifyList(), rankapps: () => this.loadRankApplications(), teams: () => this.loadTeams(), matches: () => this.loadMatches() }
+    return loaders[tab] ? loaders[tab]() : Promise.resolve()
+  },
+
+  retryList() { return this.loadActiveTab(true) },
+
+  loadList(tab, fetcher, field, transform, requestKey = '') {
+    this._listRequests = this._listRequests || {}
+    this._listVersions = this._listVersions || {}
+    const previous = this._listRequests[tab]
+    if (previous && previous.key === requestKey) return previous.promise
+    const version = (this._listVersions[tab] || 0) + 1
+    this._listVersions[tab] = version
+    this.setData({ ['listLoading.' + tab]: true, ['listErrors.' + tab]: false })
+    const promise = Promise.resolve().then(fetcher).then(data => {
+      if (this._unloaded || this._listVersions[tab] !== version) return
+      const values = transform ? transform(data || []) : data || []
+      this.setData({ [field]: values, ['listReady.' + tab]: true })
+      if (tab === 'teams') this.setData({ pendingTeamCount: values.filter(team => team.status === 'pending').length })
+    }).catch(() => {
+      if (!this._unloaded && this._listVersions[tab] === version) this.setData({ ['listErrors.' + tab]: true })
+    }).finally(() => {
+      if (this._listRequests[tab] && this._listRequests[tab].promise === promise) {
+        delete this._listRequests[tab]
+        if (!this._unloaded) this.setData({ ['listLoading.' + tab]: false })
+      }
+    })
+    this._listRequests[tab] = { key: requestKey, promise }
+    return promise
+  },
+
+  refreshAfterReview() {
+    if (!this.data.user) return Promise.resolve()
+    require('../../utils/admin-todos.js').invalidate()
+    this._todoVersion = (this._todoVersion || 0) + 1
+    this._todoRequest = null
+    Object.keys(this._listVersions || {}).forEach(tab => { this._listVersions[tab]++ })
+    this._listRequests = {}
+    this.setData({ listReady: {}, listLoading: {} })
+    return this.refreshDashboard()
+  },
+
+  toggleCreateMatch() {
+    const showCreateMatch = !this.data.showCreateMatch
+    this.setData({ showCreateMatch }, () => {
+      if (showCreateMatch && wx.pageScrollTo) wx.pageScrollTo({ selector: '#create-match-form', duration: 240 })
+    })
+  },
+
+  goChampion(e) {
+    if (!this.data.user || this.data.user.role !== 'admin') return
+    const id = e.currentTarget.dataset.id
+    const match = this.data.matches.find(item => item.id == id)
+    if (!match || match.status !== 'finished') return
+    wx.navigateTo({ url: '/pages/admin/champion/champion?matchId=' + match.id })
+  },
+
+  openHonors() {
+    if (!this.data.user || this.data.user.role !== 'admin') return
+    this.setData({ tab: 'matches' })
+    wx.showToast({ title: '请在已结束赛事中选择「补录冠军」', icon: 'none' })
+    return this.loadActiveTab()
   },
 
   // 统一错误提示：toast 会截断长文本，改用弹窗完整显示
@@ -91,14 +223,9 @@ Page({
     await this.loadUsers(this.data.userKeyword)
   },
 
-  async loadUsers(keyword) {
-    try {
-      const data = await api.adminListUsers(keyword)
-      const users = (data || []).map(u => Object.assign({}, u, { display_rank: rankDisplay(u.rank) }))
-      this.setData({ users })
-    } catch (err) {
-      this.showErr(err, '加载用户失败')
-    }
+  loadUsers(keyword) {
+    return this.loadList('users', () => api.adminListUsers(keyword), 'users', data =>
+      data.map(u => Object.assign({}, u, { display_rank: rankDisplay(u.rank) })), keyword || '')
   },
 
   // 点击用户卡片看详情
@@ -151,7 +278,7 @@ Page({
         try {
           await api.adminUpdateUser(uid, { student_id: res.content, is_verified: true })
           wx.showToast({ title: '已设置并认证', icon: 'success' })
-          await this.loadUsers(this.data.userKeyword)
+          await this.refreshAfterReview()
         } catch (err) {
           this.showErr(err, '设置失败')
         }
@@ -183,7 +310,7 @@ Page({
               try {
                 await api.adminUpdateUser(uid, { rank: 'S' + stars })
                 wx.showToast({ title: '段位已更新，水平分已同步', icon: 'success' })
-                await this.loadUsers(this.data.userKeyword)
+                await this.refreshAfterReview()
               } catch (err) {
                 this.showErr(err, '设置失败')
               }
@@ -194,7 +321,7 @@ Page({
           try {
             await api.adminUpdateUser(uid, { rank: 'D' })
             wx.showToast({ title: '段位已更新，水平分已同步', icon: 'success' })
-            await this.loadUsers(this.data.userKeyword)
+            await this.refreshAfterReview()
           } catch (err) {
             this.showErr(err, '设置失败')
           }
@@ -207,7 +334,7 @@ Page({
               try {
                 await api.adminUpdateUser(uid, { rank: subs[r2.tapIndex] })
                 wx.showToast({ title: '段位已更新，水平分已同步', icon: 'success' })
-                await this.loadUsers(this.data.userKeyword)
+                await this.refreshAfterReview()
               } catch (err) {
                 this.showErr(err, '设置失败')
               }
@@ -220,6 +347,7 @@ Page({
 
   // 修改用户权限
   setRole(e) {
+    if (!this.data.user || this.data.user.role !== 'admin') return
     const uid = e.currentTarget.dataset.id
     wx.showActionSheet({
       itemList: ['设为普通用户', '设为审核员', '设为管理员'],
@@ -228,7 +356,7 @@ Page({
         try {
           await api.adminUpdateRole(uid, roles[res.tapIndex])
           wx.showToast({ title: '权限已更新', icon: 'success' })
-          await this.loadUsers(this.data.userKeyword)
+          await this.refreshAfterReview()
         } catch (err) {
           this.showErr(err, '设置失败')
         }
@@ -246,7 +374,7 @@ Page({
         try {
           await api.adminUpdateUser(uid, { identity })
           wx.showToast({ title: '身份已更新', icon: 'success' })
-          await this.loadUsers(this.data.userKeyword)
+          await this.refreshAfterReview()
         } catch (err) {
           this.showErr(err, '设置失败')
         }
@@ -255,9 +383,8 @@ Page({
   },
 
   // ===== 认证审核 =====
-  async loadVerifyList() {
-    try {
-      const data = await api.getVerifyList()
+  loadVerifyList() {
+    return this.loadList('verify', () => api.getVerifyList(), 'verifyUsers', data => {
       const AI_MAP = {
         auto_pass: { text: '自动通过', cls: 'ai-pass' },
         auto_reject: { text: '自动驳回', cls: 'ai-reject' },
@@ -275,10 +402,8 @@ Page({
             ? Math.round(u.ai_review_confidence * 100) + '%' : ''
         })
       })
-      this.setData({ verifyUsers: list })
-    } catch (err) {
-      this.setData({ verifyUsers: [] })
-    }
+      return list
+    })
   },
 
   // 点击截图看大图
@@ -293,8 +418,7 @@ Page({
     try {
       await api.adminUpdateUser(id, { is_verified: true })
       wx.showToast({ title: '已认证通过', icon: 'success' })
-      await this.loadVerifyList()
-      await this.loadUsers(this.data.userKeyword)
+      await this.refreshAfterReview()
     } catch (err) {
       this.showErr(err, '操作失败')
     }
@@ -313,8 +437,7 @@ Page({
         try {
           await api.adminUpdateUser(id, { is_verified: false, verify_image: '', verify_reject_reason: reason || '' })
           wx.showToast({ title: '已驳回', icon: 'none' })
-          await this.loadVerifyList()
-          await this.loadUsers(this.data.userKeyword)
+          await this.refreshAfterReview()
         } catch (err) {
           this.showErr(err, '操作失败')
         }
@@ -323,9 +446,8 @@ Page({
   },
 
   // ===== 段位更新申请 =====
-  async loadRankApplications() {
-    try {
-      const data = await api.getRankApplications()
+  loadRankApplications() {
+    return this.loadList('rankapps', () => api.getRankApplications(), 'rankApplications', data => {
       const list = (data || []).map(a => Object.assign({}, a, {
         rank_image_full: a.rank_image
           ? (a.rank_image.startsWith('http') ? a.rank_image : api.BASE + a.rank_image)
@@ -333,10 +455,8 @@ Page({
         ai_conf_text: (a.ai_confidence != null) ? Math.round(a.ai_confidence * 100) + '%' : '',
         display_ai_rank: a.ai_rank ? rankDisplay(a.ai_rank) : '-'
       }))
-      this.setData({ rankApplications: list })
-    } catch (err) {
-      this.setData({ rankApplications: [] })
-    }
+      return list
+    })
   },
 
   // 预览段位截图
@@ -361,8 +481,7 @@ Page({
         try {
           await api.approveRankApplication(id, rank)
           wx.showToast({ title: '已通过，段位已更新', icon: 'success' })
-          await this.loadRankApplications()
-          await this.loadUsers(this.data.userKeyword)
+          await this.refreshAfterReview()
         } catch (err) {
           this.showErr(err, '操作失败')
         }
@@ -383,7 +502,7 @@ Page({
         try {
           await api.rejectRankApplication(id, reason)
           wx.showToast({ title: '已驳回', icon: 'none' })
-          await this.loadRankApplications()
+          await this.refreshAfterReview()
         } catch (err) {
           this.showErr(err, '操作失败')
         }
@@ -392,14 +511,9 @@ Page({
   },
 
   // ===== 队伍管理 =====
-  async loadTeams() {
-    try {
-      const data = await api.getTeams()
-      const pendingTeamCount = (data || []).filter(t => t.status === 'pending').length
-      this.setData({ teams: data || [], pendingTeamCount })
-    } catch (err) {
-      this.setData({ teams: [], pendingTeamCount: 0 })
-    }
+  loadTeams() {
+    return this.loadList('teams', () => api.getAdminTeams(), 'teams', data =>
+      data.slice().sort((a, b) => (b.status === 'pending') - (a.status === 'pending')))
   },
 
   async approveTeam(e) {
@@ -407,7 +521,7 @@ Page({
     try {
       await api.approveTeam(id)
       wx.showToast({ title: '已通过', icon: 'success' })
-      await this.loadTeams()
+      await this.refreshAfterReview()
     } catch (err) {
       this.showErr(err, '审核失败')
     }
@@ -418,7 +532,7 @@ Page({
     try {
       await api.rejectTeam(id)
       wx.showToast({ title: '已驳回', icon: 'none' })
-      await this.loadTeams()
+      await this.refreshAfterReview()
     } catch (err) {
       this.showErr(err, '驳回失败')
     }
@@ -434,7 +548,7 @@ Page({
         try {
           await api.deleteTeam(id)
           wx.showToast({ title: '已删除', icon: 'success'})
-          await this.loadTeams()
+          await this.refreshAfterReview()
         } catch (err) {
           this.showErr(err, '删除失败')
         }
@@ -443,14 +557,9 @@ Page({
   },
 
   // ===== 赛事管理 =====
-  async loadMatches() {
-    try {
-      const data = await api.getMatches()
-      const matches = (data || []).map(m => Object.assign({}, m, { statusText: this.statusText(m.status) }))
-      this.setData({ matches })
-    } catch (err) {
-      this.setData({ matches: [] })
-    }
+  loadMatches() {
+    return this.loadList('matches', () => api.getMatches(), 'matches', data =>
+      data.map(m => Object.assign({}, m, { statusText: this.statusText(m.status) })))
   },
 
   // 创建赛事表单
@@ -472,19 +581,57 @@ Page({
     this.setData({ 'newMatch.match_type': e.currentTarget.dataset.type })
   },
 
+  onRegistrationInput(e) {
+    const field = e.currentTarget.dataset.field
+    if (['registrationStartDate', 'registrationStartTime', 'registrationEndDate', 'registrationEndTime'].indexOf(field) >= 0) {
+      this.setData({ [field]: e.detail.value })
+    }
+  },
+  clearRegistrationLimit(e) {
+    const side = e.currentTarget.dataset.side
+    if (side === 'start') this.setData({ registrationStartDate: '', registrationStartTime: '' })
+    if (side === 'end') this.setData({ registrationEndDate: '', registrationEndTime: '' })
+  },
+
+  // 日期选择器提供北京时间文本，不转换成设备时区或 UTC。
+  registrationPayload() {
+    const d = this.data
+    if (!!d.registrationStartDate !== !!d.registrationStartTime || !!d.registrationEndDate !== !!d.registrationEndTime) {
+      wx.showToast({ title: '请补全日期和时间，或清除该限制', icon: 'none' })
+      return null
+    }
+    const start = d.registrationStartDate ? d.registrationStartDate + 'T' + d.registrationStartTime + ':00' : null
+    const end = d.registrationEndDate ? d.registrationEndDate + 'T' + d.registrationEndTime + ':00' : null
+    if (start && end && start >= end) {
+      wx.showToast({ title: '报名开始时间需早于截止时间', icon: 'none' })
+      return null
+    }
+    return { register_start: start, register_end: end }
+  },
+
   async createMatch() {
+    if (this.data.creatingMatch) return
     const m = this.data.newMatch
     if (!m.name) {
       wx.showToast({ title: '请输入赛事名', icon: 'none' })
       return
     }
+    const registration = this.registrationPayload()
+    if (!registration) return
+    this.setData({ creatingMatch: true })
     try {
-      await api.createMatch(m)
+      await api.createMatch(Object.assign({}, m, registration))
       wx.showToast({ title: '创建成功', icon: 'success' })
-      this.setData({ newMatch: { name: '', max_teams: 16, team_size: 5, match_type: 'major', description: '' } })
+      this.setData({
+        showCreateMatch: false,
+        newMatch: { name: '', max_teams: 16, team_size: 5, match_type: 'major', description: '' },
+        registrationStartDate: '', registrationStartTime: '', registrationEndDate: '', registrationEndTime: ''
+      })
       await this.loadMatches()
     } catch (err) {
       this.showErr(err, '创建失败')
+    } finally {
+      this.setData({ creatingMatch: false })
     }
   },
 
@@ -500,6 +647,7 @@ Page({
           await api.updateMatchStatus(id, statuses[res.tapIndex])
           wx.showToast({ title: `「${name}」状态已更新`, icon: 'success' })
           await this.loadMatches()
+          await this.refreshAfterReview()
         } catch (err) {
           this.showErr(err, '更新失败')
         }

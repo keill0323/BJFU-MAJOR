@@ -2,11 +2,14 @@ const api = require('../../utils/api.js')
 
 Page({
   data: {
+    token: '',
     isManager: false
   },
 
   onShow() {
-    if (wx.getStorageSync('token')) this.loadUser()
+    const token = wx.getStorageSync('token') || ''
+    this.setData({ token, isManager: false })
+    if (token) this.loadUser()
   },
 
   async loadUser() {
@@ -25,6 +28,8 @@ Page({
   goRules() {
     wx.navigateTo({ url: '/pages/rules/rules' })
   },
+
+  goLogin() { wx.reLaunch({ url: '/pages/login/login' }) },
 
   logout() {
     wx.showModal({

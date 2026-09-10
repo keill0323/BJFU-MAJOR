@@ -1,36 +1,39 @@
-<!-- 顶部栏（自定义导航）：左上角头像 + 标题 -->
 <view class="topbar" style="padding-top: {{statusBarHeight}}px">
-  <view class="topbar-inner">
-    <view class="avatar-btn" bindtap="openDrawer">
-      <image class="avatar-img" src="{{user.avatar_full || '/images/icons/gamepad.svg'}}"/>
-    </view>
-    <text class="topbar-title">{{title}}</text>
-    <view class="topbar-capsule"></view>
+  <view class="topbar-inner {{currentRoute && currentRoute !== '/pages/index/index' ? 'topbar-secondary' : ''}}" style="height: {{navHeight}}px; padding-right: {{capsuleSpace}}px">
+    <block wx:if="{{currentRoute && currentRoute !== '/pages/index/index'}}">
+      <button class="topbar-return" bindtap="goEvents" hover-class="topbar-return-pressed" aria-label="返回赛事中心"><text class="topbar-return-arrow" aria-hidden="true">‹</text><text>返回赛事</text></button>
+      <view class="topbar-copy"><text class="topbar-title">{{title}}</text></view>
+      <view class="menu-button" bindtap="openDrawer" aria-role="button" aria-label="{{adminTodoCount > 0 ? '打开导航菜单，有管理待办' : '打开导航菜单'}}"><view></view><view></view><text wx:if="{{isManager && (adminTodoCount > 0 || adminTodoError)}}" class="menu-dot"></text></view>
+    </block>
+    <block wx:else>
+      <view class="menu-button" bindtap="openDrawer" aria-role="button" aria-label="{{adminTodoCount > 0 ? '打开导航菜单，有管理待办' : '打开导航菜单'}}"><view></view><view></view><text wx:if="{{isManager && (adminTodoCount > 0 || adminTodoError)}}" class="menu-dot"></text></view>
+      <view class="topbar-copy"><text class="topbar-title">{{title}}</text><text class="topbar-subtitle">北京林业大学 · CS2 校赛</text></view>
+    </block>
   </view>
 </view>
-
-<!-- 遮罩 -->
-<view wx:if="{{open}}" class="drawer-mask" bindtap="closeDrawer"></view>
-
-<!-- 左侧抽屉 -->
+<view wx:if="{{isManager && showAdminNotice && (adminTodoCount > 0 || adminTodoError)}}" class="admin-notice" bindtap="goAdmin" aria-role="button" aria-label="管理待办，进入处理">
+  <view class="admin-notice-copy"><view class="admin-notice-heading"><text>管理待办</text><text class="admin-count">{{adminTodoError ? '待更新' : adminTodoBadge + ' 项待处理'}}</text></view><text class="admin-notice-sub">{{adminTodoSummary}}</text></view>
+  <text class="admin-notice-action">去处理 ›</text>
+</view>
+<view wx:if="{{open}}" class="drawer-mask" bindtap="closeDrawer" catchtouchmove="preventMove"></view>
 <view class="drawer {{open ? 'drawer-open' : ''}}">
-  <view class="drawer-head" style="padding-top: {{statusBarHeight}}px">
-    <image class="drawer-avatar" src="{{user.avatar_full || '/images/icons/gamepad.svg'}}"/>
-    <text class="drawer-name">{{user.nickname || '未登录'}}</text>
-    <text class="drawer-sub">ID {{user.id || '-'}} · {{user.display_rank || '暂无段位'}}</text>
+  <view class="drawer-head" style="padding-top: {{statusBarHeight + 20}}px">
+    <view class="drawer-brand"><text>BJFU MAJOR</text><view class="drawer-close" bindtap="closeDrawer" aria-label="关闭导航">×</view></view>
+    <image wx:if="{{user.avatar_full}}" class="drawer-avatar" src="{{user.avatar_full}}" mode="aspectFill"/>
+    <view wx:else class="drawer-avatar drawer-placeholder"><image src="/images/brand/forest-crest.svg" mode="aspectFit"/></view>
+    <text class="drawer-name">{{user.nickname || '欢迎来到北林主场'}}</text>
+    <text class="drawer-sub">{{user ? 'ID ' + user.id + ' · ' + (user.display_rank || '段位待认证') : '登录后，和队友一起上场'}}</text>
   </view>
   <scroll-view scroll-y class="drawer-body">
-    <view class="drawer-section">主导航</view>
-    <view class="drawer-item" bindtap="go" data-url="/pages/index/index">赛事中心</view>
-    <view class="drawer-item" bindtap="go" data-url="/pages/team/team">我的队伍</view>
-    <view class="drawer-item" bindtap="go" data-url="/pages/teams/teams">所有队伍</view>
-    <view class="drawer-item" bindtap="go" data-url="/pages/profile/profile">个人资料</view>
-    <view class="drawer-section">更多</view>
-    <view class="drawer-item" bindtap="go" data-url="/pages/messages/messages">消息</view>
-    <view class="drawer-item" bindtap="go" data-url="/pages/verify/verify">认证</view>
-    <view class="drawer-item" bindtap="go" data-url="/pages/settings/settings">设置</view>
-    <view class="drawer-item" bindtap="go" data-url="/pages/rules/rules">赛事规则</view>
-    <view wx:if="{{isManager}}" class="drawer-item" bindtap="go" data-url="/pages/admin/admin">管理后台</view>
-    <view class="drawer-item danger" bindtap="go" data-url="/pages/login/login">退出登录</view>
+    <view class="drawer-section">我的主场</view>
+    <view wx:for="{{navigation}}" wx:key="url" class="drawer-item {{currentRoute === item.url ? 'selected' : ''}}" bindtap="go" data-url="{{item.url}}"><image src="/images/brand/{{item.icon}}.svg"/><text>{{item.title}}</text><text class="drawer-arrow">›</text></view>
+    <view class="drawer-section">服务与支持</view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/messages/messages"><image src="/images/brand/mail.svg"/><text>消息</text></view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/verify/verify"><image src="/images/brand/shield.svg"/><text>认证中心</text></view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/settings/settings"><image src="/images/icons/settings.svg"/><text>设置</text></view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/rules/rules"><image src="/images/icons/swords.svg"/><text>赛事规则</text></view>
+    <view wx:if="{{isManager}}" class="drawer-item" bindtap="goAdmin"><image src="/images/icons/settings.svg"/><text>管理后台</text><text wx:if="{{adminTodoCount > 0 || adminTodoError}}" class="drawer-todo-badge">{{adminTodoError ? '待更新' : adminTodoBadge}}</text></view>
+    <view class="drawer-item account-action {{user ? 'danger' : ''}}" bindtap="go" data-url="/pages/login/login">{{user ? '退出登录' : '登录 / 注册'}}<text>↗</text></view>
+    <text class="drawer-footer">让热爱上场。</text>
   </scroll-view>
 </view>

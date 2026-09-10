@@ -82,6 +82,7 @@ class TalentMarketItem(BaseModel):
     game_id: Optional[str] = None
     individual_rating: Optional[int] = None
     rank: Optional[str] = None
+    user_description: Optional[str] = None   # 个人介绍（人才市场自由人详情）
 
     class Config:
         from_attributes = True

@@ -9,6 +9,10 @@ const { rankDisplay } = require('../../utils/rank.js')
 
 Page({
   data: {
+  loading: true,
+    loadFailed: false,
+    loggedIn: false,
+    rankedMemberCount: 0,
     myTeam: null,       // 我的队伍（null=没队伍）
     teamName: '',       // 创建队伍输入
     isCaptain: false,   // 我是不是队长
@@ -18,6 +22,8 @@ Page({
     applyMessage: '',   // 申请留言
     // 人才市场
     showMarket: false,  // 是否显示人才市场
+    marketLoading: false,
+    marketError: false,
     marketMatches: [],  // 可选赛事列表
     freePlayers: [],    // 当前选中的赛事的自由人
     selectedMatchId: 0, // 选中的赛事id
@@ -44,13 +50,18 @@ Page({
   // 下拉刷新
   async onPullDownRefresh() {
     await this.refreshAll()
-    await this.loadInvitations()
+    if (this.data.loggedIn) await this.loadInvitations()
     wx.stopPullDownRefresh()
   },
 
   // 刷新所有数据
   async refreshAll() {
     const token = wx.getStorageSync('token')
+    this.setData({ loggedIn: !!token, loading: true, loadFailed: false })
+    if (!token) {
+      this.setData({ myTeam: null, members: [], isCaptain: false, rankedMemberCount: 0, applications: [], loading: false })
+      return
+    }
     // 已登录才拉我的队伍；未登录允许先浏览队伍列表，不强制登录
     if (token) {
       await this.loadMyTeam()
@@ -58,6 +69,7 @@ Page({
     if (!this.data.myTeam) {
       await this.loadTeams()
     }
+    this.setData({ loading: false })
   },
 
   // 分享队伍（右上角转发 + 分享按钮都会触发）
@@ -87,29 +99,42 @@ Page({
           team.logo_full = team.logo || ''
         }
         team.logo_initial = team.name ? team.name.trim().charAt(0) : '?'
+        const status = String(team.status || '').toLowerCase()
+        team.status_text = { approved: '队伍已通过审核', pending: '队伍待审核', rejected: '队伍审核未通过' }[status] || '审核状态待确认'
+        team.status_class = status
+        // 详情接口不返回总评分，按服务端同一规则汇总真实成员评分。
+        team.display_rating = (team.members || []).map(m => Number(m.rating) || 0).sort((a, b) => b - a).slice(0, 5).reduce((sum, rating) => sum + rating, 0)
+        team.rating_tier = team.display_rating >= 400 ? 'S' : team.display_rating >= 300 ? 'A' : team.display_rating >= 200 ? 'B' : team.display_rating >= 100 ? 'C' : team.display_rating > 0 ? 'D' : '未定'
       }
-      this.setData({ myTeam: team || null })
+      this.setData({ myTeam: team || null, loadFailed: false })
       if (team) {
         // 用 /me 接口拿当前用户 id（比解析 JWT 更可靠）
         const me = await api.getMe()
         const userId = me ? me.id : null
-        const members = (team.members || []).map(m => {
-          const item = Object.assign({}, m, { display_rank: rankDisplay(m.rank) })
-          if (item.avatar && !item.avatar.startsWith('http')) {
-            item.avatar_full = api.BASE + item.avatar
-          }
+        const members = (team.members || []).map((m, index) => {
+          const item = Object.assign({}, m, {
+            display_rank: rankDisplay(m.rank),
+            display_name: m.nickname || m.game_id || '玩家' + m.user_id,
+            score_text: m.rating == null ? '—' : m.rating,
+            initial: (m.nickname || m.game_id || '玩家').charAt(0),
+            roster_no: String(index + 1).padStart(2, '0')
+          })
+          item.avatar_full = item.avatar ? (item.avatar.startsWith('http') ? item.avatar : api.BASE + item.avatar) : ''
           return item
         })
         this.setData({
           isCaptain: team.captain_id === userId,
-          members
+          members,
+          rankedMemberCount: members.filter(m => !!m.rank).length
         })
         if (team.captain_id === userId) {
           await this.loadApplications(team.id)
         }
+      } else {
+        this.setData({ members: [], isCaptain: false, rankedMemberCount: 0, applications: [] })
       }
     } catch (err) {
-      this.setData({ myTeam: null })
+      this.setData({ myTeam: null, members: [], isCaptain: false, rankedMemberCount: 0, applications: [], loadFailed: true })
     }
   },
 
@@ -137,7 +162,7 @@ Page({
 
   // 打开人才市场：拉取所有赛事，默认选第一个
   async openMarket() {
-    this.setData({ showMarket: true })
+    this.setData({ showMarket: true, marketLoading: true, marketError: false, freePlayers: [] })
     try {
       const matches = await api.getMatches()
       this.setData({ marketMatches: matches || [] })
@@ -146,7 +171,9 @@ Page({
         await this.loadFreePlayers(matches[0].id)
       }
     } catch (err) {
-      this.setData({ marketMatches: [] })
+      this.setData({ marketMatches: [], marketError: true })
+    } finally {
+      this.setData({ marketLoading: false })
     }
   },
 
@@ -159,12 +186,15 @@ Page({
 
   // 加载某赛事的自由人（已报名但无队伍）
   async loadFreePlayers(matchId) {
+    this.setData({ marketLoading: true, marketError: false, freePlayers: [] })
     try {
       const data = await api.getTalentMarket(matchId)
-      const players = (data || []).map(p => Object.assign({}, p, { display_rank: rankDisplay(p.rank) }))
+      const players = (data || []).map(p => Object.assign({}, p, { display_rank: rankDisplay(p.rank), initial: (p.nickname || p.game_id || '玩家').charAt(0), score_text: p.individual_rating == null ? '—' : p.individual_rating }))
       this.setData({ freePlayers: players })
     } catch (err) {
-      this.setData({ freePlayers: [] })
+      this.setData({ freePlayers: [], marketError: true })
+    } finally {
+      this.setData({ marketLoading: false })
     }
   },
 
@@ -214,6 +244,11 @@ Page({
   closeMarket() {
     this.setData({ showMarket: false })
   },
+
+  noop() {},
+  goTeams() { wx.reLaunch({ url: '/pages/teams/teams' }) },
+  goMatches() { wx.reLaunch({ url: '/pages/index/index' }) },
+  goLogin() { wx.navigateTo({ url: '/pages/login/login' }) },
 
   // 加载全部队伍（没队伍时浏览用）
   async loadTeams() {
@@ -397,28 +432,19 @@ Page({
     }
   },
 
-  // 拉取信息 tab 数据（入队邀请 + 段位申请）+ 更新 tab 红点
+  // 拉取信息 tab 数据（入队邀请 + 段位申请）
   async loadInvitations() {
-    let hasInvite = false
-    let hasRankApp = false
     try {
       const invites = await api.getMyInvitations()
       this.setData({ invitations: invites || [] })
-      hasInvite = (invites || []).length > 0
     } catch (err) {
       this.setData({ invitations: [] })
     }
     try {
       const apps = await api.getMyRankApplications()
       this.setData({ rankApplications: apps || [] })
-      hasRankApp = (apps || []).some(a => a.status === 'pending' || a.status === 'rejected')
     } catch (err) {
       this.setData({ rankApplications: [] })
-    }
-    if (hasInvite || hasRankApp) {
-      wx.showTabBarRedDot({ index: 1 })
-    } else {
-      wx.hideTabBarRedDot({ index: 1 })
     }
   },
 

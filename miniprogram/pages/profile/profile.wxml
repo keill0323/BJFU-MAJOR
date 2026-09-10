@@ -1,86 +1,64 @@
-<!-- 个人资料 -->
 <view class="page">
-  <nav-drawer title="个人资料"></nav-drawer>
-
-  <view wx:if="{{!token}}" class="card">
-    <text class="empty-text">请先登录</text>
-    <view class="btn-primary" bindtap="logout" style="margin-top:30rpx">去登录</view>
+  <nav-drawer title="个人中心" show-admin-notice="{{true}}"></nav-drawer>
+  <view wx:if="{{!token}}" class="card guest-card">
+    <view class="guest-avatar"><image src="/images/icons/gamepad.svg"/></view>
+    <text class="guest-title">这里，记录你的校赛身份</text>
+    <text class="guest-copy">登录后管理个人资料、认证信息与队伍。</text>
+    <view class="btn-primary" bindtap="goLogin">微信登录</view>
   </view>
-
-  <view wx:else>
-    <!-- 用户卡 -->
-    <view wx:if="{{user}}" class="profile-hero">
-      <view class="avatar"><image class="avatar-img" src="{{user.avatar_full || '/images/icons/gamepad.svg'}}"/></view>
-      <view class="hero-info">
-        <text class="hero-name">{{user.nickname || '未设置昵称'}}</text>
-        <text class="hero-id">ID {{user.id}} · {{user.display_rank || '暂无段位'}}</text>
-        <view class="hero-badges">
-          <text class="hero-badge {{user.is_verified ? 'hero-badge-ok' : 'hero-badge-no'}}">{{user.is_verified ? '已认证' : '未认证'}}</text>
-          <text class="hero-badge hero-badge-role">{{user.role === 'admin' ? '管理员' : user.role === 'reviewer' ? '审核员' : '普通用户'}}</text>
-          <text class="hero-badge hero-badge-id">{{user.identity === 'new_student' ? '新生' : user.identity === 'senior' ? '老登' : '未设身份'}}</text>
+  <view wx:elif="{{!user}}" class="card guest-card">
+    <text class="guest-title">{{loadFailed ? '资料暂未加载' : '正在加载个人资料'}}</text>
+    <text class="guest-copy">{{loadFailed ? '请检查网络连接后重试。' : '稍等一下，你的资料即将就绪。'}}</text>
+    <view wx:if="{{loadFailed}}" class="btn-outline" bindtap="loadUser">重新加载</view>
+  </view>
+  <block wx:else>
+    <view class="profile-hero">
+      <view class="profile-hero-top"><text class="eyebrow">YOUR PLAYER CARD</text><text class="player-id">NO. {{user.id}}</text></view>
+      <view class="profile-identity">
+        <view class="avatar"><image class="avatar-img" src="{{user.avatar_full || '/images/icons/gamepad.svg'}}" mode="aspectFill"/></view>
+        <view class="hero-info">
+          <text class="hero-name">{{user.nickname || '未设置昵称'}}</text>
+          <text class="hero-game">{{user.game_id || '添加游戏 ID，让队友找到你'}}</text>
+          <view class="hero-badges">
+            <text class="hero-badge {{user.is_verified ? 'hero-badge-ok' : 'hero-badge-pending'}}">{{user.is_verified ? '在校已认证' : '在校待认证'}}</text>
+            <text class="hero-badge">{{user.identity === 'new_student' ? '新生' : user.identity === 'senior' ? '老生' : '身份待设置'}}</text>
+          </view>
         </view>
+      </view>
+      <view class="hero-stats">
+        <view class="hero-stat profile-rank-stat"><image class="profile-rank-icon" src="{{user.rank_badge.icon}}" mode="aspectFit" aria-label="{{user.rank_badge.label}}"/><view class="profile-rank-copy"><text class="stat-label">认证段位</text><text class="stat-value">{{user.display_rank || '待认证'}}</text></view></view>
+        <view class="hero-stat"><text class="stat-label">个人评分</text><view><text class="stat-score">{{user.individual_rating || 0}}</text><text class="stat-unit"> / 100</text></view></view>
       </view>
     </view>
 
-    <!-- 个人信息 -->
-    <view class="card">
-      <text class="section-title">个人信息</text>
+    <view class="quick-links">
+      <view class="quick-link" bindtap="goTeam"><image src="/images/brand/team.svg"/><text>我的队伍</text></view>
+      <view class="quick-link" bindtap="goVerify"><image src="/images/brand/shield.svg"/><text>参赛认证</text></view>
+      <view class="quick-link" bindtap="goMessages"><image src="/images/brand/mail.svg"/><text>我的消息</text></view>
+    </view>
 
-      <!-- 基础信息 -->
-      <view wx:if="{{!editMode && user}}" class="info-group">
-        <text class="info-group-title">基础信息</text>
-        <view class="info-grid">
-          <view class="info-cell">
-            <text class="info-label">用户ID</text>
-            <text class="info-value">{{user.id}}</text>
-          </view>
-          <view class="info-cell">
-            <text class="info-label">昵称</text>
-            <text class="info-value">{{user.nickname || '未设置'}}</text>
-          </view>
-          <view class="info-cell">
-            <text class="info-label">游戏ID</text>
-            <text class="info-value">{{user.game_id || '未设置'}}</text>
-          </view>
-          <view class="info-cell">
-            <text class="info-label">学号</text>
-            <text class="info-value">{{user.student_id || '未认证'}}</text>
-          </view>
-        </view>
-      </view>
-
-      <!-- 账户 -->
-      <view wx:if="{{!editMode && user}}" class="info-group">
-        <text class="info-group-title">账户</text>
-        <view class="info-grid">
-          <view class="info-cell">
-            <text class="info-label">认证状态</text>
-            <text class="info-value {{user.is_verified ? 'text-green' : 'text-red'}}">{{user.is_verified ? '已认证' : '未认证'}}</text>
-          </view>
-          <view class="info-cell">
-            <text class="info-label">段位</text>
-            <text class="info-value">{{user.display_rank || '未设置'}}</text>
-          </view>
-          <view class="info-cell">
-            <text class="info-label">个人评分</text>
-            <text class="info-value">{{user.individual_rating || 0}}</text>
-          </view>
-          <view class="info-cell">
-            <text class="info-label">身份</text>
-            <text class="info-value">{{user.role === 'admin' ? '管理员' : user.role === 'reviewer' ? '审核员' : '普通用户'}}</text>
-          </view>
-        </view>
-      </view>
-
-      <view wx:if="{{!editMode && user}}" class="btn-outline edit-btn" bindtap="enableEdit">修改资料</view>
-
-      <!-- 编辑态 -->
-      <view wx:if="{{editMode}}">
-        <button class="btn-outline edit-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">更换头像</button>
-        <input class="input" placeholder="昵称" value="{{nickname}}" bindinput="onNickInput"/>
-        <input class="input" placeholder="游戏ID" value="{{gameId}}" bindinput="onGameIdInput"/>
-        <view class="btn-primary" bindtap="saveProfile">保存</view>
+    <view class="card info-card">
+      <view class="section-head"><view><text class="eyebrow">PLAYER INFO</text><text class="section-title">个人资料</text></view><text wx:if="{{!editMode}}" class="text-action" bindtap="enableEdit">编辑资料</text><text wx:else class="text-action muted" bindtap="cancelEdit">取消</text></view>
+      <block wx:if="{{!editMode}}">
+        <view class="info-row"><text class="info-label">昵称</text><text class="info-value">{{user.nickname || '未设置'}}</text></view>
+        <view class="info-row"><text class="info-label">游戏 ID</text><text class="info-value">{{user.game_id || '未设置'}}</text></view>
+        <view class="info-row"><text class="info-label">学号</text><text class="info-value">{{user.student_id || '待在校认证'}}</text></view>
+        <view class="info-row"><text class="info-label">账户角色</text><text class="info-value">{{user.role === 'admin' ? '管理员' : user.role === 'reviewer' ? '审核员' : '普通用户'}}</text></view>
+      </block>
+      <view wx:else class="edit-form">
+        <button class="avatar-button" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" disabled="{{avatarUploading || saving}}"><image src="{{user.avatar_full || '/images/icons/gamepad.svg'}}" mode="aspectFill"/><text>{{avatarUploading ? '头像上传中…' : '更换头像'}}</text><text class="avatar-button-arrow">↗</text></button>
+        <text class="field-label">昵称</text>
+        <input class="input" placeholder="填写你的昵称" value="{{nickname}}" bindinput="onNickInput" disabled="{{saving}}"/>
+        <text class="field-label">游戏 ID</text>
+        <input class="input" placeholder="填写你的游戏 ID" value="{{gameId}}" bindinput="onGameIdInput" disabled="{{saving}}"/>
+        <view class="btn-primary {{saving ? 'is-busy' : ''}}" bindtap="saveProfile">{{saving ? '保存中…' : '保存资料'}}</view>
       </view>
     </view>
-  </view>
+    <view class="card account-menu">
+      <view wx:if="{{isManager}}" class="menu-entry" bindtap="goAdmin"><view class="menu-name"><image src="/images/icons/settings.svg"/><text>赛事管理</text></view><image class="menu-arrow" src="/images/icons/chevron-right.svg"/></view>
+      <view class="menu-entry" bindtap="goRules"><view class="menu-name"><image src="/images/icons/check-circle.svg"/><text>参赛须知与隐私政策</text></view><image class="menu-arrow" src="/images/icons/chevron-right.svg"/></view>
+    </view>
+    <view class="logout-btn" bindtap="logout">退出登录</view>
+    <text class="page-footer">BJFU MAJOR · 为热爱，上场</text>
+  </block>
 </view>

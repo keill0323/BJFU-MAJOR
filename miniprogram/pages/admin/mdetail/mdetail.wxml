@@ -1,18 +1,23 @@
 <!-- 赛事详情页：赛事队伍 / 挑战者组 / 传奇组 / 淘汰赛 -->
+<event-return />
 <view class="page">
   <view wx:if="{{!match}}" class="empty">加载中...</view>
 
   <block wx:else>
     <!-- 赛事信息 -->
-    <view class="card">
+    <view class="card admin-hero">
+      <text class="admin-kicker">BJFU / TOURNAMENT MANAGEMENT</text>
       <view class="detail-header">
         <text class="section-title">{{match.name}}</text>
         <view class="header-actions">
-          <view class="btn-outline small-btn" bindtap="openWindowPanel">⏱ 时间窗口</view>
+          <view class="btn-primary small-btn" bindtap="openRegistrationPanel">报名时间</view>
+          <view class="btn-outline small-btn" bindtap="openWindowPanel">比赛排期范围</view>
           <view class="btn-outline small-btn" bindtap="exportAll">导出对阵</view>
         </view>
       </view>
-      <text class="team-meta">状态: {{match.statusText}} | 队伍: {{teams.length}}/{{match.max_teams}}</text>
+      <text class="team-meta">{{match.statusText}} · {{teams.length}} / {{match.max_teams || '不限'}} 支队伍</text>
+      <text class="team-meta registration-summary">报名时间（北京时间）<text class="registration-summary-value">{{registrationSummary}}</text></text>
+      <view wx:if="{{rosterLocked}}" class="roster-lock-note">已分组，参赛名单已锁定</view>
     </view>
 
     <!-- 阶段 tab -->
@@ -25,6 +30,18 @@
 
     <!-- ===== 赛事队伍 tab（队伍状态 + 队伍排名） ===== -->
     <view wx:if="{{tab === 'teams'}}">
+      <view wx:if="{{waitingTeams.length > 0}}" class="card waiting-card">
+        <view class="detail-header">
+          <text class="section-title">待分组 · {{waitingTeams.length}} 支</text>
+          <text class="tag tag-green">已通过报名</text>
+        </view>
+        <text class="team-meta">这些队伍已通过审核，等待分配种子和分组，尚未进入挑战者组比赛。</text>
+        <view wx:for="{{waitingTeams}}" wx:key="team_id" class="team-row" bindtap="showTeam" data-id="{{item.team_id}}">
+          <text class="team-name">{{item.team_name}}</text>
+          <text class="tag tag-blue">待分组</text>
+        </view>
+        <view wx:if="{{!rosterLocked}}" class="btn-outline grouping-entry" bindtap="promptGroup">{{groupingBusy ? '正在分组…' : '分配种子并分组'}}</view>
+      </view>
       <!-- 大区块1：队伍状态（分 tab：挑战者组/传奇组/淘汰赛） -->
       <view class="card">
         <text class="section-title">队伍状态（点击队伍查看历史对阵）</text>
@@ -65,10 +82,16 @@
             <text class="team-name">{{item.team_name}}</text>
           </view>
           <view class="detail-tags">
+            <!-- 报名审核状态（pending 显示通过按钮，审核链修复） -->
+            <text wx:if="{{item.registration_status === 'pending'}}" class="tag tag-orange">报名待审核</text>
+            <text wx:if="{{item.registration_status === 'approved'}}" class="tag tag-green">已通过</text>
+            <text wx:if="{{item.registration_status === 'rejected'}}" class="tag tag-red">已驳回</text>
             <text wx:if="{{item.ko_rank}}" class="tag {{item.ko_rank === '冠军' ? 'tag-orange' : item.ko_rank === '亚军' ? 'tag-green' : item.ko_rank === '四强' ? 'tag-blue' : 'tag-gray'}}">{{item.ko_rank}}</text>
-            <text class="tag {{item.stage_text === '已淘汰' ? 'tag-gray' : 'tag-green'}}">{{item.stage_text}}</text>
+            <text class="tag {{item.stage_text === '待分组' ? 'tag-blue' : item.stage_text === '已淘汰' ? 'tag-gray' : 'tag-green'}}">{{item.stage_text}}</text>
             <text class="tag tag-gray">{{item.wins}}胜{{item.losses}}负</text>
             <text class="tag tag-gray">净胜{{item.diff}}</text>
+            <view wx:if="{{item.registration_status === 'pending' && !rosterLocked}}" class="btn-primary small-btn"
+                  catchtap="approveTeamReg" data-id="{{item.team_id}}" data-name="{{item.team_name}}">通过报名</view>
           </view>
         </view>
       </view>
@@ -78,6 +101,7 @@
     <view wx:if="{{tab === 'challenger'}}">
       <view class="card">
         <text class="section-title">挑战者组队伍</text>
+        <view class="hint-bar">{{challengerFormatHint}}</view>
         <view wx:if="{{challengerTeams.length === 0}}" class="empty">暂无挑战者队伍</view>
         <view class="chip-wrap">
           <view wx:for="{{challengerTeams}}" wx:key="team_id" class="team-chip" bindtap="showTeam" data-id="{{item.team_id}}">
@@ -87,10 +111,10 @@
           </view>
         </view>
         <view class="op-btns">
-          <view class="btn-outline small-btn" bindtap="promptGroup">②分组(含种子)</view>
+          <view class="btn-outline small-btn" bindtap="promptGroup">{{groupingBusy ? '正在分组…' : '②分组(含种子)'}}</view>
           <view class="btn-outline small-btn" bindtap="generateAllMatches">③生成对阵</view>
           <view class="btn-primary small-btn" bindtap="finishGroup">④结束小组赛</view>
-          <view class="btn-primary small-btn" bindtap="finishPlayoff">⑤结束附加赛</view>
+          <view wx:if="{{canFinishPlayoff}}" class="btn-primary small-btn" bindtap="finishPlayoff">⑤结束附加赛</view>
         </view>
       </view>
 
@@ -102,7 +126,7 @@
         <swiper class="stage-swiper" current="{{challengerStage}}" bindchange="onChallengerSwiper">
           <swiper-item wx:for="{{challengerSwiper}}" wx:key="title">
             <!-- 小组赛：按 A/B/C 组分区 -->
-            <block wx:if="{{item.groups}}">
+            <block wx:if="{{item.type === 'group'}}">
               <scroll-view scroll-y class="stage-scroll">
                 <view wx:if="{{item.count === 0}}" class="empty">暂无对阵</view>
                 <view wx:for="{{item.groups}}" wx:for-item="gr" wx:for-index="gname" wx:key="gname">
@@ -130,6 +154,7 @@
             <!-- 附加赛：普通列表 -->
             <block wx:else>
               <scroll-view scroll-y class="stage-scroll">
+                <view wx:if="{{item.historyOnly}}" class="hint-bar">历史附加赛对阵，仅保留查看；当前赛制没有附加赛晋级操作。</view>
                 <view wx:if="{{item.rounds.length === 0}}" class="empty">暂无对阵</view>
                 <view wx:for="{{item.rounds}}" wx:key="id" wx:for-item="r" class="round-row">
                   <view class="versus">
@@ -145,7 +170,7 @@
                   </view>
                   <view class="detail-tags">
                     <text class="tag tag-blue">{{r.group_name}}</text>
-                    <view class="btn-outline small-btn" bindtap="openScore" data-id="{{r.id}}">录比分</view>
+                    <view wx:if="{{!item.historyOnly}}" class="btn-outline small-btn" bindtap="openScore" data-id="{{r.id}}">录比分</view>
                   </view>
                 </view>
               </scroll-view>
@@ -317,26 +342,60 @@
     </view>
   </view>
 
-  <!-- 时间窗口管理面板 -->
+  <!-- 报名时间管理，与比赛排期范围独立 -->
+  <view wx:if="{{showRegistrationPanel}}" class="mask" bindtap="closeRegistrationPanel">
+    <view class="history-panel registration-panel" catchtap="noop">
+      <view class="detail-header">
+        <text class="section-title">报名时间</text>
+        <image class="detail-close" src="/images/icons/x.svg" bindtap="closeRegistrationPanel"/>
+      </view>
+      <text class="team-meta">所有时间均为北京时间。留空表示该端不限制，可只设置开始或截止时间。</text>
+      <view class="registration-notice">此设置不会自动修改赛事状态。赛事处于「报名中」且满足时间范围时，用户才可报名。</view>
+      <text class="registration-label">开始报名</text>
+      <view class="registration-pickers">
+        <picker mode="date" disabled="{{registrationSaving}}" value="{{registrationStartDate}}" data-field="registrationStartDate" bindchange="onRegistrationInput"><view class="win-picker">{{registrationStartDate || '选择日期'}}</view></picker>
+        <picker mode="time" disabled="{{registrationSaving}}" value="{{registrationStartTime}}" data-field="registrationStartTime" bindchange="onRegistrationInput"><view class="win-picker">{{registrationStartTime || '选择时间'}}</view></picker>
+        <text class="registration-clear" bindtap="clearRegistrationLimit" data-side="start">清除</text>
+      </view>
+      <text class="registration-label">截止报名</text>
+      <view class="registration-pickers">
+        <picker mode="date" disabled="{{registrationSaving}}" value="{{registrationEndDate}}" data-field="registrationEndDate" bindchange="onRegistrationInput"><view class="win-picker">{{registrationEndDate || '选择日期'}}</view></picker>
+        <picker mode="time" disabled="{{registrationSaving}}" value="{{registrationEndTime}}" data-field="registrationEndTime" bindchange="onRegistrationInput"><view class="win-picker">{{registrationEndTime || '选择时间'}}</view></picker>
+        <text class="registration-clear" bindtap="clearRegistrationLimit" data-side="end">清除</text>
+      </view>
+      <text class="registration-clear clear-all" bindtap="clearRegistrationLimit" data-side="all">清除全部时间限制</text>
+      <view class="score-btns">
+        <button class="btn-outline" disabled="{{registrationSaving}}" bindtap="closeRegistrationPanel">取消</button>
+        <button class="btn-primary" loading="{{registrationSaving}}" disabled="{{registrationSaving}}" bindtap="saveRegistrationWindow">{{registrationSaving ? '保存中' : '保存报名时间'}}</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 比赛排期范围管理面板 -->
   <view wx:if="{{showWindowPanel}}" class="mask" bindtap="closeWindowPanel">
     <view class="history-panel" catchtap="noop">
       <view class="detail-header">
-        <text class="section-title">时间窗口设置</text>
+        <text class="section-title">比赛排期范围</text>
         <image class="detail-close" src="/images/icons/x.svg" bindtap="closeWindowPanel"/>
       </view>
-      <text class="team-meta">为各阶段设置限定时段，双方队长需在该时段内约定比赛时间</text>
+      <text class="team-meta">限定双方队长可协商的比赛时间范围（北京时间），与报名开始、截止时间分别设置。</text>
 
-      <view wx:if="{{stageWindows.length === 0}}" class="empty">暂无对阵阶段（请先生成对阵）</view>
-      <view wx:for="{{stageWindows}}" wx:key="group_name" class="history-row">
-        <view class="detail-header">
-          <text class="team-name">{{item.group_name}}</text>
-          <view class="btn-outline small-btn" bindtap="openWindowEdit" data-group="{{item.group_name}}">{{item.has_window ? '修改' : '设置'}}</view>
+      <view wx:if="{{stageWindows.length === 0}}" class="empty">暂无分组或已保存的排期范围，请先完成分组或生成对阵。</view>
+      <view wx:for="{{windowSections}}" wx:for-item="section" wx:key="key" class="window-section">
+        <text class="group-title">{{section.title}}</text>
+        <text class="team-meta">{{section.hint}}</text>
+        <view wx:for="{{section.windows}}" wx:key="group_name" class="history-row">
+          <view class="detail-header">
+            <text class="team-name">{{item.label}}</text>
+            <view wx:if="{{!item.history_only}}" class="btn-outline small-btn" bindtap="openWindowEdit" data-group="{{item.group_name}}">{{item.has_window ? '修改' : '设置'}}</view>
+          </view>
+          <text wx:if="{{item.source_hint}}" class="window-source">{{item.source_hint}}</text>
+          <text class="team-meta">{{item.window_text}}</text>
         </view>
-        <text class="team-meta">{{item.window_text}}</text>
       </view>
 
       <block wx:if="{{windowEditGroup}}">
-        <text class="group-title">设置「{{windowEditGroup}}」时段</text>
+        <text class="group-title">设置「{{windowEditLabel}}」排期范围</text>
         <view class="win-row">
           <text class="win-label">开始日期</text>
           <picker mode="date" value="{{windowStartDate}}" bindchange="onStartDateChange">
@@ -362,8 +421,8 @@
           </picker>
         </view>
         <view class="score-btns">
-          <view class="btn-outline" bindtap="cancelWindowEdit">取消</view>
-          <view class="btn-primary" bindtap="saveWindow">保存</view>
+          <button class="btn-outline" disabled="{{windowSaving}}" bindtap="cancelWindowEdit">取消</button>
+          <button class="btn-primary" disabled="{{windowSaving}}" loading="{{windowSaving}}" bindtap="saveWindow">{{windowSaving ? '保存中' : '保存'}}</button>
         </view>
       </block>
     </view>

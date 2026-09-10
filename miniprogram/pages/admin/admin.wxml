@@ -1,29 +1,44 @@
-<!-- 管理后台 -->
+<!-- 管理工作台 -->
+<event-return />
 <view class="page">
-  <!-- 统计概览 -->
-  <view class="stat-row">
-    <view class="stat-card">
-      <text class="stat-num">{{users.length}}</text>
-      <text class="stat-label">用户</text>
-    </view>
-    <view class="stat-card">
-      <text class="stat-num">{{teams.length}}</text>
-      <text class="stat-label">队伍</text>
-    </view>
-    <view class="stat-card">
-      <text class="stat-num">{{matches.length}}</text>
-      <text class="stat-label">赛事</text>
-    </view>
+  <view class="workbench-head">
+    <view class="workbench-copy"><text class="workbench-kicker">MAJOR · MANAGEMENT</text><text class="workbench-title">管理工作台</text><text class="workbench-caption">{{user.role === 'reviewer' ? '审核员' : '管理员'}} · 待办优先，有序办赛</text></view>
+    <view class="workbench-total"><text class="workbench-number">{{todos ? todos.total : '—'}}</text><text>{{todoError ? '待办待更新' : '待处理'}}</text></view>
   </view>
+  <view wx:if="{{permissionLoading}}" class="load-state">正在确认管理权限…</view>
+  <block wx:if="{{user}}">
+    <view class="admin-tabs">
+      <view wx:for="{{tabs}}" wx:key="id" class="admin-tab {{tab === item.id ? 'active' : ''}}" data-tab="{{item.id}}" bindtap="switchTab" aria-role="button">
+        <text>{{item.label}}</text><text wx:if="{{item.countKey && todos && todos[item.countKey] > 0}}" class="tab-badge">{{todos[item.countKey] > 99 ? '99+' : todos[item.countKey]}}</text>
+      </view>
+    </view>
+    <view wx:if="{{todoError}}" class="notice error-notice"><view><text class="notice-title">待办数量更新失败</text><text class="notice-copy">{{todos ? '下方保留上次记录，请刷新确认最新待办。' : '暂时无法确认待办数量，请稍后重试。'}}</text></view><view class="text-action" bindtap="retryTodos">重试</view></view>
+    <view wx:elif="{{todoLoading}}" class="sync-state">正在更新待办…</view>
 
-  <!-- 顶部 tab 切换 -->
-  <view class="admin-tabs">
-    <view class="admin-tab {{tab === 'users' ? 'active' : ''}}" data-tab="users" bindtap="switchTab">用户</view>
-    <view class="admin-tab {{tab === 'verify' ? 'active' : ''}}" data-tab="verify" bindtap="switchTab">认证</view>
-    <view class="admin-tab {{tab === 'rankapps' ? 'active' : ''}}" data-tab="rankapps" bindtap="switchTab">段位申请</view>
-    <view class="admin-tab {{tab === 'teams' ? 'active' : ''}}" data-tab="teams" bindtap="switchTab">队伍<text wx:if="{{pendingTeamCount > 0}}" class="tab-badge">{{pendingTeamCount}}</text></view>
-    <view class="admin-tab {{tab === 'matches' ? 'active' : ''}}" data-tab="matches" bindtap="switchTab">赛事</view>
-  </view>
+    <view wx:if="{{tab === 'overview'}}">
+      <view class="section-heading"><text class="section-title">待办事项</text><text class="section-caption">点击进入审核</text></view>
+      <view wx:if="{{todos && todos.total === 0 && !todoLoading && !todoError}}" class="notice clear-notice"><text>当前没有待办，下拉可查看最新情况。</text></view>
+      <view class="todo-grid">
+        <view wx:for="{{todoCards}}" wx:key="tab" class="todo-card {{todos && todos[item.key] > 0 ? 'has-pending' : ''}}" bindtap="switchTab" data-tab="{{item.tab}}" aria-role="button">
+          <view class="todo-card-top"><image class="todo-icon" src="/images/brand/{{item.icon}}.svg" mode="aspectFit"/><text class="todo-number">{{todos ? todos[item.key] : '—'}}</text></view>
+          <text class="todo-title">{{item.title}}</text><view class="todo-footer"><text>{{item.subtitle}}</text><text class="todo-arrow">›</text></view>
+        </view>
+      </view>
+      <view wx:if="{{todos && todos.registration_matches.length}}" class="card registration-queue">
+        <view class="queue-heading"><text class="section-title">待审核赛事报名</text><text class="section-caption">按赛事处理</text></view>
+        <view wx:for="{{todos.registration_matches}}" wx:key="match_id" class="queue-row" bindtap="goMDetail" data-id="{{item.match_id}}" aria-role="button"><view class="queue-copy"><text class="queue-name">{{item.match_name}}</text><text class="queue-caption">{{item.roster_locked ? '已分组，请查看并处理遗留报名' : '审核后进入待分组名单'}}</text></view><text class="queue-count">{{item.count}} 待办</text><text class="queue-arrow">›</text></view>
+      </view>
+      <view class="section-heading"><text class="section-title">常用管理</text></view>
+      <view class="card management-links">
+        <view class="management-link" bindtap="switchTab" data-tab="matches"><view><text class="link-title">赛事管理</text><text class="link-caption">报名、赛程与赛事设置</text></view><text>›</text></view>
+        <view wx:if="{{user.role === 'admin'}}" class="management-link" bindtap="openHonors"><view><text class="link-title">冠军补录</text><text class="link-caption">为已结束赛事补录冠军荣誉</text></view><text>›</text></view>
+        <view class="management-link" bindtap="switchTab" data-tab="users"><view><text class="link-title">用户管理</text><text class="link-caption">查找选手、调整资料</text></view><text>›</text></view>
+      </view>
+    </view>
+    <block wx:if="{{tab !== 'overview'}}">
+      <view wx:if="{{listErrors[tab]}}" class="notice error-notice"><view><text class="notice-title">列表加载失败</text><text class="notice-copy">{{listReady[tab] ? '保留上次加载的记录，请重试确认。' : '暂时无法读取数据，请重试。'}}</text></view><view class="text-action" bindtap="retryList">重试</view></view>
+      <view wx:elif="{{listLoading[tab]}}" class="load-state">正在加载{{tab === 'verify' ? '在校认证' : tab === 'rankapps' ? '段位申请' : tab === 'teams' ? '队伍' : tab === 'matches' ? '赛事' : '用户'}}…</view>
+    </block>
 
   <!-- ===== 用户管理 ===== -->
   <view wx:if="{{tab === 'users'}}">
@@ -43,16 +58,16 @@
         <view class="btn-outline small-btn" catchtap="setStudentId" data-id="{{item.id}}">设学号</view>
         <view class="btn-outline small-btn" catchtap="setRank" data-id="{{item.id}}">设段位</view>
         <view class="btn-outline small-btn" catchtap="setIdentity" data-id="{{item.id}}">设身份</view>
-        <view class="btn-outline small-btn" catchtap="setRole" data-id="{{item.id}}">修改权限</view>
+        <view wx:if="{{user.role === 'admin'}}" class="btn-outline small-btn" catchtap="setRole" data-id="{{item.id}}">修改权限</view>
       </view>
     </view>
 
-    <view wx:if="{{users.length === 0}}" class="empty">暂无用户</view>
+    <view wx:if="{{users.length === 0 && listReady.users && !listLoading.users && !listErrors.users}}" class="empty">暂无用户</view>
   </view>
 
   <!-- ===== 认证审核 ===== -->
   <view wx:if="{{tab === 'verify'}}">
-    <view wx:if="{{verifyUsers.length === 0}}" class="empty">暂无待认证用户</view>
+    <view wx:if="{{verifyUsers.length === 0 && listReady.verify && !listLoading.verify && !listErrors.verify}}" class="empty">暂无待认证用户</view>
     <view wx:for="{{verifyUsers}}" wx:key="id" class="card verify-card">
       <view class="verify-top">
         <text class="user-id">#{{item.id}}</text>
@@ -76,16 +91,16 @@
     </view>
   </view>
 
-  <!-- ===== 段位更新申请 ===== -->
+  <!-- ===== 段位认证与更新申请 ===== -->
   <view wx:if="{{tab === 'rankapps'}}">
-    <view wx:if="{{rankApplications.length === 0}}" class="empty">暂无段位更新申请</view>
+    <view wx:if="{{rankApplications.length === 0 && listReady.rankapps && !listLoading.rankapps && !listErrors.rankapps}}" class="empty">暂无待审核段位申请</view>
     <view wx:for="{{rankApplications}}" wx:key="id" class="card verify-card">
       <view class="verify-top">
         <text class="user-id">#{{item.user_id}}</text>
         <text class="tag tag-orange">待审批</text>
       </view>
       <text class="user-name">{{item.nickname || '未设昵称'}} {{item.game_id ? '(' + item.game_id + ')' : ''}}</text>
-      <text class="user-meta">当前段位: {{item.current_rank || '-'}} → AI 识别: {{item.display_ai_rank}}（置信度 {{item.ai_conf_text}}）</text>
+      <text class="user-meta">当前段位: {{item.current_rank || '未认证'}} → AI 识别: {{item.display_ai_rank}}（置信度 {{item.ai_conf_text}}）</text>
       <text wx:if="{{item.ai_reason}}" class="user-meta">AI 判断：{{item.ai_reason}}</text>
       <image wx:if="{{item.rank_image_full}}" class="verify-shot" src="{{item.rank_image_full}}" mode="aspectFit" bindtap="previewRankShot" data-url="{{item.rank_image_full}}"/>
       <view class="user-actions">
@@ -111,39 +126,59 @@
         <view class="btn-danger small-btn" catchtap="deleteTeam" data-id="{{item.id}}">删除</view>
       </view>
     </view>
-    <view wx:if="{{teams.length === 0}}" class="empty">暂无队伍</view>
+    <view wx:if="{{teams.length === 0 && listReady.teams && !listLoading.teams && !listErrors.teams}}" class="empty">暂无队伍</view>
   </view>
 
   <!-- ===== 赛事管理 ===== -->
   <view wx:if="{{tab === 'matches'}}">
-    <!-- 创建赛事 -->
-    <view class="card">
-      <text class="section-title">创建赛事</text>
-      <input class="input" placeholder="赛事名称" value="{{newMatch.name}}" bindinput="onMatchName"/>
-      <view class="type-row">
-        <view class="type-option {{newMatch.match_type === 'major' ? 'active' : ''}}" bindtap="onMatchType" data-type="major">大赛</view>
-        <view class="type-option {{newMatch.match_type === 'freshman' ? 'active' : ''}}" bindtap="onMatchType" data-type="freshman">新生赛</view>
-      </view>
-      <view class="input-row">
-        <input class="input half" type="number" placeholder="队伍上限" value="{{newMatch.max_teams}}" bindinput="onMatchMax"/>
-        <input class="input half" type="number" placeholder="每队人数" value="{{newMatch.team_size}}" bindinput="onMatchSize"/>
-      </view>
-      <input class="input" placeholder="赛事简介" value="{{newMatch.description}}" bindinput="onMatchDesc"/>
-      <view class="btn-primary" bindtap="createMatch">创建赛事</view>
-    </view>
+    <view class="section-heading"><view><text class="section-title">赛事管理</text><text class="section-caption">选择赛事处理报名与赛程</text></view><view class="text-action" bindtap="toggleCreateMatch">{{showCreateMatch ? '收起新建' : '+ 新建赛事'}}</view></view>
 
-    <!-- 赛事列表（点击整卡进入赛事详情） -->
     <view wx:for="{{matches}}" wx:key="id" class="card match-card" bindtap="goMDetail" data-id="{{item.id}}">
       <view class="team-top">
         <text class="team-name">{{item.name}}</text>
         <text class="tag {{item.status === 'registering' ? 'tag-green' : item.status === 'in_progress' ? 'tag-blue' : item.status === 'finished' ? 'tag-gray' : 'tag-orange'}}">{{item.statusText}}</text>
       </view>
-      <text class="team-meta">队伍上限: {{item.max_teams}} | 每队: {{item.team_size}}人</text>
-      <view class="user-actions">
+      <text class="team-meta">{{item.match_type === 'freshman' ? '新生赛' : 'MAJOR 大赛'}} · 最多 {{item.max_teams}} 支队伍 · 每队 {{item.team_size}} 人</text>
+      <view class="user-actions"><view class="btn-primary small-btn" catchtap="goMDetail" data-id="{{item.id}}">管理赛事</view><view wx:if="{{user.role === 'admin' && item.status === 'finished'}}" class="btn-outline small-btn" catchtap="goChampion" data-id="{{item.id}}">补录冠军</view>
         <view class="btn-outline small-btn" catchtap="changeMatchStatus" data-id="{{item.id}}" data-name="{{item.name}}">修改状态</view>
       </view>
     </view>
-    <view wx:if="{{matches.length === 0}}" class="empty">暂无赛事</view>
+    <view wx:if="{{matches.length === 0 && listReady.matches && !listLoading.matches && !listErrors.matches}}" class="empty">暂无赛事</view>
+    <!-- 创建赛事 -->
+    <view wx:if="{{showCreateMatch}}" id="create-match-form" class="card create-card">
+      <text class="section-title">新建赛事</text>
+      <text class="field-label">赛事名称</text>
+      <input class="input" placeholder="赛事名称" value="{{newMatch.name}}" bindinput="onMatchName"/>
+      <text class="field-label">赛事类型</text>
+      <view class="type-row">
+        <view class="type-option {{newMatch.match_type === 'major' ? 'active' : ''}}" bindtap="onMatchType" data-type="major">大赛</view>
+        <view class="type-option {{newMatch.match_type === 'freshman' ? 'active' : ''}}" bindtap="onMatchType" data-type="freshman">新生赛</view>
+      </view>
+      <view class="input-row">
+        <view class="input-group"><text class="field-label">队伍上限</text><input class="input" type="number" placeholder="队伍上限" value="{{newMatch.max_teams}}" bindinput="onMatchMax"/></view>
+        <view class="input-group"><text class="field-label">每队人数</text><input class="input" type="number" placeholder="每队人数" value="{{newMatch.team_size}}" bindinput="onMatchSize"/></view>
+      </view>
+      <text class="field-label">赛事简介 · 选填</text>
+      <input class="input" placeholder="赛事简介" value="{{newMatch.description}}" bindinput="onMatchDesc"/>
+      <view class="registration-fields">
+        <text class="registration-title">报名时间 <text class="registration-optional">选填 · 北京时间</text></text>
+        <text class="registration-label">开始报名</text>
+        <view class="registration-pickers">
+          <picker mode="date" value="{{registrationStartDate}}" data-field="registrationStartDate" bindchange="onRegistrationInput"><view class="registration-picker">{{registrationStartDate || '选择日期'}}</view></picker>
+          <picker mode="time" value="{{registrationStartTime}}" data-field="registrationStartTime" bindchange="onRegistrationInput"><view class="registration-picker">{{registrationStartTime || '选择时间'}}</view></picker>
+          <text class="registration-clear" bindtap="clearRegistrationLimit" data-side="start">清除</text>
+        </view>
+        <text class="registration-label">截止报名</text>
+        <view class="registration-pickers">
+          <picker mode="date" value="{{registrationEndDate}}" data-field="registrationEndDate" bindchange="onRegistrationInput"><view class="registration-picker">{{registrationEndDate || '选择日期'}}</view></picker>
+          <picker mode="time" value="{{registrationEndTime}}" data-field="registrationEndTime" bindchange="onRegistrationInput"><view class="registration-picker">{{registrationEndTime || '选择时间'}}</view></picker>
+          <text class="registration-clear" bindtap="clearRegistrationLimit" data-side="end">清除</text>
+        </view>
+        <text class="registration-hint">留空表示该端不限制。时间设置不会自动修改赛事状态，赛事处于「报名中」时才可报名。</text>
+      </view>
+      <button class="btn-primary" loading="{{creatingMatch}}" disabled="{{creatingMatch}}" bindtap="createMatch">{{creatingMatch ? '创建中' : '创建赛事'}}</button>
+    </view>
+
   </view>
 
   <!-- 用户详情弹层 -->
@@ -183,4 +218,5 @@
       </view>
     </view>
   </view>
+  </block>
 </view>

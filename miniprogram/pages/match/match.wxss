@@ -1,597 +1,130 @@
-.page {
-  padding-bottom: 60rpx;
-}
-
-/* ===== 赛事 Hero ===== */
-.hero {
-  position: relative;
-  margin: 20rpx;
-  padding: 36rpx 32rpx 32rpx;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(165deg, #ffffff 0%, #f1f4f8 100%);
-  border: 1rpx solid var(--color-border);
-  overflow: hidden;
-}
-
-.hero-glow {
-  position: absolute;
-  top: -140rpx;
-  right: -100rpx;
-  width: 420rpx;
-  height: 420rpx;
-  background: radial-gradient(circle, rgba(8, 145, 178, 0.22), transparent 70%);
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.hero-top {
-  position: relative;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 22rpx;
-}
-
-.hero-badge {
-  font-size: 20rpx;
-  font-weight: 700;
-  letter-spacing: 4rpx;
-  color: var(--color-primary);
-  background: rgba(8, 145, 178, 0.14);
-  border: 1rpx solid rgba(8, 145, 178, 0.3);
-  border-radius: 999rpx;
-  padding: 6rpx 20rpx;
-}
-
-.hero-status {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-  font-size: 24rpx;
-  color: var(--color-gray-600);
-}
-
-.hero-status-dot {
-  width: 16rpx;
-  height: 16rpx;
-  border-radius: 50%;
-  background: var(--color-gray-400);
-}
-
-.hero-status.st-registering .hero-status-dot { background: #34d399; }
-.hero-status.st-in_progress .hero-status-dot { background: var(--color-primary); }
-.hero-status.st-finished .hero-status-dot { background: var(--color-gray-300); }
-.hero-status.st-draft .hero-status-dot { background: #fbbf24; }
-
-.hero-title {
-  position: relative;
-  display: block;
-  font-size: 46rpx;
-  font-weight: 800;
-  line-height: 1.3;
-  color: var(--color-gray-900);
-  margin-bottom: 14rpx;
-}
-
-.hero-desc {
-  position: relative;
-  display: block;
-  font-size: 26rpx;
-  line-height: 1.5;
-  color: var(--color-gray-600);
-  margin-bottom: 26rpx;
-}
-
-.hero-stats {
-  position: relative;
-  display: flex;
-  gap: 18rpx;
-}
-
-.hero-stat {
-  flex: 1;
-  background: rgba(15, 23, 42, 0.05);
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 18rpx 8rpx;
-  text-align: center;
-}
-
-.hero-stat-num {
-  display: block;
-  font-size: 40rpx;
-  font-weight: 800;
-  color: var(--color-primary);
-  line-height: 1.2;
-}
-
-.hero-stat-den {
-  font-size: 24rpx;
-  font-weight: 600;
-  color: var(--color-gray-500);
-}
-
-.hero-stat-label {
-  display: block;
-  font-size: 22rpx;
-  color: var(--color-gray-500);
-  margin-top: 8rpx;
-}
-
-.section-title {
-  font-size: 30rpx;
-  font-weight: bold;
-  display: block;
-  margin-bottom: 16rpx;
-  color: var(--color-gray-800);
-}
-
-/* ===== 报名区 ===== */
-.register-card {
-  text-align: center;
-}
-
-.register-done {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12rpx;
-  color: var(--color-success);
-  font-size: 30rpx;
-  font-weight: bold;
-}
-
-.register-icon {
-  width: 36rpx;
-  height: 36rpx;
-}
-
-.register-disabled {
-  color: var(--color-gray-500);
-  font-size: 26rpx;
-}
-
-/* ===== 阶段 tab ===== */
-.tabs {
-  display: flex;
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: var(--color-card);
-  border-radius: var(--radius-lg);
-  margin: 20rpx;
-  overflow: hidden;
-  border: 1rpx solid var(--color-border);
-}
-
-.tab {
-  flex: 1;
-  text-align: center;
-  padding: 18rpx 0;
-  font-size: 26rpx;
-  color: var(--color-gray-600);
-  transition: color 0.2s ease;
-}
-
-.tab.active {
-  color: #ffffff;
-  font-weight: 700;
-  background: linear-gradient(135deg, #0891b2, #0e7490);
-}
-
-/* ===== 子阶段 tab（swiper 切换） ===== */
-.stage-tabs {
-  display: flex;
-  gap: 14rpx;
-  margin-bottom: 12rpx;
-}
-
-.stage-tab {
-  padding: 8rpx 28rpx;
-  font-size: 24rpx;
-  color: var(--color-gray-600);
-  background: var(--color-gray-100);
-  border-radius: 30rpx;
-}
-
-.stage-tab.active {
-  background: linear-gradient(135deg, #0891b2, #0e7490);
-  color: #ffffff;
-  font-weight: 600;
-}
-
-.stage-swiper {
-  height: 600rpx;
-}
-
-.stage-scroll {
-  height: 100%;
-}
-
-.teams-swiper {
-  height: 620rpx;
-}
-
-.teams-scroll {
-  height: 100%;
-}
-
-/* ===== 队伍行（状态/排名） ===== */
-.team-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--color-row);
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 14rpx 20rpx;
-  margin-bottom: 10rpx;
-}
-
-.team-name {
-  font-size: 26rpx;
-  color: var(--color-gray-800);
-  flex-shrink: 0;
-}
-
-.detail-tags {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-/* 排名 */
-.rank-left {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  flex: 1;
-  min-width: 0;
-}
-
-.rank-no {
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 50%;
-  background: rgba(15, 23, 42, 0.10);
-  color: var(--color-gray-600);
-  font-size: 26rpx;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.rank-no.rank-top {
-  background: rgba(8, 145, 178, 0.22);
-  color: #34d399;
-}
-
-/* ===== 队伍 chips ===== */
-.chip-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16rpx;
-  margin-bottom: 10rpx;
-}
-
-.team-chip {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-  background: var(--color-gray-100);
-  border: 1rpx solid var(--color-border);
-  border-radius: 30rpx;
-  padding: 12rpx 24rpx;
-  font-size: 26rpx;
-}
-
-.chip-name {
-  font-weight: bold;
-  color: var(--color-gray-800);
-}
-
-/* ===== 对阵 ===== */
-.round-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0.01));
-  background-color: var(--color-row);
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 18rpx 22rpx;
-  margin-bottom: 14rpx;
-  gap: 16rpx;
-}
-
-/* 记分牌：队名在两侧，比分靠中间对齐（左队名靠外/比分靠中，右队名反向） */
-.versus {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12rpx;
-  min-width: 0;
-}
-
-.vteam {
-  flex: 1;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10rpx;
-  padding: 12rpx 10rpx;
-  border-radius: var(--radius-md);
-  background: rgba(15, 23, 42, 0.04);
-  border: 1rpx solid transparent;
-  min-width: 0;
-}
-
-/* 记分牌对齐：左队名靠外/比分靠中，右队反向，形成 "队伍A 12 : 9 队伍B" */
-.vteam:first-child {
-  justify-content: flex-end;
-}
-.vteam:last-child {
-  flex-direction: row-reverse;
-  justify-content: flex-start;
-}
-
-.vteam-win {
-  background: rgba(8, 145, 178, 0.10);
-  border: 1rpx solid rgba(8, 145, 178, 0.25);
-}
-
-.vteam-name {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: var(--color-gray-800);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vteam-score {
-  font-size: 40rpx;
-  font-weight: 800;
-  color: var(--color-gray-500);
-}
-
-.score-win {
-  color: #0891b2;
-}
-
-.vs-text {
-  font-size: 22rpx;
-  color: var(--color-gray-500);
-  flex-shrink: 0;
-}
-
-/* BO3 大比分 */
-.big-score {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4rpx;
-  padding: 8rpx 16rpx;
-}
-
-.big-score-text {
-  font-size: 44rpx;
-  font-weight: 800;
-  color: var(--color-gray-500);
-}
-
-.big-score-text.score-win {
-  color: #0891b2;
-}
-
-.big-score-text.score-tbd {
-  color: var(--color-gray-400);
-}
-
-.big-score-label {
-  font-size: 20rpx;
-  color: var(--color-gray-500);
-}
-
-.ko-row:active {
-  background: var(--color-gray-100);
-}
-
-/* 淘汰赛 BO3 对阵保持队名居中，不套用普通记分牌对齐 */
-.ko-row .vteam {
-  justify-content: center;
-}
-.ko-row .vteam:last-child {
-  flex-direction: row;
-  justify-content: center;
-}
-
-.bo3-more {
-  font-size: 22rpx;
-  color: var(--color-primary);
-  flex-shrink: 0;
-}
-
-/* 组标题 */
-.group-title {
-  display: block;
-  font-size: 24rpx;
-  font-weight: bold;
-  color: var(--color-primary);
-  margin: 14rpx 0 10rpx;
-  padding-left: 12rpx;
-  border-left: 6rpx solid var(--color-primary);
-}
-
-.ko-title {
-  color: #fb7185;
-  border-left-color: #fb7185;
-}
-
-.ko-section {
-  margin-bottom: 8rpx;
-}
-
-/* ===== BO3 小局弹层 ===== */
-.mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.bo3-panel {
-  width: 82%;
-  max-height: 80vh;
-  overflow-y: auto;
-  background: var(--color-card);
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 30rpx;
-}
-
-.detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10rpx;
-}
-
-.detail-close {
-  width: 40rpx;
-  height: 40rpx;
-  padding: 10rpx;
-}
-
-.bo3-big {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6rpx;
-  padding: 24rpx 0;
-  border-bottom: 1rpx solid var(--color-border);
-  margin-bottom: 20rpx;
-}
-
-.bo3-big-score {
-  font-size: 64rpx;
-  font-weight: 800;
-  color: var(--color-gray-900);
-}
-
-.bo3-big-label {
-  font-size: 24rpx;
-  color: var(--color-gray-500);
-}
-
-.bo3-game {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--color-row);
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 18rpx 24rpx;
-  margin-bottom: 12rpx;
-}
-
-.bo3-game-title {
-  font-size: 26rpx;
-  color: var(--color-gray-500);
-}
-
-.bo3-game-score {
-  font-size: 32rpx;
-  font-weight: 700;
-  color: var(--color-gray-800);
-}
-
-/* ===== 时间协商 ===== */
-.round-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6rpx;
-  flex-shrink: 0;
-}
-
-.schedule-status {
-  font-size: 20rpx;
-  color: var(--color-gray-500);
-  max-width: 220rpx;
-  text-align: right;
-  word-break: break-all;
-}
-
-.schedule-status.unconfirmed { color: var(--color-gray-500); }
-.schedule-status.pending { color: var(--color-warning); }
-.schedule-status.confirmed { color: var(--color-primary); }
-.schedule-status.clickable { text-decoration: underline; }
-
-.team-meta {
-  font-size: 24rpx;
-  color: var(--color-gray-500);
-  display: block;
-  margin: 8rpx 0;
-}
-
-.schedule-panel {
-  width: 82%;
-  max-height: 80vh;
-  overflow-y: auto;
-  background: var(--color-card);
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 30rpx;
-}
-
-.win-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-  margin: 16rpx 0;
-}
-
-.win-label {
-  width: 140rpx;
-  font-size: 26rpx;
-  color: var(--color-gray-600);
-  flex-shrink: 0;
-}
-
-.win-picker {
-  flex: 1;
-  background: var(--color-gray-100);
-  border-radius: 10rpx;
-  padding: 16rpx 20rpx;
-  font-size: 28rpx;
-  color: var(--color-gray-800);
-}
-
-.score-btns {
-  display: flex;
-  gap: 20rpx;
-  margin-top: 24rpx;
-}
-
-.score-btns .btn-outline,
-.score-btns .btn-primary {
-  flex: 1;
-  padding: 16rpx 0;
-  font-size: 28rpx;
-  text-align: center;
-}
+.page { padding-bottom: calc(40rpx + env(safe-area-inset-bottom)); }
+.page > .card, .page > block > .card { margin: 24rpx; }
+.card { margin: 24rpx; padding: 28rpx; border-radius: 28rpx; box-shadow: none; }
+
+/* A restrained arena identity, drawn with CSS rather than a large image. */
+.hero { position: relative; margin: 24rpx; padding: 30rpx; border-radius: 32rpx; background: linear-gradient(125deg, #102a43 5%, #143e50 68%, #087f8c 140%); color: #fff; overflow: hidden; }
+.hero-orbit { position: absolute; width: 390rpx; height: 390rpx; border: 1rpx solid rgba(90, 226, 218, .17); border-radius: 80rpx; transform: rotate(35deg); pointer-events: none; }
+.hero-orbit-one { right: -140rpx; top: -155rpx; }
+.hero-orbit-two { right: -185rpx; top: -110rpx; }
+.hero-top { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 16rpx; margin-bottom: 32rpx; }
+.hero-badge { font-size: 19rpx; font-weight: 700; letter-spacing: 3rpx; color: #a5d5df; }
+.hero-status { display: flex; align-items: center; gap: 9rpx; font-size: 22rpx; color: #fff; flex-shrink: 0; }
+.hero-status-dot { width: 10rpx; height: 10rpx; border-radius: 50%; background: #aec1ce; }
+.hero-status.st-registering .hero-status-dot, .hero-status.st-in_progress .hero-status-dot { background: #5bdfca; }
+.hero-status.st-draft .hero-status-dot { background: #e6bd75; }
+.hero-main { position: relative; display: flex; align-items: center; gap: 18rpx; }
+.hero-copy { flex: 1; min-width: 0; }
+.hero-type { display: block; color: #87dacf; font-size: 22rpx; margin-bottom: 10rpx; }
+.hero-title { display: block; font-size: 42rpx; font-weight: 800; line-height: 1.35; word-break: break-all; }
+.hero-emblem { width: 108rpx; height: 126rpx; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1rpx solid rgba(142, 217, 219, .35); border-radius: 22rpx 22rpx 44rpx 44rpx; background: rgba(255,255,255,.06); }
+.hero-trophy { width: 52rpx; height: 52rpx; opacity: .95; filter: brightness(0) invert(1); }
+.hero-emblem text { color: #c1e5e6; font-size: 17rpx; font-weight: 700; letter-spacing: 3rpx; margin-top: 9rpx; }
+.hero-desc { position: relative; display: block; font-size: 24rpx; line-height: 1.7; color: #bdcfdc; margin: 20rpx 0 26rpx; word-break: break-all; }
+.hero-stats { position: relative; display: flex; border-top: 1rpx solid rgba(204, 233, 239, .17); padding-top: 26rpx; }
+.hero-stat { flex: 1; min-width: 0; padding: 0 14rpx; border-right: 1rpx solid rgba(204, 233, 239, .17); }
+.hero-stat:first-child { padding-left: 0; }
+.hero-stat:last-child { border-right: 0; }
+.hero-stat-num { display: block; font-size: 38rpx; line-height: 1.2; font-weight: 750; color: #fff; }
+.hero-stat-den { font-size: 21rpx; font-weight: 400; color: #bdcfdc; }
+.hero-stat-label { display: block; margin-top: 10rpx; font-size: 21rpx; color: #bdcfdc; }
+
+/* Registration is its own clearly labelled action, separate from the schedule. */
+.register-heading { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; flex-wrap: wrap; margin-bottom: 22rpx; }
+.register-title { color: #102a43; font-size: 28rpx; font-weight: 700; }
+.register-caption { color: #6d8193; font-size: 21rpx; }
+.register-card .btn-primary { font-size: 28rpx; padding: 22rpx 20rpx; text-align: center; }
+.register-done { display: flex; align-items: center; justify-content: center; gap: 12rpx; color: #087f8c; background: #eaf7f4; border-radius: 18rpx; padding: 22rpx 16rpx; font-size: 27rpx; font-weight: 600; }
+.register-icon { width: 32rpx; height: 32rpx; }
+.register-disabled { display: block; padding: 20rpx 14rpx; border-radius: 18rpx; background: #f3f7fa; text-align: center; color: #6d8193; font-size: 25rpx; line-height: 1.6; }
+.roster-note { display: block; margin-top: 16rpx; color: #6d8193; font-size: 22rpx; line-height: 1.6; text-align: center; }
+.waiting-card { border-color: #ede2c9; }
+
+.content-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16rpx; margin: 40rpx 28rpx 20rpx; }
+.section-kicker { display: block; color: #087f8c; font-size: 18rpx; letter-spacing: 3rpx; font-weight: 700; margin-bottom: 9rpx; }
+.content-title { display: block; font-size: 36rpx; font-weight: 750; color: #102a43; }
+.content-note { font-size: 21rpx; color: #6d8193; margin-bottom: 5rpx; }
+.tabs { display: flex; position: sticky; top: 0; z-index: 50; background: #fff; border: 1rpx solid #e2ebf0; border-radius: 24rpx; padding: 8rpx; margin: 20rpx 24rpx; }
+.tab { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8rpx; padding: 18rpx 0; font-size: 24rpx; color: #6d8193; border-radius: 18rpx; }
+.tab-code { font-size: 18rpx; font-weight: 700; letter-spacing: 2rpx; color: #8496a5; }
+.tab.active { color: #fff; font-weight: 600; background: #087f8c; }
+.tab.active .tab-code { color: #b0e5e1; }
+.schedule-hint { margin: 0 30rpx 20rpx; color: #6d8193; font-size: 22rpx; line-height: 1.65; }
+.section-title { display: block; color: #102a43; font-size: 30rpx; font-weight: 700; line-height: 1.5; margin-bottom: 20rpx; }
+.section-caption { display: block; margin: -8rpx 0 24rpx; color: #6d8193; font-size: 22rpx; line-height: 1.6; }
+.stage-tabs { display: flex; gap: 12rpx; flex-wrap: wrap; margin-bottom: 24rpx; }
+.stage-tab { padding: 14rpx 26rpx; font-size: 23rpx; color: #6d8193; background: #f3f7fa; border-radius: 14rpx; }
+.stage-tab.active { background: #e5f5f3; color: #087f8c; font-weight: 700; }
+.stage-swiper { height: 860rpx; }
+.stage-scroll, .teams-scroll { height: 100%; }
+.teams-swiper { height: 640rpx; }
+
+/* Team names get their own line so long names and status badges stay legible. */
+.team-row { display: flex; flex-direction: column; gap: 14rpx; padding: 24rpx 0; border-bottom: 1rpx solid #e2ebf0; }
+.team-row:last-child { border-bottom: 0; }
+.team-name { min-width: 0; font-size: 27rpx; font-weight: 600; color: #102a43; line-height: 1.5; word-break: break-all; }
+.detail-tags { display: flex; gap: 8rpx; flex-wrap: wrap; align-items: center; }
+.detail-tags .tag { font-size: 20rpx; }
+.rank-left { display: flex; align-items: center; gap: 18rpx; min-width: 0; }
+.rank-no { width: 46rpx; height: 46rpx; border-radius: 13rpx; background: #f3f7fa; color: #6d8193; font-size: 24rpx; font-weight: 750; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.rank-no.rank-top { color: #946821; background: #fbf2df; }
+.chip-wrap { display: flex; flex-direction: column; gap: 12rpx; }
+.team-chip { display: flex; gap: 10rpx; align-items: center; flex-wrap: wrap; background: #f3f7fa; border-radius: 18rpx; padding: 20rpx; font-size: 24rpx; }
+.chip-name { width: 100%; color: #102a43; font-size: 26rpx; font-weight: 600; line-height: 1.5; word-break: break-all; }
+
+/* Scorecards use the full content width; scheduling is a separate footer. */
+.round-row { display: flex; flex-direction: column; background: #fff; border: 1rpx solid #e2ebf0; border-radius: 22rpx; margin-bottom: 20rpx; overflow: hidden; }
+.round-finished { background: #f5fbfb; border-color: #d9edeb; }
+.round-heading { display: flex; justify-content: space-between; align-items: center; gap: 12rpx; padding: 18rpx 20rpx 0; }
+.round-state { font-size: 20rpx; color: #6d8193; }
+.round-state.finished { color: #087f8c; }
+.round-format { font-size: 19rpx; color: #8192a0; }
+.versus { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; padding: 26rpx 18rpx; min-width: 0; }
+.vteam { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16rpx; min-width: 0; }
+.vteam-name { display: block; font-size: 25rpx; font-weight: 600; color: #102a43; line-height: 1.5; max-width: 100%; text-align: center; word-break: break-all; }
+.vteam-score { display: block; font-size: 56rpx; line-height: 1.1; font-weight: 800; color: #526d82; }
+.score-win { color: #087f8c; }
+.vteam-win .vteam-name { color: #087f8c; }
+.vs-text { font-size: 20rpx; letter-spacing: 2rpx; color: #8b9dac; flex-shrink: 0; }
+.round-side { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12rpx; border-top: 1rpx solid #e2ebf0; padding: 16rpx 20rpx; background: rgba(243,247,250,.75); }
+.round-side > .tag { font-size: 20rpx; padding: 4rpx 10rpx; }
+.schedule-status { font-size: 21rpx; color: #6d8193; line-height: 1.5; word-break: break-all; }
+.schedule-status.pending { color: #946821; }
+.schedule-status.confirmed { color: #087f8c; }
+.schedule-status.clickable { background: #e3f3f1; color: #087f8c; padding: 10rpx 14rpx; border-radius: 12rpx; }
+.schedule-status.clickable:active { background: #ccebe6; }
+.big-score { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; max-width: 210rpx; gap: 8rpx; }
+.big-score-text { font-size: 46rpx; font-weight: 800; color: #102a43; white-space: nowrap; }
+.big-score-text.score-win { color: #087f8c; }
+.big-score-text.score-tbd { color: #6d8193; }
+.big-score-label { font-size: 18rpx; color: #6d8193; text-align: center; line-height: 1.5; }
+.bo3-more { font-size: 21rpx; color: #087f8c; }
+.ko-row:active { background: #edf7f7; }
+.group-title { display: block; font-size: 24rpx; font-weight: 700; color: #087f8c; margin: 24rpx 0 16rpx; }
+.ko-title { color: #946821; }
+.ko-section { margin-bottom: 24rpx; }
+
+/* Panels remain native, scrollable, and safe above the home indicator. */
+.mask { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-end; justify-content: center; background: rgba(10,28,43,.48); }
+.bo3-panel, .schedule-panel { width: 100%; max-height: 82vh; box-sizing: border-box; overflow-y: auto; background: #fff; border-radius: 32rpx 32rpx 0 0; padding: 32rpx 28rpx calc(32rpx + env(safe-area-inset-bottom)); }
+.detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16rpx; margin-bottom: 18rpx; }
+.detail-header .section-title { flex: 1; min-width: 0; word-break: break-all; margin-bottom: 0; }
+.detail-close { width: 34rpx; height: 34rpx; padding: 12rpx; flex-shrink: 0; border-radius: 50%; background: #f3f7fa; }
+.bo3-big { display: flex; flex-direction: column; align-items: center; gap: 10rpx; padding: 30rpx 0; margin-bottom: 24rpx; border-radius: 22rpx; background: #f3f7fa; }
+.bo3-big-score { font-size: 70rpx; font-weight: 800; color: #102a43; }
+.bo3-big-label { font-size: 23rpx; color: #6d8193; }
+.bo3-game { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12rpx; padding: 24rpx 0; border-bottom: 1rpx solid #e2ebf0; }
+.bo3-game-title { color: #6d8193; font-size: 24rpx; }
+.bo3-game-score { color: #102a43; font-size: 32rpx; font-weight: 700; }
+.bo3-game .tag { max-width: 250rpx; word-break: break-all; white-space: normal; }
+.team-meta { display: block; margin: 10rpx 0; font-size: 24rpx; line-height: 1.7; color: #6d8193; word-break: break-all; }
+.win-row { display: flex; align-items: center; gap: 16rpx; margin: 20rpx 0; }
+.win-label { flex-shrink: 0; width: 90rpx; font-size: 25rpx; color: #526d82; }
+.win-row picker { flex: 1; }
+.win-picker { background: #f3f7fa; border: 1rpx solid #e2ebf0; border-radius: 16rpx; padding: 22rpx; font-size: 27rpx; color: #102a43; }
+.score-btns { display: flex; gap: 16rpx; margin-top: 28rpx; }
+.score-btns .btn-outline, .score-btns .btn-primary { flex: 1; padding: 22rpx 12rpx; font-size: 26rpx; text-align: center; }
+.empty { padding: 64rpx 24rpx; font-size: 25rpx; color: #6d8193; }
+.reg-pending .register-done { color: #946821; background: #fcf5e7; }
+.reg-rejected .register-done { color: #b44848; background: #fff0ef; }
+.round-state.in_progress { color: #087f8c; }

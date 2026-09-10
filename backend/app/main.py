@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.database import engine, Base
 from app.config import settings
 import app.models
-from app.routers import auth, team, match
+from app.routers import auth, team, match, hall, admin
 
 Base.metadata.create_all(bind=engine)
 
@@ -35,6 +35,8 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(team.router)
 app.include_router(match.router)
+app.include_router(hall.router)
+app.include_router(admin.router)
 
 
 @app.get("/")

@@ -1,0 +1,44 @@
+<nav-drawer title="名人堂"></nav-drawer>
+<view class="hall-page">
+  <view class="page-heading"><text class="eyebrow">THE HALL OF FAME</text><text class="page-title">让每一份荣耀，被记住。</text><text class="page-caption">从并肩夺冠，到攀登巅峰。</text></view>
+  <view class="hall-tabs"><view wx:for="{{tabs}}" wx:key="value" class="hall-tab {{activeTab === item.value ? 'active' : ''}}" bindtap="switchTab" data-tab="{{item.value}}" role="button" aria-label="{{item.title}}">{{item.title}}</view></view>
+
+  <block wx:if="{{activeTab === 'champions'}}">
+    <view class="board-heading"><view><text class="board-title">冠军档案</text><text class="board-subtitle">每一届，都有属于他们的高光。</text></view><text wx:if="{{champions.attempted && !champions.error}}" class="total-count">{{champions.total}} 届</text></view>
+    <block wx:for="{{champions.items}}" wx:key="match_id">
+      <view class="champion-card">
+        <view class="champion-ribbon"><view class="ribbon-label"><image src="/images/brand/cup.svg" mode="aspectFit"/><text>CHAMPIONS</text></view><text class="event-date">{{item.eventLabel}}</text></view>
+        <view class="champion-main"><view class="champion-emblem"><image wx:if="{{item.logoFull}}" src="{{item.logoFull}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view><view class="champion-identity"><text class="honor-label">赛事冠军</text><text class="champion-name">{{item.champion_name}}</text><text class="event-type">{{item.typeLabel}}</text></view></view>
+        <text class="event-name">{{item.match_name}}</text>
+        <text wx:if="{{item.sourceLabel}}" class="archive-source">{{item.sourceLabel}}</text>
+        <view class="final-result"><text class="final-label">决赛</text><text wx:if="{{item.hasScore}}" class="final-score">{{item.champion_score}}<text>:</text>{{item.runner_up_score}}</text><text wx:else class="score-pending">比分未归档</text><text class="runner-name">{{item.runner_up_name ? '对阵 ' + item.runner_up_name : '亚军未归档'}}</text></view>
+        <view class="champion-actions"><view class="roster-toggle" bindtap="toggleRoster" data-id="{{item.match_id}}" role="button">{{item.expanded ? '收起夺冠阵容' : '查看夺冠阵容'}}<text>{{item.expanded ? '−' : '+'}}</text></view><view wx:if="{{item.matchAvailable}}" class="event-link" bindtap="goMatch" data-id="{{item.match_id}}" role="button">赛事详情<text>↗</text></view></view>
+        <view wx:if="{{item.expanded}}" class="champion-roster">
+          <text wx:if="{{item.snapshot_source === 'backfill'}}" class="archive-note">历史阵容为归档时记录</text>
+          <view wx:for="{{item.roster}}" wx:key="rosterKey" wx:for-item="member" class="member-row"><view class="member-avatar"><image wx:if="{{member.avatarFull}}" src="{{member.avatarFull}}" mode="aspectFill"/><text wx:else>{{member.initial}}</text></view><text class="member-name">{{member.nickname}}</text><image wx:if="{{member.hasRankRecord}}" class="member-badge" src="{{member.badge.icon}}" mode="aspectFit"/><text class="member-rank">{{member.hasRankRecord ? member.badge.label : '段位未归档'}}</text></view>
+          <text wx:if="{{item.roster.length === 0}}" class="archive-note">本届夺冠阵容暂无记录</text>
+        </view>
+      </view>
+    </block>
+    <view wx:if="{{champions.loading}}" class="board-notice">{{champions.items.length ? '正在更新冠军档案…' : '正在加载冠军档案…'}}</view>
+    <view wx:elif="{{champions.error}}" class="error-card"><text class="notice-title">冠军档案暂时未能加载</text><text class="notice-detail">{{champions.error}}</text><view class="retry-button" bindtap="retry" role="button">点击重试 ↻</view></view>
+    <view wx:elif="{{champions.items.length === 0}}" class="empty-card"><view class="empty-emblem"><image src="/images/brand/cup.svg"/></view><text class="notice-title">第一份冠军荣耀，静待揭晓</text><text class="notice-detail">决赛结束后，冠军队伍将在这里留下印记。</text></view>
+    <view wx:elif="{{champions.hasMore}}" class="load-more" bindtap="loadMore" role="button">查看更多冠军<text>↓</text></view>
+    <text wx:else class="board-end">每一座奖杯，都属于共同奋战的队伍。</text>
+  </block>
+
+  <block wx:else>
+    <view class="rank-spotlight" wx:if="{{highestPlayer}}"><view class="spotlight-copy"><text class="spotlight-kicker">THE HIGHEST RANK</text><text class="spotlight-title">{{highestPlayer.badge.label}}</text><text class="spotlight-caption">当前平台最高段位</text><view class="spotlight-player"><text>领衔选手</text><text class="spotlight-name">{{highestPlayer.nickname}}</text><text wx:if="{{highestPlayer.tied}}" class="spotlight-tied">并列</text></view></view><image class="spotlight-badge" src="{{highestPlayer.badge.icon}}" mode="aspectFit"/></view>
+    <view class="board-heading"><view><text class="board-title">选手段位榜</text><text class="board-subtitle">按已认证段位排序 · S 段按星数排序</text></view><text wx:if="{{players.attempted && !players.error}}" class="total-count">{{players.total}} 人</text></view>
+    <view wx:if="{{players.items.length > 0}}" class="ranking-card">
+      <view class="ranking-head"><text>名次 / 选手</text><text>已认证段位</text></view>
+      <view wx:for="{{players.items}}" wx:key="user_id" class="rank-row {{item.position === 1 ? 'rank-leading' : ''}}"><view class="position-cell"><text class="position-number">{{item.position}}</text><text wx:if="{{item.tied}}" class="position-tied">并列</text></view><view class="rank-avatar"><image wx:if="{{item.avatarFull}}" src="{{item.avatarFull}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view><view class="rank-identity"><text class="rank-name">{{item.nickname}}</text></view><view class="rank-value"><image src="{{item.badge.icon}}" mode="aspectFit"/><text>{{item.badge.label}}</text></view></view>
+    </view>
+    <view wx:if="{{players.loading}}" class="board-notice">{{players.items.length ? '正在更新选手段位…' : '正在加载选手段位…'}}</view>
+    <view wx:elif="{{players.error}}" class="error-card"><text class="notice-title">选手段位暂时未能加载</text><text class="notice-detail">{{players.error}}</text><view class="retry-button" bindtap="retry" role="button">点击重试 ↻</view></view>
+    <view wx:elif="{{players.items.length === 0}}" class="empty-card"><view class="empty-emblem"><image src="/images/brand/shield.svg"/></view><text class="notice-title">巅峰之路，等你开启</text><text class="notice-detail">选手完成段位认证后，将出现在榜单中。</text></view>
+    <view wx:elif="{{players.hasMore}}" class="load-more" bindtap="loadMore" role="button">加载更多选手<text>↓</text></view>
+    <text wx:else class="board-end">同段位、同星数并列，不以水平分区分名次。</text>
+  </block>
+  <text class="hall-footer">BJFU MAJOR · 荣耀源自热爱</text>
+</view>

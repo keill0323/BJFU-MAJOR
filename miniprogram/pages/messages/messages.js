@@ -2,11 +2,13 @@ const api = require('../../utils/api.js')
 
 Page({
   data: {
+    token: '', loading: false, loadError: false,
     invitations: [],
     rankApplications: []
   },
 
   onShow() {
+    this.setData({ token: wx.getStorageSync('token') || '' })
     this.loadMessages()
   },
 
@@ -15,18 +17,24 @@ Page({
   },
 
   async loadMessages() {
-    try {
-      const invites = await api.getMyInvitations()
-      this.setData({ invitations: invites || [] })
-    } catch (err) { this.setData({ invitations: [] }) }
-    try {
-      const apps = (await api.getMyRankApplications() || []).map(a => Object.assign({}, a, {
+    if (!this.data.token) {
+      this.setData({ invitations: [], rankApplications: [], loading: false, loadError: false })
+      return
+    }
+    this.setData({ loading: true, loadError: false })
+    let loadError = false
+    const results = await Promise.all([
+      api.getMyInvitations().catch(() => { loadError = true; return [] }),
+      api.getMyRankApplications().catch(() => { loadError = true; return [] })
+    ])
+    const apps = (results[1] || []).map(a => Object.assign({}, a, {
         statusText: a.status === 'approved' ? '已通过' : a.status === 'rejected' ? '已驳回' : '待审批',
         statusCls: a.status === 'approved' ? 'ok' : a.status === 'rejected' ? 'reject' : 'pending'
-      }))
-      this.setData({ rankApplications: apps })
-    } catch (err) { this.setData({ rankApplications: [] }) }
+    }))
+    this.setData({ invitations: results[0] || [], rankApplications: apps, loading: false, loadError })
   },
+
+  goLogin() { wx.reLaunch({ url: '/pages/login/login' }) },
 
   async acceptInv(e) {
     const id = e.currentTarget.dataset.id

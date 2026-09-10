@@ -25,6 +25,8 @@ Page({
     keyword: '',
     total: 0,
     maxRating: 0,     // 最高队伍评分
+    loading: true,
+    loadFailed: false,
     // 详情弹层
     showTeamDetail: false,
     detailTeam: null,
@@ -47,11 +49,15 @@ Page({
       tierLabel: tier.label,
       tierCls: tier.cls,
       memberCount: t.member_count || 0,
+      statusText: { approved: '已通过审核', pending: '待审核', rejected: '审核未通过' }[String(t.status || '').toLowerCase()] || '待确认',
+      statusCls: String(t.status || '').toLowerCase(),
+      captainLabel: t.captain_name || '玩家' + t.captain_id,
       logo_full: t.logo ? (t.logo.indexOf('http') === 0 ? t.logo : api.BASE + t.logo) : ''
     })
   },
 
   async loadTeams() {
+    this.setData({ loading: true, loadFailed: false })
     try {
       const data = await api.getTeams()
       const teams = (data || []).map(t => this.decorateTeam(t))
@@ -60,8 +66,10 @@ Page({
       this.setData({ teams, total: teams.length, maxRating })
       this.applyFilter()
     } catch (err) {
-      this.setData({ teams: [], total: 0, maxRating: 0 })
+      this.setData({ teams: [], total: 0, maxRating: 0, loadFailed: true })
       this.applyFilter()
+    } finally {
+      this.setData({ loading: false })
     }
   },
 
@@ -91,15 +99,22 @@ Page({
     const id = e.currentTarget.dataset.id
     try {
       const team = await api.getTeam(id)
-      const tier = ratingTier(team.rating)
+      // TeamInfo 不含总评分和队长名，从本次返回的成员数据派生。
+      const rating = (team.members || []).map(m => Number(m.rating) || 0).sort((a, b) => b - a).slice(0, 5).reduce((sum, value) => sum + value, 0)
+      const captain = (team.members || []).find(m => m.user_id === team.captain_id)
+      const tier = ratingTier(rating)
       const members = (team.members || []).map(m => {
-        const item = Object.assign({}, m, { display_rank: rankDisplay(m.rank) })
-        if (item.avatar && !item.avatar.startsWith('http')) item.avatar_full = api.BASE + item.avatar
+        const item = Object.assign({}, m, { display_rank: rankDisplay(m.rank), initial: (m.nickname || m.game_id || '玩家').charAt(0), score_text: m.rating == null ? '—' : m.rating })
+        item.avatar_full = item.avatar ? (item.avatar.startsWith('http') ? item.avatar : api.BASE + item.avatar) : ''
         return item
       })
       this.setData({
         showTeamDetail: true,
         detailTeam: Object.assign({}, team, {
+          rating,
+          captainLabel: captain ? (captain.nickname || captain.game_id || '玩家' + captain.user_id) : '玩家' + team.captain_id,
+          statusText: { approved: '已通过审核', pending: '待审核', rejected: '审核未通过' }[String(team.status || '').toLowerCase()] || '待确认',
+          statusCls: String(team.status || '').toLowerCase(),
           initial: teamInitial(team.name),
           tierLabel: tier.label,
           tierCls: tier.cls,
@@ -117,6 +132,7 @@ Page({
   },
 
   noop() {},   // 阻止面板内点击冒泡到遮罩
+  goMyTeam() { wx.reLaunch({ url: '/pages/team/team' }) },
 
   // 申请加入（弹确认，二次确认防误触）
   async applyJoin(e) {

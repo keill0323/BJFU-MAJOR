@@ -22,3 +22,5 @@
   color: var(--color-gray-700);
   line-height: 1.8;
 }
+
+.page { padding: 12rpx 0 calc(40rpx + env(safe-area-inset-bottom)); }.page-intro { padding-top: 18rpx; padding-bottom: 12rpx; }.card { margin: 24rpx 28rpx; padding: 32rpx; border-radius: 28rpx; }.rule-title { color: #102a43; font-size: 32rpx; padding-bottom: 18rpx; border-bottom: 1rpx solid #e2ebf0; }.rule-item { color: #4c657a; font-size: 26rpx; line-height: 1.9; margin-bottom: 14rpx; }

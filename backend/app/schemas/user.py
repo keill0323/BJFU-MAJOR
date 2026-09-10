@@ -28,6 +28,8 @@ class UserInfo(BaseModel):
     verify_image: Optional[str] = None   # 学信网截图URL
     verify_reject_reason: Optional[str] = None   # 认证驳回原因
     avatar: Optional[str] = None         # 头像URL
+    rank_image: Optional[str] = None     # 段位截图URL（认证页缩略图回显）
+    user_description: Optional[str] = None   # 个人介绍（人才市场自我介绍）
     # AI 审核结果（auto_pass 自动通过 / auto_reject 自动驳回 / pending 待人工复核）
     ai_review_status: Optional[str] = None
     ai_review_reason: Optional[str] = None

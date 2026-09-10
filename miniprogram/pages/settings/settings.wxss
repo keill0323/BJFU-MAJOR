@@ -44,3 +44,6 @@
 .logout-wrap {
   margin: 40rpx 20rpx;
 }
+
+/* 与主站共用的轻量设置卡 */
+.page { padding-bottom: calc(32rpx + env(safe-area-inset-bottom)); }.group { margin: 30rpx 28rpx 0; }.group-label { font-size: 23rpx; color: #62798c; margin-bottom: 14rpx; }.set-row { padding: 32rpx 26rpx; }.set-text { min-width: 0; line-height: 1.6; }.set-version { flex-shrink: 0; }.logout-wrap { margin: 44rpx 28rpx; }

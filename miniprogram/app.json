@@ -2,11 +2,13 @@
   "pages": [
     "pages/index/index",
     "pages/match/match",
+    "pages/hall/hall",
     "pages/team/team",
     "pages/profile/profile",
     "pages/login/login",
     "pages/rules/rules",
     "pages/admin/admin",
+    "pages/admin/champion/champion",
     "pages/admin/mdetail/mdetail",
     "pages/messages/messages",
     "pages/verify/verify",

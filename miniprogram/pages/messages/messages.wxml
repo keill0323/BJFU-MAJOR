@@ -1,8 +1,13 @@
 <view class="page">
-  <nav-drawer title="消息"></nav-drawer>
+  <nav-drawer title="消息" show-admin-notice="{{true}}"></nav-drawer>
+  <view class="page-intro"><text class="page-eyebrow">INBOX</text><text class="page-heading">每一步进展，都在这里</text><text class="page-caption">查看入队邀请与段位审核结果。</text></view>
+
+  <view wx:if="{{!token}}" class="card guest-card"><text class="empty-title">登录后，接收你的参赛消息</text><text class="empty-sub">队伍邀请和审核进展会与你的账号同步</text><view class="btn-primary" bindtap="goLogin">前往登录</view></view>
+  <view wx:elif="{{loading}}" class="empty">正在加载消息…</view>
+  <view wx:elif="{{loadError}}" class="card retry-card"><text>部分消息暂时未能加载</text><view bindtap="loadMessages">点击重试</view></view>
 
   <!-- 空状态 -->
-  <view wx:if="{{invitations.length === 0 && rankApplications.length === 0}}" class="empty">
+  <view wx:if="{{token && !loading && !loadError && invitations.length === 0 && rankApplications.length === 0}}" class="empty">
     <view class="empty-box">
       <image class="empty-ic" src="/images/icons/mail.svg"/>
       <text class="empty-title">暂无消息</text>
@@ -10,7 +15,7 @@
     </view>
   </view>
 
-  <block wx:else>
+  <block wx:if="{{token && !loading}}">
     <!-- 入队邀请 -->
     <view wx:if="{{invitations.length > 0}}" class="card">
       <view class="group-title">

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.match import MatchCreateRequest, MatchInfo, RoundInfo, RoundUpdateRequest, MatchStatusUpdateRequest, MatchAdminDetail, StageWindowInfo, StageWindowUpdate, RoundScheduleRequest, RoundScheduleActionRequest
+from app.schemas.match import MatchCreateRequest, MatchInfo, MatchDetailInfo, RoundInfo, RoundUpdateRequest, MatchStatusUpdateRequest, MatchAdminDetail, StageWindowInfo, StageWindowUpdate, RoundScheduleRequest, RoundScheduleActionRequest, RegistrationWindowUpdateRequest
 from app.models.match import MatchStatus
 from app.services import match_service
 from app.services.auth_service import get_current_user, require_admin
@@ -70,6 +70,22 @@ def update_match_status(
     return match
 
 
+@router.put("/{match_id}/registration-window", response_model=MatchInfo)
+def update_registration_window(
+    match_id: int,
+    request: RegistrationWindowUpdateRequest,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin),
+):
+    """管理员设置报名开始/截止时间（北京时间），null 清除对应限制。
+
+    此接口不改变赛事状态；只有状态为 registering 且处于报名时段才允许报名。
+    """
+    return match_service.update_registration_window(
+        db, match_id, request.register_start, request.register_end
+    )
+
+
 @router.get("/{match_id}", response_model=MatchInfo)
 def get_match(match_id: int, db: Session = Depends(get_db)):
     """获取赛事详情"""
@@ -79,16 +95,23 @@ def get_match(match_id: int, db: Session = Depends(get_db)):
     return match
 
 
+def _get_detail_with_roster_state(db: Session, match_id: int) -> dict:
+    detail = match_service.get_match_admin_detail(db, match_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="赛事不存在")
+    detail["match"] = MatchDetailInfo.model_validate(detail["match"]).model_copy(update={
+        "roster_locked": match_service.is_roster_locked(db, match_id),
+    })
+    return detail
+
+
 @router.get("/{match_id}/detail", response_model=MatchAdminDetail)
 def get_match_detail_public(
     match_id: int,
     db: Session = Depends(get_db),
 ):
     """普通用户查看赛事详情（队伍进度 + 对阵，含 BO3 小分），用于用户端赛事页展示"""
-    detail = match_service.get_match_admin_detail(db, match_id)
-    if not detail:
-        raise HTTPException(status_code=404, detail="赛事不存在")
-    return detail
+    return _get_detail_with_roster_state(db, match_id)
 
 
 @router.get("/{match_id}/admin-detail", response_model=MatchAdminDetail)
@@ -98,10 +121,7 @@ def get_match_admin_detail(
     admin = Depends(require_admin),
 ):
     """管理后台查看赛事详情（含报名队伍进度与对阵）"""
-    detail = match_service.get_match_admin_detail(db, match_id)
-    if not detail:
-        raise HTTPException(status_code=404, detail="赛事不存在")
-    return detail
+    return _get_detail_with_roster_state(db, match_id)
 
 
 @router.get("/{match_id}/rounds", response_model=list[RoundInfo])
@@ -295,7 +315,7 @@ def get_my_registration(
     }
 
 
-@router.post("/registerations/{reg_id}/approve")
+@router.post("/registrations/{reg_id}/approve")
 def approve_registration(
     reg_id: int,
     db: Session = Depends(get_db),
@@ -306,6 +326,18 @@ def approve_registration(
     if not reg:
         raise HTTPException(status_code=404, detail="报名记录不存在")
     return {"message": "审核通过"}
+
+
+@router.post("/{match_id}/registrations/approve-team")
+def approve_team_registration(
+    match_id: int,
+    team_id: int,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin),
+):
+    """审核通过某队伍在该赛事的全部报名记录（批量）"""
+    result = match_service.approve_team_registration(db, match_id, team_id)
+    return {"message": f"已通过 {result['approved']} 条报名记录", "data": result}
 
 
 @router.post("/{match_id}/auto-seeds")
@@ -329,6 +361,19 @@ def auto_group(match_id: int,
     return {"message": "分组完成"}
 
 
+@router.post("/{match_id}/seed-and-group")
+def seed_and_group(match_id: int,
+                   group_names: list[str] = Query(...),
+                   db=Depends(get_db),
+                   admin=Depends(require_admin)):
+    """一次完成种子与小组分配；任何校验失败均不锁定未编排的参赛名单。"""
+    progresses = match_service.seed_and_group_teams(db, match_id, group_names)
+    return {"message": "种子分配与分组完成", "data": {
+        "group_count": len(group_names), "has_playoff": len(group_names) == 3,
+        "team_count": len(progresses),
+    }}
+
+
 @router.post("/{match_id}/auto-matches/double")
 def auto_double_matches(match_id: int,
                         group_name: str,
@@ -349,14 +394,14 @@ def auto_single_matches(match_id: int, group_name: str, db=Depends(get_db), admi
 
 @router.post("/{match_id}/finish-group")
 def finish_group(match_id: int, db=Depends(get_db), admin=Depends(require_admin)):
-    """结束小组赛：每组第1晋级，每组第2进附加赛单循环"""
+    """结束小组赛：各组第1晋级传奇；三组的第2名进入附加赛，四组不设附加赛。"""
     result = match_service.finish_group_stage(db, match_id)
     return {"message": "小组赛结束", "data": result}
 
 
 @router.post("/{match_id}/finish-playoff")
 def finish_playoff(match_id: int, db=Depends(get_db), admin=Depends(require_admin)):
-    """结束附加赛：附加赛第1晋级"""
+    """结束三组赛制的附加赛：第1名晋级传奇组；四组赛事不适用。"""
     result = match_service.finish_playoff_stage(db, match_id)
     return {"message": "附加赛结束", "data": result}
 

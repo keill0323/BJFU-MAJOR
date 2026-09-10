@@ -40,6 +40,11 @@ class MatchInfo(BaseModel):
         from_attributes = True
 
 
+class MatchDetailInfo(MatchInfo):
+    """详情增加参赛名单是否已锁定；状态由实际编排记录计算，无需新增数据库列。"""
+    roster_locked: bool = False
+
+
 class RoundInfo(BaseModel):
     """对阵信息响应"""
     id: int
@@ -80,6 +85,12 @@ class MatchStatusUpdateRequest(BaseModel):
     status: str  # draft/registering/in_progress/finished
 
 
+class RegistrationWindowUpdateRequest(BaseModel):
+    """完整替换报名时间限制；null 表示不限制该端时间，不改变赛事状态。"""
+    register_start: Optional[datetime]
+    register_end: Optional[datetime]
+
+
 class LeaderboardItem(BaseModel):
     """排行榜条目"""
     rank: int
@@ -108,7 +119,7 @@ class RegistrationDetail(BaseModel):
 
 class MatchAdminDetail(BaseModel):
     """管理后台赛事详情：赛事信息 + 报名队伍进度 + 对阵列表"""
-    match: MatchInfo
+    match: MatchDetailInfo
     teams: List[RegistrationDetail] = []
     rounds: List[RoundInfo] = []
 
@@ -139,4 +150,3 @@ class RoundScheduleRequest(BaseModel):
 class RoundScheduleActionRequest(BaseModel):
     """确认/拒绝约定时间请求（带客户端所见的提议时间，用于防竞态）"""
     expected_time: Optional[datetime] = None
-    

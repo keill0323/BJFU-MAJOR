@@ -4,6 +4,7 @@
  * 入口：管理后台 → 赛事 → 点击赛事卡片
  */
 const api = require('../../../utils/api.js')
+const { isWaitingForGroup, isRosterLocked } = require('../../../utils/tournament.js')
 
 Page({
   data: {
@@ -12,6 +13,9 @@ Page({
     tab: 'teams',           // teams / challenger / legend / knockout
     // 队伍
     teams: [],
+    waitingTeams: [],
+    rosterLocked: false,
+    groupingBusy: false,
     legendTeams: [],        // 传奇组（含直升+晋级）
     challengerTeams: [],    // 挑战者组（小组赛阶段）
     playoffTeams: [],       // 淘汰赛（6强）
@@ -29,6 +33,10 @@ Page({
     challengerSwiper: [],
     legendSwiper: [],
     challengerStage: 0,
+    groupCount: 0,
+    hasPlayoffStage: false,
+    canFinishPlayoff: false,
+    challengerFormatHint: '',
     legendStage: 0,
     // 队伍历史弹层
     showHistory: false,
@@ -47,11 +55,22 @@ Page({
     showWindowPanel: false,
     allRounds: [],
     stageWindows: [],
+    windowSections: [],
+    windowSaving: false,
     windowEditGroup: null,
+    windowEditLabel: '',
     windowStartDate: '',
     windowStartTime: '',
     windowEndDate: '',
-    windowEndTime: ''
+    windowEndTime: '',
+    // 报名时间和比赛排期范围分别管理。
+    showRegistrationPanel: false,
+    registrationSaving: false,
+    registrationStartDate: '',
+    registrationStartTime: '',
+    registrationEndDate: '',
+    registrationEndTime: '',
+    registrationSummary: ''
   },
 
   onLoad(options) {
@@ -65,10 +84,12 @@ Page({
 
   // 可滑动区块切换（挑战者组/传奇组）
   switchChallengerStage(e) {
-    this.setData({ challengerStage: Number(e.currentTarget.dataset.idx) })
+    const index = Math.max(0, Math.min(Number(e.currentTarget.dataset.idx) || 0, this.data.challengerSwiper.length - 1))
+    this.setData({ challengerStage: index })
   },
   onChallengerSwiper(e) {
-    this.setData({ challengerStage: e.detail.current })
+    const index = Math.max(0, Math.min(Number(e.detail.current) || 0, this.data.challengerSwiper.length - 1))
+    this.setData({ challengerStage: index })
   },
   switchLegendStage(e) {
     this.setData({ legendStage: Number(e.currentTarget.dataset.idx) })
@@ -84,12 +105,27 @@ Page({
     this.setData({ teamsStage: e.detail.current })
   },
 
+  challengerFormat(teams, rounds) {
+    const isGroup = name => !!name && ['附加赛', '上区', '下区', '淘汰赛'].indexOf(name) < 0
+    // 保存的窗口仅用于回显，不能改变真实分组对应的赛制。
+    const groups = [...new Set((teams || []).concat(rounds || []).map(row => row.group_name).filter(isGroup))]
+    const groupCount = groups.length
+    const hasHistory = (rounds || []).some(round => round.group_name === '附加赛')
+    const challengerFormatHint = groupCount === 3
+      ? '3 组赛制：3 个小组冠军晋级传奇组，3 个小组第 2 通过附加赛争夺 1 个晋级名额。'
+      : groupCount === 4
+        ? '4 组赛制：4 个小组冠军直接晋级传奇组，无附加赛。'
+        : '请选择赛制：3 组冠军晋级，小组第 2 参加附加赛争夺 1 席；4 组冠军直接晋级，无附加赛。'
+    return { groupCount, hasPlayoffStage: groupCount === 3 || (groupCount === 0 && hasHistory), canFinishPlayoff: groupCount === 3, challengerFormatHint }
+  },
+
   async load() {
     try {
       const detail = await api.adminMatchDetail(this.data.matchId)
       const teams = detail.teams || []
       const rounds = detail.rounds || []
-      const challengerRounds = rounds.filter(r => ['A', 'B', 'C', 'D', 'E', 'F', '附加赛'].indexOf(r.group_name) >= 0)
+      const isChallengerGroup = name => !!name && ['附加赛', '上区', '下区', '淘汰赛'].indexOf(name) < 0
+      const challengerRounds = rounds.filter(r => isChallengerGroup(r.group_name) || r.group_name === '附加赛')
       const legendRounds = rounds.filter(r => ['上区', '下区'].indexOf(r.group_name) >= 0)
       const knockoutRounds = rounds.filter(r => r.group_name === '淘汰赛')
       // 淘汰赛对阵按轮次分组：前2场1/4决赛，接着2场半决赛，最后1场决赛
@@ -142,24 +178,27 @@ Page({
           : '决赛打完，冠军已产生！'
       }
       // 小组赛对阵按组分区（A组/B组/C组...）
-      const groupRounds = {}
-      rounds.filter(r => ['A', 'B', 'C', 'D', 'E', 'F'].indexOf(r.group_name) >= 0).forEach(r => {
+      const groupRounds = Object.create(null)
+      rounds.filter(r => isChallengerGroup(r.group_name)).forEach(r => {
         ;(groupRounds[r.group_name] = groupRounds[r.group_name] || []).push(r)
       })
-      const challengerSwiper = [
-        {
-          title: '小组赛',
-          groups: groupRounds,
-          count: Object.keys(groupRounds).reduce((s, k) => s + groupRounds[k].length, 0)
-        },
-        { title: '附加赛', rounds: rounds.filter(r => r.group_name === '附加赛') }
-      ]
+      const format = this.challengerFormat(teams, rounds)
+      const challengerSwiper = [{
+        title: '小组赛', type: 'group', groups: groupRounds,
+        count: Object.keys(groupRounds).reduce((s, k) => s + groupRounds[k].length, 0)
+      }]
+      if (format.hasPlayoffStage) challengerSwiper.push({
+        title: format.groupCount === 3 ? '附加赛' : '附加赛（历史）', type: 'playoff',
+        historyOnly: format.groupCount !== 3, rounds: rounds.filter(r => r.group_name === '附加赛')
+      })
       const legendSwiper = [
         { title: '上区', rounds: rounds.filter(r => r.group_name === '上区') },
         { title: '下区', rounds: rounds.filter(r => r.group_name === '下区') }
       ]
       const legendTeams = teams.filter(t => t.stage === 'legend')
-      const challengerTeams = teams.filter(t => t.stage === 'challenger')
+      const waitingTeams = teams.filter(isWaitingForGroup)
+      const rosterLocked = isRosterLocked(detail.match, teams, rounds)
+      const challengerTeams = teams.filter(t => t.stage === 'challenger' && !isWaitingForGroup(t) && t.registration_status !== 'pending' && t.registration_status !== 'rejected')
       const playoffTeams = teams.filter(t => t.stage === 'playoff')
       const eliminatedTeams = teams.filter(t => t.stage === 'eliminated')
 
@@ -167,7 +206,7 @@ Page({
       const koFinal = koSorted.length >= 5 ? koSorted[4] : null
       const koSemi = koSorted.slice(2, 4)
       const koRankOf = (teamId) => {
-        if (koFinal && (koFinal.team1_id == teamId || koFinal.team2_id == teamId)) {
+        if (koFinal && koFinal.status === 'finished' && koFinal.winner_id != null && (koFinal.team1_id == teamId || koFinal.team2_id == teamId)) {
           return koFinal.winner_id == teamId ? '冠军' : '亚军'
         }
         for (const r of koSemi) {
@@ -197,8 +236,9 @@ Page({
 
       // 挑战者组 tab：所有参加过挑战者组比赛的队伍
       const challengerTab = teams.filter(t => {
+        if (isWaitingForGroup(t) || t.registration_status === 'pending' || t.registration_status === 'rejected') return false
         if (t.stage === 'challenger') return true
-        if (['A', 'B', 'C', 'D', 'E', 'F', '附加赛'].indexOf(t.group_name) >= 0) return true
+        if (isChallengerGroup(t.group_name) || t.group_name === '附加赛') return true
         return t.seed > 4   // 从挑战者组晋级上来的（直升的前4 seed 1-4）
       }).map(t => Object.assign({}, t, { stage_status: challengerStatusOf(t) }))
       // 传奇组 tab：所有参加过传奇组比赛的队伍（直升 + 晋级 + 传奇组及以后淘汰）
@@ -221,6 +261,8 @@ Page({
 
       // 队伍排名：按比赛结果 —— 名次(冠军>亚军>四强>六强>传奇>挑战者>已淘汰) → 胜场 → 净胜分 → rating
       const stageWeightOf = (t) => {
+        if (isWaitingForGroup(t)) return 7
+        if (t.registration_status === 'pending' || t.registration_status === 'rejected') return 8
         if (t.ko_rank === '冠军') return 0
         if (t.ko_rank === '亚军') return 1
         if (t.ko_rank === '四强') return 2
@@ -234,7 +276,10 @@ Page({
           const ko_rank = koRankOf(t.team_id)
           // 排名状态：淘汰赛名次 > 阶段状态 > 待分组
           let stage_text = '待分组'
-          if (ko_rank) stage_text = ko_rank
+          if (t.registration_status === 'pending') stage_text = '报名待审核'
+          else if (t.registration_status === 'rejected') stage_text = '报名已驳回'
+          else if (isWaitingForGroup(t)) stage_text = '待分组'
+          else if (ko_rank) stage_text = ko_rank
           else if (t.stage === 'legend') stage_text = '传奇组'
           else if (t.stage === 'challenger') stage_text = '挑战者'
           else if (t.stage === 'playoff') stage_text = '已晋级'
@@ -250,7 +295,10 @@ Page({
         })
       this.setData({
         match: Object.assign({}, detail.match, { statusText: this.statusText(detail.match.status) }),
+        registrationSummary: this.describeRegistration(detail.match),
         teams,
+        waitingTeams,
+        rosterLocked,
         legendTeams,
         challengerTeams,
         playoffTeams,
@@ -263,12 +311,57 @@ Page({
         knockoutGroups: koGroups,
         knockoutHint,
         challengerSwiper,
+        groupCount: format.groupCount,
+        hasPlayoffStage: format.hasPlayoffStage,
+        canFinishPlayoff: format.canFinishPlayoff,
+        challengerFormatHint: format.challengerFormatHint,
+        challengerStage: Math.min(this.data.challengerStage, challengerSwiper.length - 1),
         legendSwiper,
         allRounds: rounds
       })
     } catch (err) {
       this.showErr(err, '加载失败')
     }
+  },
+
+  // 写入成功后使共享角标过期；纯内存通知失败不能把已完成的审批误报为失败。
+  invalidateAdminTodos() {
+    try {
+      require('../../../utils/admin-todos.js').invalidate()
+    } catch (_) {
+      // 页面返回时仍会按摘要缓存周期重试，不影响服务器已保存的结果。
+    }
+  },
+
+  // 通过某队伍的报名记录（审核链修复：pending → approved，并自动创建赛事进度参与编排）
+  async approveTeamReg(e) {
+    const teamId = e.currentTarget.dataset.id
+    const name = e.currentTarget.dataset.name || '该队伍'
+    if (this.data.rosterLocked || isRosterLocked(this.data.match, this.data.teams, this.data.allRounds)) {
+      wx.showToast({ title: '已分组，参赛名单已锁定', icon: 'none' })
+      return
+    }
+    const team = this.data.teams.find(t => t.team_id == teamId)
+    if (!team || team.registration_status !== 'pending') return
+    wx.showModal({
+      title: '通过报名',
+      content: `确定通过「${name}」的报名审核吗？通过后显示为待分组。`,
+      success: async (res) => {
+        if (!res.confirm) return
+        if (this.data.rosterLocked || isRosterLocked(this.data.match, this.data.teams, this.data.allRounds)) {
+          wx.showToast({ title: '已分组，参赛名单已锁定', icon: 'none' })
+          return
+        }
+        try {
+          await api.approveTeamRegistration(this.data.matchId, teamId)
+          this.invalidateAdminTodos()
+          wx.showToast({ title: '已通过', icon: 'success' })
+          await this.load()
+        } catch (err) {
+          this.showErr(err, '操作失败')
+        }
+      }
+    })
   },
 
   // BO3 小局详情（淘汰赛点对阵行查看）
@@ -302,6 +395,10 @@ Page({
       .concat(this.data.legendRounds)
       .concat(this.data.knockoutRounds)
       .find(x => x.id == rid)
+    if (r && r.group_name === '附加赛' && !this.data.canFinishPlayoff) {
+      wx.showToast({ title: '历史附加赛仅可查看', icon: 'none' })
+      return
+    }
     const isBo3 = !!(r && r.group_name === '淘汰赛')
     this.setData({
       scoreRoundId: rid,
@@ -424,32 +521,39 @@ Page({
   // ===== 编排操作 =====
   // 分组（输入组数，自动生成 A/B/C...；自动先分配种子：前4直升传奇组）
   promptGroup() {
+    if (this.data.groupingBusy) return
     wx.showModal({
-      title: '分组',
+      title: '3 组含附加赛 / 4 组直晋',
       editable: true,
-      placeholderText: '输入组数，如: 3',
+      placeholderText: '输入 3 或 4',
       success: async (res) => {
-        if (!res.confirm || !res.content) return
-        const n = parseInt(res.content.trim(), 10)
-        if (isNaN(n) || n < 2 || n > 6) {
-          wx.showToast({ title: '请输入 2-6 之间的组数', icon: 'none' })
+        if (!res.confirm || !res.content || this.data.groupingBusy) return
+        const value = res.content.trim()
+        if (value !== '3' && value !== '4') {
+          wx.showToast({ title: '当前赛制仅支持 3 组或 4 组', icon: 'none' })
           return
         }
+        const n = Number(value)
         // 自动生成 A, B, C... 组名
         const groups = []
         for (let i = 0; i < n; i++) groups.push(String.fromCharCode(65 + i))
+        this.setData({ groupingBusy: true })
         try {
-          // 先分配种子（前4直升传奇组），再蛇形分组
-          await api.autoSeeds(this.data.matchId)
-          await api.autoGroup(this.data.matchId, groups)
+          // 种子与分组由同一个事务保存，分组失败时名单仍可继续审核。
+          await api.seedAndGroup(this.data.matchId, groups)
+          this.invalidateAdminTodos()
+          // 即使重新加载失败，已成功分组的页面也立即关闭审批入口。
+          this.setData({ rosterLocked: true })
           wx.showModal({
             title: '分组完成',
-            content: `已分配种子并分为 ${groups.join('、')} 组`,
+            content: `已分配种子并分为 ${groups.join('、')} 组\n` + (n === 3 ? '3 个小组冠军晋级，第 2 名参加附加赛。' : '4 个小组冠军直接晋级，无附加赛。'),
             showCancel: false
           })
-          this.load()
+          await this.load()
         } catch (err) {
           this.showErr(err, '分组失败')
+        } finally {
+          this.setData({ groupingBusy: false })
         }
       }
     })
@@ -484,9 +588,12 @@ Page({
       const d = res.data || {}
       const w = (d.group_winners || []).length
       const n = d.added_rounds || 0
+      const hasPlayoff = typeof d.has_playoff === 'boolean' ? d.has_playoff : (d.group_count || this.data.groupCount) === 3
       wx.showModal({
         title: '小组赛已结束',
-        content: `每组第1共 ${w} 队已晋级传奇组\n附加赛对阵已生成 ${n} 场，请录入附加赛比分`,
+        content: hasPlayoff
+          ? `每组第1共 ${w} 队已晋级传奇组\n附加赛对阵已生成 ${n} 场，请录入附加赛比分`
+          : `${w} 个小组冠军已晋级传奇组，请到「传奇组」进行分区。`,
         showCancel: false
       })
       this.load()
@@ -496,6 +603,10 @@ Page({
   },
 
   async finishPlayoff() {
+    if (!this.data.canFinishPlayoff) {
+      wx.showToast({ title: '当前赛制不需要推进附加赛', icon: 'none' })
+      return
+    }
     try {
       await api.finishPlayoffStage(this.data.matchId)
       wx.showModal({
@@ -603,27 +714,117 @@ Page({
     return m ? (m[1] + ':' + m[2]) : ''
   },
 
-  // 打开时间窗口面板：固定阶段列表 + 对阵中出现的组名合并（对阵未生成也能预设窗口）
-  openWindowPanel() {
-    const allRounds = this.data.allRounds || []
-    const fixedGroups = ['A', 'B', 'C', 'D', 'E', 'F', '附加赛', '上区', '下区', '淘汰赛']
-    const roundGroups = allRounds.map(r => r.group_name).filter(Boolean)
-    const groupNames = [...new Set([...fixedGroups, ...roundGroups])]
-    const stageWindows = groupNames.map(g => {
-      const r = allRounds.find(x => x.group_name === g)
-      const ws = r ? r.window_start : null
-      const we = r ? r.window_end : null
-      return {
-        group_name: g,
-        window_start: ws,
-        window_end: we,
-        has_window: !!(ws && we),
-        window_text: (ws && we) ? (this.fmtDateTime(ws) + ' ~ ' + this.fmtDateTime(we)) : '未设置限定时段'
-      }
+  describeRegistration(match) {
+    const display = value => this.fmtDate(value) + ' ' + this.fmtTime(value)
+    return '开始：' + (match.register_start ? display(match.register_start) : '不限制') + ' · 截止：' + (match.register_end ? display(match.register_end) : '不限制')
+  },
+  openRegistrationPanel() {
+    const match = this.data.match
+    if (!match || this.data.registrationSaving) return
+    this.setData({
+      showRegistrationPanel: true,
+      registrationStartDate: this.fmtDate(match.register_start),
+      registrationStartTime: this.fmtTime(match.register_start),
+      registrationEndDate: this.fmtDate(match.register_end),
+      registrationEndTime: this.fmtTime(match.register_end)
     })
-    this.setData({ showWindowPanel: true, stageWindows, windowEditGroup: null })
+  },
+  closeRegistrationPanel() {
+    if (!this.data.registrationSaving) this.setData({ showRegistrationPanel: false })
+  },
+  onRegistrationInput(e) {
+    if (this.data.registrationSaving) return
+    const field = e.currentTarget.dataset.field
+    if (['registrationStartDate', 'registrationStartTime', 'registrationEndDate', 'registrationEndTime'].indexOf(field) >= 0) {
+      this.setData({ [field]: e.detail.value })
+    }
+  },
+  clearRegistrationLimit(e) {
+    if (this.data.registrationSaving) return
+    const side = e.currentTarget.dataset.side
+    if (side === 'start' || side === 'all') this.setData({ registrationStartDate: '', registrationStartTime: '' })
+    if (side === 'end' || side === 'all') this.setData({ registrationEndDate: '', registrationEndTime: '' })
+  },
+  async saveRegistrationWindow() {
+    if (this.data.registrationSaving) return
+    const d = this.data
+    if (!!d.registrationStartDate !== !!d.registrationStartTime || !!d.registrationEndDate !== !!d.registrationEndTime) {
+      wx.showToast({ title: '请补全日期和时间，或清除该限制', icon: 'none' })
+      return
+    }
+    // 保留选择的北京时间；不根据设备时区进行 Date/toISOString 转换。
+    const start = d.registrationStartDate ? d.registrationStartDate + 'T' + d.registrationStartTime + ':00' : null
+    const end = d.registrationEndDate ? d.registrationEndDate + 'T' + d.registrationEndTime + ':00' : null
+    if (start && end && start >= end) {
+      wx.showToast({ title: '报名开始时间需早于截止时间', icon: 'none' })
+      return
+    }
+    this.setData({ registrationSaving: true })
+    try {
+      const updated = await api.updateRegistrationWindow(d.matchId, { register_start: start, register_end: end })
+      // 此接口只更新报名时间；保留详情接口提供的报名数量等统计字段。
+      const match = Object.assign({}, this.data.match, {
+        register_start: updated.register_start,
+        register_end: updated.register_end
+      })
+      match.statusText = this.statusText(match.status)
+      this.setData({ match, registrationSummary: this.describeRegistration(match), showRegistrationPanel: false })
+      wx.showToast({ title: '报名时间已保存', icon: 'success' })
+    } catch (err) {
+      this.showErr(err, '保存报名时间失败')
+    } finally {
+      this.setData({ registrationSaving: false })
+    }
+  },
+
+  // 组数由实际分组决定，同时保留历史对阵及独立保存的排期范围。
+  async openWindowPanel() {
+    try {
+      const savedWindows = await api.getStageWindows(this.data.matchId)
+      const allRounds = this.data.allRounds || []
+      const teamGroups = (this.data.teams || []).map(t => t.group_name).filter(Boolean)
+      const roundGroups = allRounds.map(r => r.group_name).filter(Boolean)
+      const savedGroups = (savedWindows || []).map(w => w.group_name).filter(Boolean)
+      const currentGroups = new Set([...teamGroups, ...roundGroups])
+      const groupNames = [...new Set([...teamGroups, ...roundGroups, ...savedGroups])]
+      const format = this.challengerFormat(this.data.teams, allRounds)
+      const stageWindows = groupNames.map(g => {
+        const window = (savedWindows || []).find(w => w.group_name === g)
+        const ws = window ? window.window_start : null
+        const we = window ? window.window_end : null
+        const historyOnly = g === '附加赛' && format.groupCount === 4
+        const stage = historyOnly ? 'history' : g === '淘汰赛' ? 'knockout' : (g === '上区' || g === '下区') ? 'legend' : 'challenger'
+        const groupLabel = /^[A-Z]$/.test(g) ? g + ' 组' : g
+        const label = historyOnly ? '附加赛（历史，不适用当前 4 组）' : stage === 'knockout' ? '淘汰赛' : (stage === 'legend' ? '传奇组 · ' : '挑战者组 · ') + groupLabel
+        return {
+          group_name: g,
+          stage,
+          label,
+          history_only: historyOnly,
+          saved_only: !currentGroups.has(g),
+          source_hint: g === '附加赛' && format.groupCount === 4
+            ? '历史附加赛设置，不参与当前 4 组赛制'
+            : !currentGroups.has(g) ? '已保存设置 · 当前无队伍或对阵' : '',
+          window_start: ws,
+          window_end: we,
+          has_window: !!(ws && we),
+          window_text: (ws && we) ? (this.fmtDateTime(ws) + ' ~ ' + this.fmtDateTime(we)) : '未限制比赛排期范围'
+        }
+      })
+      const windowSections = [
+        { key: 'challenger', title: '挑战者组', hint: format.challengerFormatHint + (format.groupCount === 3 ? '附加赛生成后可设置其排期范围。' : '') },
+        { key: 'legend', title: '传奇组', hint: '上区、下区分别设置比赛排期范围。' },
+        { key: 'knockout', title: '淘汰赛', hint: '此范围适用于淘汰赛对阵。' },
+        { key: 'history', title: '历史设置', hint: '以下设置不参与当前赛制，仅保留查看。' }
+      ].map(section => Object.assign({}, section, { windows: stageWindows.filter(w => w.stage === section.key) }))
+        .filter(section => section.windows.length > 0)
+      this.setData({ showWindowPanel: true, stageWindows, windowSections, windowEditGroup: null })
+    } catch (err) {
+      this.showErr(err, '加载时间窗口失败')
+    }
   },
   closeWindowPanel() {
+    if (this.data.windowSaving) return
     this.setData({ showWindowPanel: false, windowEditGroup: null })
   },
 
@@ -631,8 +832,10 @@ Page({
   openWindowEdit(e) {
     const g = e.currentTarget.dataset.group
     const w = this.data.stageWindows.find(x => x.group_name === g)
+    if (!w || w.history_only || this.data.windowSaving) return
     this.setData({
       windowEditGroup: g,
+      windowEditLabel: w.label,
       windowStartDate: w && w.window_start ? this.fmtDate(w.window_start) : '',
       windowStartTime: w && w.window_start ? this.fmtTime(w.window_start) : '',
       windowEndDate: w && w.window_end ? this.fmtDate(w.window_end) : '',
@@ -640,6 +843,7 @@ Page({
     })
   },
   cancelWindowEdit() {
+    if (this.data.windowSaving) return
     this.setData({ windowEditGroup: null })
   },
   onStartDateChange(e) { this.setData({ windowStartDate: e.detail.value }) },
@@ -649,6 +853,7 @@ Page({
 
   // 保存窗口
   async saveWindow() {
+    if (this.data.windowSaving) return
     const { windowStartDate, windowStartTime, windowEndDate, windowEndTime, windowEditGroup } = this.data
     if (!windowStartDate || !windowStartTime || !windowEndDate || !windowEndTime) {
       wx.showToast({ title: '请填写完整的起止时间', icon: 'none' })
@@ -660,6 +865,8 @@ Page({
       wx.showToast({ title: '开始时间需早于结束时间', icon: 'none' })
       return
     }
+    if (!windowEditGroup) return
+    this.setData({ windowSaving: true })
     try {
       await api.setStageWindow(this.data.matchId, windowEditGroup, { window_start: start, window_end: end })
       wx.showToast({ title: '窗口已保存', icon: 'success' })
@@ -667,6 +874,8 @@ Page({
       this.load()
     } catch (err) {
       this.showErr(err, '保存失败')
+    } finally {
+      this.setData({ windowSaving: false })
     }
   }
 })

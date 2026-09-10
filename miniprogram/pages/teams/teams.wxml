@@ -1,118 +1,39 @@
-<view class="page">
-  <nav-drawer title="所有队伍"></nav-drawer>
+<nav-drawer title="所有队伍"></nav-drawer>
+<view class="teams-directory">
+  <view class="page-heading"><view><text class="eyebrow">TEAM DIRECTORY</text><text class="page-title">找到你的队伍</text></view><view class="text-link" bindtap="goMyTeam">我的队伍<text>›</text></view></view>
+  <text class="page-caption">看见彼此的实力，找到并肩作战的默契。</text>
+  <view class="overview-strip"><view class="overview-main"><text class="overview-value">{{total}}</text><text class="overview-unit">支队伍</text></view><view class="overview-divider"></view><view class="overview-secondary"><text class="overview-label">最高队伍水平分</text><text class="overview-score">{{maxRating}}</text></view><image class="overview-icon" src="/images/brand/team.svg"/></view>
+  <view class="search-bar"><image class="search-icon" src="/images/icons/search.svg"/><input class="search-input" placeholder="搜索队伍名称或队长" placeholder-class="search-placeholder" value="{{keyword}}" bindinput="onSearchInput" confirm-type="search"/><view wx:if="{{keyword}}" class="search-clear" bindtap="clearSearch"><image src="/images/icons/x.svg"/></view></view>
+  <view class="list-heading"><text>{{keyword ? '搜索结果' : '全部队伍'}}<text class="result-count">{{filtered.length}}</text></text><text class="sort-caption">按水平分排序</text></view>
 
-  <!-- 搜索 -->
-  <view class="search-bar">
-    <image class="search-ic" src="/images/icons/search.svg"/>
-    <input class="search-input" placeholder="搜索队伍或队长..." value="{{keyword}}" bindinput="onSearchInput" confirm-type="search"/>
-    <view wx:if="{{keyword}}" class="search-clear" bindtap="clearSearch">
-      <image class="search-clear-ic" src="/images/icons/x.svg"/>
-    </view>
-  </view>
-
-  <!-- 统计概览 -->
-  <view class="stat-bar">
-    <view class="stat">
-      <text class="stat-num">{{total}}</text>
-      <text class="stat-label">全部队伍</text>
-    </view>
-    <view class="stat">
-      <text class="stat-num stat-dim">{{filtered.length}}</text>
-      <text class="stat-label">当前结果</text>
-    </view>
-    <view class="stat">
-      <text class="stat-num">{{maxRating}}</text>
-      <text class="stat-label">最高评分</text>
-    </view>
-  </view>
-
-  <!-- 队伍卡片列表 -->
-  <block wx:if="{{filtered.length > 0}}">
-    <view class="team-card" wx:for="{{filtered}}" wx:key="id" bindtap="viewTeam" data-id="{{item.id}}">
-      <view class="tc-avatar t-{{item.tierCls}}">
-        <image wx:if="{{item.logo_full}}" class="tc-logo" src="{{item.logo_full}}" mode="aspectFill"/>
-        <text wx:else class="tc-initial">{{item.initial}}</text>
-        <text class="tc-tier">{{item.tierLabel}}</text>
-      </view>
-      <view class="tc-body">
-        <view class="tc-top">
-          <text class="tc-name">{{item.name}}</text>
-        </view>
-        <text class="tc-meta">队长：{{item.captain_name || '未知'}}</text>
-        <view class="tc-foot">
-          <text class="tc-count">{{item.memberCount}} 名队员</text>
-          <text class="tc-rating">评分 {{item.rating || 0}}</text>
-          <view class="tc-apply" catchtap="applyJoin" data-id="{{item.id}}" data-name="{{item.name}}">申请加入</view>
-        </view>
-      </view>
-      <image class="tc-arrow" src="/images/icons/chevron-right.svg"/>
+  <view wx:if="{{loading}}" class="empty-card"><view class="empty-symbol"><image src="/images/brand/team.svg"/></view><text class="empty-title">正在加载队伍</text><text class="empty-copy">稍等片刻，看看有哪些队伍在这里</text></view>
+  <view wx:elif="{{loadFailed}}" class="empty-card"><text class="empty-title">暂时无法加载</text><text class="empty-copy">请检查网络后重试</text><view class="empty-action" bindtap="loadTeams">重新加载</view></view>
+  <block wx:elif="{{filtered.length > 0}}">
+    <view wx:for="{{filtered}}" wx:key="id" class="team-card" bindtap="viewTeam" data-id="{{item.id}}">
+      <view class="card-top"><view class="team-emblem tier-{{item.tierCls}}"><image wx:if="{{item.logo_full}}" src="{{item.logo_full}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view><view class="card-identity"><text class="team-name">{{item.name}}</text><text class="captain-meta">队长 · {{item.captainLabel}}</text></view><image class="card-chevron" src="/images/icons/chevron-right.svg"/></view>
+      <text wx:if="{{item.description}}" class="team-description">{{item.description}}</text>
+      <view class="card-metrics"><view class="rating-block"><text class="rating-number">{{item.rating || 0}}</text><text class="rating-label">水平分</text></view><text class="rating-tier tier-text-{{item.tierCls}}">{{item.tierLabel}}<text>队伍评级</text></text><view class="member-block"><text class="member-number">{{item.memberCount}}</text><text class="rating-label">名队员</text></view></view>
+      <view class="card-bottom"><text class="status-pill status-{{item.statusCls}}"><text class="status-dot"></text>{{item.statusText}}</text><view class="apply-button" catchtap="applyJoin" data-id="{{item.id}}" data-name="{{item.name}}">申请加入<text>›</text></view></view>
     </view>
   </block>
-
-  <!-- 空状态 -->
-  <view wx:elif="{{total === 0}}" class="empty">
-    <view class="empty-box">
-      <image class="empty-ic" src="/images/icons/swords.svg"/>
-      <text class="empty-title">还没有队伍</text>
-      <text class="empty-sub">下拉刷新，或去「我的队伍」创建一支</text>
-    </view>
-  </view>
-  <view wx:else class="empty">
-    <view class="empty-box">
-      <image class="empty-ic" src="/images/icons/search.svg"/>
-      <text class="empty-title">没有匹配的队伍</text>
-      <text class="empty-sub">换个关键词试试</text>
-    </view>
-  </view>
+  <view wx:elif="{{total === 0}}" class="empty-card"><view class="empty-symbol"><image src="/images/brand/team.svg"/></view><text class="empty-title">第一支队伍，或许就是你们</text><text class="empty-copy">创建队伍，邀请熟悉的队友一起上场</text><view class="empty-action" bindtap="goMyTeam">去创建队伍</view></view>
+  <view wx:else class="empty-card"><view class="empty-symbol"><image src="/images/icons/search.svg"/></view><text class="empty-title">没有找到匹配的队伍</text><text class="empty-copy">试试其他名称，或查看全部队伍</text><view class="empty-action" bindtap="clearSearch">清空搜索</view></view>
+  <text wx:if="{{!loading && filtered.length > 0}}" class="list-note">队伍评级根据真实水平分划分，赛事报名由队长提交</text>
 </view>
 
-<!-- 队伍详情弹层 -->
-<view wx:if="{{showTeamDetail && detailTeam}}" class="mask" bindtap="closeTeamDetail">
-  <view class="detail-panel" catchtap="noop">
-    <view class="dp-header">
-      <view class="dp-avatar t-{{detailTeam.tierCls}}">
-        <image wx:if="{{detailTeam.logo_full}}" class="dp-logo" src="{{detailTeam.logo_full}}" mode="aspectFill"/>
-        <text wx:else class="dp-initial">{{detailTeam.initial}}</text>
-        <text class="tc-tier">{{detailTeam.tierLabel}}</text>
-      </view>
-      <view class="dp-title">
-        <text class="dp-name">{{detailTeam.name}}</text>
-        <text class="dp-caption">队长：{{detailTeam.captain_name || '未知'}}</text>
-      </view>
-      <image class="dp-close" src="/images/icons/x.svg" bindtap="closeTeamDetail"/>
-    </view>
-
-    <!-- 数据统计 -->
-    <view class="dp-stats">
-      <view class="dp-stat">
-        <text class="dp-stat-num">{{detailMembers.length}}</text>
-        <text class="dp-stat-label">成员</text>
-      </view>
-      <view class="dp-stat">
-        <text class="dp-stat-num">{{detailTeam.rating || 0}}</text>
-        <text class="dp-stat-label">队伍评分</text>
-      </view>
-      <view class="dp-stat">
-        <text class="dp-stat-num">{{detailTeam.tierLabel}}</text>
-        <text class="dp-stat-label">段位等级</text>
-      </view>
-    </view>
-
-    <text wx:if="{{detailTeam.description}}" class="dp-desc">{{detailTeam.description}}</text>
-
-    <!-- 成员花名册 -->
-    <text class="dp-section">成员花名册 ({{detailMembers.length}})</text>
-    <view wx:for="{{detailMembers}}" wx:key="id" class="member-row">
-      <image class="member-avatar" src="{{item.avatar_full || '/images/icons/gamepad.svg'}}"/>
-      <view class="member-info">
-        <view class="member-name-row">
-          <text class="member-name">{{item.nickname || '玩家' + item.user_id}}</text>
-          <text class="tag {{item.role === 'captain' ? 'tag-orange' : 'tag-gray'}}">{{item.role === 'captain' ? '队长' : '队员'}}</text>
-        </view>
-        <text class="member-meta">游戏ID {{item.game_id || '未设置'}} · 段位 {{item.display_rank || '未设置'}}</text>
-      </view>
-    </view>
-
-    <view class="dp-apply btn-primary" bindtap="applyJoin" data-id="{{detailTeam.id}}" data-name="{{detailTeam.name}}">申请加入</view>
+<view wx:if="{{showTeamDetail && detailTeam}}" class="sheet-mask" bindtap="closeTeamDetail">
+  <view class="detail-sheet" catchtap="noop">
+    <view class="sheet-handle"></view>
+    <view class="sheet-heading"><text class="micro-label">TEAM PROFILE / {{detailTeam.id}}</text><view class="close-control" bindtap="closeTeamDetail"><image src="/images/icons/x.svg"/></view></view>
+    <scroll-view scroll-y class="detail-scroll">
+      <view class="detail-identity"><view class="detail-emblem tier-{{detailTeam.tierCls}}"><image wx:if="{{detailTeam.logo_full}}" src="{{detailTeam.logo_full}}" mode="aspectFill"/><text wx:else>{{detailTeam.initial}}</text></view><view class="detail-copy"><text class="detail-name">{{detailTeam.name}}</text><text class="captain-meta">队长 · {{detailTeam.captainLabel}}</text><text class="status-pill status-{{detailTeam.statusCls}}"><text class="status-dot"></text>{{detailTeam.statusText}}</text></view></view>
+      <view class="detail-metrics"><view><text class="detail-stat-value accent">{{detailTeam.rating}}</text><text class="detail-stat-label">队伍水平分</text></view><view><text class="detail-stat-value tier-text-{{detailTeam.tierCls}}">{{detailTeam.tierLabel}}</text><text class="detail-stat-label">队伍评级</text></view><view><text class="detail-stat-value">{{detailMembers.length}}</text><text class="detail-stat-label">当前队员</text></view></view>
+      <text class="rating-explainer">水平分按评分最高的 5 名队员合计</text>
+      <text wx:if="{{detailTeam.description}}" class="detail-description">{{detailTeam.description}}</text>
+      <view class="roster-heading"><text class="roster-title">队伍阵容</text><text class="roster-caption">ROSTER</text></view>
+      <view wx:for="{{detailMembers}}" wx:key="user_id" class="member-row"><view class="member-avatar"><image wx:if="{{item.avatar_full}}" src="{{item.avatar_full}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view><view class="member-copy"><view class="member-name-line"><text class="member-name">{{item.nickname || item.game_id || '玩家' + item.user_id}}</text><text wx:if="{{item.role === 'captain'}}" class="captain-label">队长</text></view><text class="member-game">{{item.game_id || '暂未设置游戏 ID'}}</text></view><view class="member-rating"><text class="member-rank">{{item.display_rank || '待认证'}}</text><text class="member-score">{{item.score_text}} 水平分</text></view></view>
+      <view wx:if="{{detailMembers.length === 0}}" class="roster-empty">暂无成员信息</view>
+    </scroll-view>
+    <view class="detail-footer"><view class="detail-apply" bindtap="applyJoin" data-id="{{detailTeam.id}}" data-name="{{detailTeam.name}}">申请加入队伍</view><text>提交后由队长审核入队申请</text></view>
   </view>
 </view>
