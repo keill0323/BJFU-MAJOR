@@ -33,3 +33,28 @@ CLAUDE.md
 # 微信小程序
 miniprogram/node_modules/
 node_modules/
+
+# 本机微信开发者工具配置
+/project.private.config.json
+
+# 本地发布、宣传产物与临时工作区（源码图片和迁移不忽略）
+/artifacts/deploy/
+/artifacts/promotion/
+/artifacts/tmp/
+/artifacts/preview/
+/.local/
+/tmp/
+/temp/
+/deploy.tar.gz
+/backend-release*.tar.gz
+/fix_matches.sql
+/before-*.sql
+
+# 测试、构建生成内容
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+/dist/
+/build/
+*.log

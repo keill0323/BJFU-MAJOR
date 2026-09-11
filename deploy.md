@@ -1,5 +1,7 @@
 # 北林 CS2 Major · 上线部署指南
 
+项目变更与发布状态统一记录在[项目日志](项目总结与踩坑记录.md)。发布包及逐次部署记录保存在仓库外或被忽略的 `artifacts/deploy/`；不要复用旧发布包，始终从待发布代码重新打包。
+
 > 目标：把 FastAPI 后端部署到云服务器（MySQL + Nginx + HTTPS），小程序正式发布。
 > 前置：已注册微信小程序、已买国内云服务器、已备案域名（约 1-2 周）。
 
@@ -79,6 +81,29 @@ docker compose logs -f backend
 验证：`curl http://127.0.0.1:8000/api/matches` 应返回 JSON。
 
 ---
+
+### 已有冠军表升级
+
+已有环境必须先备份数据库并停止 API 写入，再用新镜像执行冠军补录迁移。`create_all()` 只创建缺失表，不为已有表补列。下面的命令适用于仓库已有的冠军补录版本；后续新增迁移需随对应功能代码同步。
+
+```bash
+(
+set -eu
+umask 077
+docker compose build backend
+docker compose stop backend
+upgrade_backup="before-manual-champions-$(date +%Y%m%d-%H%M%S).sql"
+docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines --triggers cs2_competition' > "$upgrade_backup"
+test -s "$upgrade_backup"
+# 备份与迁移任一步失败时终止，不继续启动。
+docker compose run --rm --no-deps backend python -m app.migrations.manual_champions
+# 仅在迁移成功后恢复服务。
+docker compose up -d --no-deps backend
+docker compose restart nginx
+)
+```
+
+迁移可以重跑，保留已有冠军数据；MySQL DDL 不能整段事务回滚。非 Docker 环境在 `backend` 目录执行 `python -m app.migrations.manual_champions`，成功后重启后端。
 
 ## 六、配置 HTTPS（Let's Encrypt 免费证书）
 
