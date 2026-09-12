@@ -12,7 +12,7 @@ from app.database import get_db
 from app.schemas.team import (
     TeamCreateRequest, TeamInfo, TeamListInfo, JoinTeamRequest, AssignMemberRequest,
     TalentMarketItem, UpdateMarketDescription, ApplyJoinRequest, TeamApplicationInfo,
-    InviteRequest, InvitationInfo, RecruitByStudentRequest,
+    InviteRequest, InvitationInfo, RecruitByStudentRequest, TeamContactRequest,
 )
 from app.models.user import User, UserRole
 from app.models.team import Team
@@ -42,7 +42,9 @@ def create_team(
     current_user = Depends(get_current_user),
 ):
     """创建队伍，创建者自动成为队长"""
-    return team_service.create_team(db, request.name, current_user.id, request.description)
+    return team_service.create_team(
+        db, request.name, current_user.id, request.description, captain_qq=request.captain_qq
+    )
 
 
 @router.get("", response_model=List[TeamListInfo])
@@ -197,16 +199,29 @@ def get_team(team_id: int, db: Session = Depends(get_db), authorization: Optiona
     team = team_service.get_team_by_id(db, team_id)
     if not team:
         raise HTTPException(status_code=404, detail="队伍不存在")
-    viewer = get_current_user(db, authorization) if isinstance(authorization, str) else None
+    viewer = get_current_user(db, authorization) if isinstance(authorization, str) and authorization.strip() else None
     if viewer and viewer.role in (UserRole.ADMIN, UserRole.REVIEWER):
         return team
     if team.is_hidden:
         raise HTTPException(status_code=404, detail="队伍不存在")
     result = TeamInfo.model_validate(team)
+    if viewer is None:
+        result.captain_qq = None
     visible_members = {member.user_id for member in team.members if member.user and not member.user.is_hidden}
     result.members = [member for member in result.members if member.user_id in visible_members]
     result.member_count = len(result.members)
     return result
+
+
+@router.put("/{team_id}/contact", response_model=TeamInfo)
+def update_team_contact(
+    team_id: int,
+    request: TeamContactRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """仅当前队长可以补录或更换队伍联系 QQ。"""
+    return team_service.update_team_contact(db, team_id, current_user.id, request.captain_qq)
 
 
 @router.post("/{team_id}/logo", response_model=TeamInfo)

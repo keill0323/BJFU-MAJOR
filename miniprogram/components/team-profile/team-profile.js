@@ -24,7 +24,7 @@ function score(value) {
 }
 
 // Only display fields enter component data; private server fields are never copied.
-function profileData(raw) {
+function profileData(raw, loggedIn) {
   const captainId = positiveId(raw.captain_id)
   const members = (Array.isArray(raw.members) ? raw.members : []).filter(Boolean).map(member => {
     const userId = positiveId(member.user_id)
@@ -69,6 +69,7 @@ function profileData(raw) {
       id: positiveId(raw.id),
       name,
       captain_id: captainId,
+      captain_qq: loggedIn && /^[1-9][0-9]{4,11}$/.test(text(raw.captain_qq)) ? text(raw.captain_qq) : '',
       captain_name: captain ? captain.display_name : (captainId ? '玩家' + captainId : '暂未设置'),
       description: text(raw.description) || '队长还没有填写队伍简介',
       logo_full: mediaUrl(raw.logo),
@@ -96,26 +97,35 @@ Component({
       observer() { this.loadTeam() }
     }
   },
-  data: { loading: true, error: '', team: null, members: [] },
+  data: { loading: true, error: '', team: null, members: [], loggedIn: false },
   lifetimes: {
     created() { this._generation = 0; this._detached = false },
     attached() { if (this._requestedTeamId === undefined) this.loadTeam() },
     detached() { this._detached = true; this._generation = (this._generation || 0) + 1 }
   },
+  pageLifetimes: {
+    hide() {
+      this._generation = (this._generation || 0) + 1
+      this.setData({ team: null, members: [], loggedIn: false })
+    },
+    show() { if (!this.data.team) this.loadTeam() }
+  },
   methods: {
     async loadTeam() {
       if (this._detached) return
       const teamId = positiveId(this.data.teamId)
+      const token = wx.getStorageSync('token')
       const generation = this._generation = (this._generation || 0) + 1
       this._requestedTeamId = teamId
-      this.setData({ loading: !!teamId, error: teamId ? '' : '未选择队伍，请关闭后重新打开', team: null, members: [] })
+      this.setData({ loading: !!teamId, error: teamId ? '' : '未选择队伍，请关闭后重新打开', team: null, members: [], loggedIn: !!token })
       if (!teamId) return
-      const isCurrent = () => !this._detached && generation === this._generation && teamId === positiveId(this.data.teamId)
+      const isCurrent = () => !this._detached && generation === this._generation && teamId === positiveId(this.data.teamId) && token === wx.getStorageSync('token')
       try {
         const result = await api.getTeam(teamId)
         if (!isCurrent()) return
         if (!result || positiveId(result.id) !== teamId) throw new Error('Invalid team response')
-        const profile = profileData(result)
+        this._contactToken = token
+        const profile = profileData(result, !!token)
         this.setData({ loading: false, error: '', team: profile.team, members: profile.members })
       } catch (err) {
         if (!isCurrent()) return
@@ -123,6 +133,13 @@ Component({
         const error = status === 404 ? '队伍不存在或已被删除' : status === 401 || status === 403 ? '暂时无法查看队伍，请确认登录状态后重试' : '队伍信息加载失败，请检查网络后重试'
         this.setData({ loading: false, error, team: null, members: [] })
       }
+    },
+    copyCaptainQq() {
+      const token = wx.getStorageSync('token')
+      if (!token || token !== this._contactToken) { this.loadTeam(); return }
+      const team = this.data.team
+      if (this._detached || !team || !/^[1-9][0-9]{4,11}$/.test(team.captain_qq || '')) return
+      wx.setClipboardData({ data: team.captain_qq })
     }
   }
 })

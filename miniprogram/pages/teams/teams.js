@@ -29,13 +29,18 @@ Page({
     loadFailed: false,
     // 详情弹层
     showTeamDetail: false,
+    detailLoggedIn: false,
     detailTeam: null,
     detailMembers: []
   },
 
   onShow() {
+    this.closeTeamDetail()
     this.loadTeams()
   },
+
+  onHide() { this.closeTeamDetail() },
+  onUnload() { this.closeTeamDetail() },
 
   onPullDownRefresh() {
     this.loadTeams().finally(() => wx.stopPullDownRefresh())
@@ -97,8 +102,15 @@ Page({
 
   async viewTeam(e) {
     const id = e.currentTarget.dataset.id
+    const token = wx.getStorageSync('token')
+    const generation = this._detailGeneration = (this._detailGeneration || 0) + 1
+    const isCurrent = () => generation === this._detailGeneration && token === wx.getStorageSync('token')
+    this.setData({ showTeamDetail: false, detailTeam: null, detailMembers: [] })
     try {
       const team = await api.getTeam(id)
+      if (!isCurrent()) return
+      if (!team || Number(team.id) !== Number(id)) throw new Error('Invalid team response')
+      this._detailToken = token
       // TeamInfo 不含总评分和队长名，从本次返回的成员数据派生。
       const rating = (team.members || []).map(m => Number(m.rating) || 0).sort((a, b) => b - a).slice(0, 5).reduce((sum, value) => sum + value, 0)
       const captain = (team.members || []).find(m => m.user_id === team.captain_id)
@@ -110,7 +122,9 @@ Page({
       })
       this.setData({
         showTeamDetail: true,
+        detailLoggedIn: !!token,
         detailTeam: Object.assign({}, team, {
+          captain_qq: token && typeof team.captain_qq === 'string' && /^[1-9][0-9]{4,11}$/.test(team.captain_qq.trim()) ? team.captain_qq.trim() : '',
           rating,
           captainLabel: captain ? (captain.nickname || captain.game_id || '玩家' + captain.user_id) : '玩家' + team.captain_id,
           statusText: { approved: '已通过审核', pending: '待审核', rejected: '审核未通过' }[String(team.status || '').toLowerCase()] || '待确认',
@@ -123,13 +137,26 @@ Page({
         detailMembers: members
       })
     } catch (err) {
+      if (!isCurrent()) return
       wx.showToast({ title: '加载失败', icon: 'error' })
     }
   },
 
   closeTeamDetail() {
-    this.setData({ showTeamDetail: false, detailTeam: null, detailMembers: [] })
+    this._detailGeneration = (this._detailGeneration || 0) + 1
+    this._detailToken = ''
+    this.setData({ showTeamDetail: false, detailLoggedIn: false, detailTeam: null, detailMembers: [] })
   },
+
+  copyCaptainQq() {
+    const token = wx.getStorageSync('token')
+    const team = this.data.detailTeam
+    if (!token || token !== this._detailToken) { this.closeTeamDetail(); return }
+    if (!this.data.showTeamDetail || !team || !/^[1-9][0-9]{4,11}$/.test(team.captain_qq || '')) return
+    wx.setClipboardData({ data: team.captain_qq })
+  },
+
+  goLogin() { wx.navigateTo({ url: '/pages/login/login' }) },
 
   noop() {},   // 阻止面板内点击冒泡到遮罩
   goMyTeam() { wx.reLaunch({ url: '/pages/team/team' }) },

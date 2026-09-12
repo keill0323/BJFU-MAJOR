@@ -41,7 +41,9 @@ function load(file, getTeam = async id => team(id), component = false) {
       if (name.endsWith('/tournament.js')) return require(path.join(root, 'utils/tournament.js'))
       throw new Error('Unexpected module: ' + name)
     },
-    wx: new Proxy({}, { get(target, key) { throw new Error('Unexpected wx call: ' + String(key)) } })
+    wx: new Proxy({ getStorageSync: key => key === 'token' ? 'admin-test-token' : '' }, {
+      get(target, key) { if (key in target) return target[key]; throw new Error('Unexpected wx call: ' + String(key)) }
+    })
   }, { filename: absolute })
   const instance = { ...definition, ...definition.methods, data: plain(definition.data) }
   if (component) instance.data.teamId = 1

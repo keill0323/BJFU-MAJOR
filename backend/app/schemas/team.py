@@ -5,11 +5,38 @@ Since: 2026-7-22
 """
 
 from datetime import datetime
+import re
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-class TeamCreateRequest(BaseModel):
+def normalize_captain_qq(value) -> str:
+    """只接受符合格式的 QQ 字符串；接口与服务入口共用此校验。"""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise ValueError("请填写队长 QQ 号")
+    if not isinstance(value, str) or not re.fullmatch(r"[1-9][0-9]{4,11}", value.strip()):
+        raise ValueError("QQ 号须为 5–12 位数字，且不能以 0 开头")
+    return value.strip()
+
+
+class TeamContactRequest(BaseModel):
+    """队长补录或更新用于队伍联系的 QQ，不允许清空。"""
+    captain_qq: str = Field(..., description="队长 QQ 号（5–12 位数字，不以 0 开头）")
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_captain_qq(cls, values):
+        if isinstance(values, dict) and "captain_qq" not in values:
+            raise ValueError("请填写队长 QQ 号")
+        return values
+
+    @field_validator("captain_qq", mode="before")
+    @classmethod
+    def validate_captain_qq(cls, value):
+        return normalize_captain_qq(value)
+
+
+class TeamCreateRequest(TeamContactRequest):
     """创建队伍请求"""
     name: str = Field(..., min_length=1, max_length=20, description="队伍名（1-20字符）")
     description: Optional[str] = None
@@ -54,6 +81,7 @@ class TeamInfo(BaseModel):
     id: int
     name: str
     captain_id: int
+    captain_qq: Optional[str] = None
     description: Optional[str] = None
     status: str
     members: List[TeamMemberInfo] = []

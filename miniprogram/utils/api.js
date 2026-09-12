@@ -197,7 +197,9 @@ module.exports = {
   uploadAvatar: (filePath) => uploadFile('/api/auth/upload-avatar', filePath, false),
 
   // ===== 队伍 =====
-  createTeam: (name) => request('/api/teams', 'POST', { name }),          // 创建队伍
+  createTeam: (name, captainQq) => request('/api/teams', 'POST', { name, captain_qq: captainQq }), // 创建队伍
+  updateTeamContact: (teamId, captainQq) => request('/api/teams/' + teamId + '/contact', 'PUT', { captain_qq: captainQq })
+    .catch(err => backendVersionError(err, '队长 QQ 设置')),
   getTeams: () => request('/api/teams'),                                  // 队伍列表
   getAdminTeams: () => request('/api/teams/admin'),                        // 全部队伍（需管理权限）
   getTeam: (id) => request('/api/teams/' + id),                           // 查某支队伍详情

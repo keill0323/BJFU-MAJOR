@@ -17,7 +17,7 @@ const escapeHtml = value => String(value == null ? '' : value).replace(/[&<>"']/
 function makeFixtures() {
   const user = { id: 1, nickname: '林间有回声', game_id: 'FOREST_01', student_id: '示例学号', identity: 'new_student', rank: 'S32', individual_rating: 88, avatar: '', is_verified: true, role: 'user' }
   const members = ['林间有回声', '今天练枪了吗', '白桦', '长名字的队友也能完整显示', '回防中'].map((nickname, i) => ({ user_id: i + 1, nickname, game_id: 'FOREST_0' + (i + 1), rank: ['S32', 'A', 'B', 'B', 'C'][i], rating: [88, 75, 62, 60, 45][i], identity: i < 3 ? 'new_student' : 'senior', student_id: '示例 ' + (i + 1), avatar: '', role: i === 0 ? 'captain' : 'member' }))
-  const team = { id: 10, name: '北林森林回响', description: '认真打好每一回合，一起走向下一场。', captain_id: 1, captain_name: user.nickname, status: 'approved', logo: '', members, member_count: members.length, rating: 330 }
+  const team = { id: 10, name: '北林森林回响', description: '认真打好每一回合，一起走向下一场。', captain_id: 1, captain_name: user.nickname, captain_qq: '123456789012', status: 'approved', logo: '', members, member_count: members.length, rating: 330 }
   const matches = [
     { id: 1, name: '2026 秋季 CS2 Major 新生赛', description: '新学期，新的主场。和队友一起，让热爱上场。', status: 'registering', match_type: 'freshman', max_teams: 16, team_size: 5, registered_count: 12, register_end: '2026-09-20T20:00:00' },
     { id: 2, name: '北林 CS2 校园公开赛', description: '集结校园战队，用每一个回合写下战绩。', status: 'in_progress', match_type: 'major', max_teams: 16, team_size: 5, registered_count: 16, register_end: '2026-08-31T20:00:00' }
@@ -245,8 +245,11 @@ async function pageData(name) {
     if (name === 'recruitment-edit') { page.setData({ tab: 'posts' }); page.edit() }
   } else if (route === 'team') {
     await page.refreshAll()
+    if (name === 'team-create') page.setData({ myTeam: null, isCaptain: false, members: [], teamName: '森林回响', teamCaptainQq: '123456789012' })
+    if (name === 'team-contact-edit') { page.setData({ 'myTeam.captain_qq': null }); page.openContactEditor() }
   } else if (route === 'teams') {
     await page.loadTeams()
+    if (name.startsWith('teams-contact')) await page.viewTeam({ currentTarget: { dataset: { id: fixtures.team.id } } })
   } else if (route === 'messages') {
     page.setData({ token: 'offline-preview-token' })
     await page.loadMessages()
@@ -475,7 +478,7 @@ async function writePreview(name, directory) {
   const base = path.join(appRoot, pagePath)
   const tree = parseWxml(fs.readFileSync(base + '.wxml', 'utf8'))
   tree.scope = data
-  const css = browserCss(cssSource(path.join(appRoot, 'app.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/nav-drawer/nav-drawer.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/event-return/event-return.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/team-profile/team-profile.wxss')) + '\n' + cssSource(base + '.wxss'))
+  const css = browserCss(cssSource(path.join(appRoot, 'app.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/nav-drawer/nav-drawer.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/event-return/event-return.wxss')) + '\n' + (teamProfile ? cssSource(path.join(appRoot, 'components/team-profile/team-profile.wxss')) : '') + '\n' + cssSource(base + '.wxss'))
   const config = JSON.parse(fs.readFileSync(base + '.json', 'utf8'))
   const nativeNav = config.navigationStyle !== 'custom' ? '<div class="preview-native-nav"><span>‹</span><strong>' + escapeHtml(config.navigationBarTitleText || '北林CS2校赛') + '</strong><span>•••</span></div>' : ''
   const html = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'"><title>' + name + ' · 离线布局预览</title><style>'
@@ -492,6 +495,7 @@ async function main() {
   const requested = arg('--page')
   const supported = ['index', 'index-guest', 'index-manager', 'index-manager-error', 'team', 'teams', 'verify', 'verify-empty', 'profile', 'login', 'match', 'match-knockout', 'match-three', 'match-four', 'match-awaiting', 'admin', 'admin-registration', 'admin-windows', 'admin-windows-four', 'admin-challenger', 'admin-challenger-four', 'admin-awaiting', 'admin-roster-locked', 'hall', 'hall-players', 'hall-empty', 'workbench', 'workbench-verify', 'workbench-users', 'workbench-rankapps', 'workbench-teams', 'workbench-matches', 'workbench-create', 'workbench-create-empty', 'workbench-blocked', 'workbench-empty', 'workbench-error', 'champion', 'champion-edit', 'champion-readonly']
   supported.push('workbench-team-profile', 'recruitment-filtered', 'recruitment', 'recruitment-edit', 'recruitment-guest', 'messages', 'match-standings', 'match-history', 'admin-standings', 'admin-history')
+  supported.push('team-create', 'team-contact-edit', 'teams-contact', 'teams-contact-guest')
   if (requested && !supported.includes(requested)) throw new Error('Unsupported page: ' + requested)
   const directory = arg('--out') ? path.resolve(arg('--out')) : fs.mkdtempSync(path.join(os.tmpdir(), 'bjfu-layout-preview-'))
   const tempRoot = path.resolve(os.tmpdir())

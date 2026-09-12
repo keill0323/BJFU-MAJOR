@@ -18,6 +18,7 @@ from app.models.match import Match, MatchStatus, Registration, RegistrationStatu
 from app.services import wechat_service
 from app.services.team_request_service import actionable, invalidate_pending
 from app.services.locking import lock_row
+from app.schemas.team import normalize_captain_qq
 
 
 @contextmanager
@@ -42,13 +43,25 @@ def _team_transaction(db: Session, team_id: int):
         raise
 
 
-def create_team(db: Session, name: str, captain_id: int, description: Optional[str] = None) -> Team:
+def _validated_captain_qq(value) -> str:
+    try:
+        return normalize_captain_qq(value)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+def create_team(
+    db: Session, name: str, captain_id: int, description: Optional[str] = None,
+    *, captain_qq=None,
+) -> Team:
     """创建队伍与旧申请失效、评分更新共用事务。"""
     try:
+        contact_qq = _validated_captain_qq(captain_qq)
         _lock_request_user(db, captain_id)
         if db.query(TeamMember).filter_by(user_id=captain_id).with_for_update().first():
             raise HTTPException(400, "你已在某支队伍中，不能重复创建")
-        team = Team(name=name, captain_id=captain_id, description=description, status=TeamStatus.PENDING)
+        team = Team(name=name, captain_id=captain_id, captain_qq=contact_qq,
+                    description=description, status=TeamStatus.PENDING)
         db.add(team)
         db.flush()
         db.add(TeamMember(team_id=team.id, user_id=captain_id, role=MemberRole.CAPTAIN))
@@ -62,6 +75,16 @@ def create_team(db: Session, name: str, captain_id: int, description: Optional[s
     except Exception:
         db.rollback()
         raise
+    db.refresh(team)
+    return team
+
+
+def update_team_contact(db: Session, team_id: int, captain_id: int, captain_qq) -> Team:
+    """队伍行锁内检查当前队长身份，防止非队长更改联系方式。"""
+    with _team_transaction(db, team_id) as team:
+        if team.captain_id != captain_id:
+            raise HTTPException(status_code=403, detail="只有队长才能修改队伍联系 QQ")
+        team.captain_qq = _validated_captain_qq(captain_qq)
     db.refresh(team)
     return team
 

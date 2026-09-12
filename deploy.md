@@ -82,7 +82,9 @@ docker compose logs -f backend
 
 ### 已有服务器更新代码与数据库
 
-先将当前代码同步到服务器既有项目目录，保留服务器 `.env` 和数据卷，再在该目录执行以下命令。冠军补录需要升级 `champion_snapshots`，认证学号识别需要增加 `users.ai_student_id`；两项迁移均可重复执行。仅重建/重启容器不会给旧表补列，可能导致淘汰赛录分、冠军列表或登录接口报错。
+先将当前代码同步到服务器既有项目目录，保留服务器 `.env` 和数据卷，再在该目录执行以下命令。冠军补录需要升级 `champion_snapshots`，认证学号识别需要增加 `users.ai_student_id`，队长 QQ 需要增加 `teams.captain_qq`；迁移均可重复执行。仅重建/重启容器不会给旧表补列，可能导致录分、登录或队伍接口报错。
+
+当前版本新建队伍强制填写队长 QQ，旧版小程序不带此字段会返回中文 422。先将包含 QQ 输入框的新版小程序上传审核，待可发布时安排前后端配套更新，不能提前单独切换必填后端。发布后旧版本用户需重新进入最新版；此次代码修改本身未部署后端或发布小程序。
 
 ```bash
 (
@@ -100,6 +102,7 @@ docker compose run --rm --no-deps backend python -m app.migrations.test_data_vis
 docker compose run --rm --no-deps backend python -m app.migrations.schedule_notifications
 docker compose run --rm --no-deps backend python -m app.migrations.recruitment_notifications
 docker compose run --rm --no-deps backend python -m app.migrations.team_request_invalidation
+docker compose run --rm --no-deps backend python -m app.migrations.team_captain_qq
 docker compose up -d --no-deps backend
 docker compose restart nginx
 docker compose ps backend
@@ -110,6 +113,8 @@ docker compose logs --tail=80 backend
 MySQL 结构变更不能整段回滚；迁移失败时先查看具体错误，不要继续启动新后端。完成后确认冠军列表正常，并在管理后台重新提交之前失败的 BO3 比分。非 Docker 环境在实际服务虚拟环境的 `backend` 目录执行上面的各项 `python -m` 命令，再重启服务。
 
 约赛消息功能新增 `schedule_notifications` 表，对应迁移显式创建该表；现有启动建表流程也会创建不存在的新表。该功能还需上传对应小程序，详见[约赛消息通知](项目总结与踩坑记录.md)。申请和邀请还需执行 `team_request_invalidation` 补充失效标记，详见下方升级说明。
+
+队长 QQ 迁移仅添加可空字符串列，历史队伍保留空值，由当前队长在「我的队伍」补录或修改。QQ 采用 5–12 位 ASCII 数字、首位非零，首尾空格自动去除；不验证号码所有权。`POST /api/teams` 必填 `captain_qq`，`PUT /api/teams/{team_id}/contact` 只允许当前队长更新且不能清空。登录用户可在队伍详情查看和复制，游客响应隐藏、公开列表不批量返回 QQ。验收需覆盖新建、历史补录、普通队员无修改权限、退出登录后隐藏；使用自愿测试账号，勿修改真实队伍资料作为测试。
 
 ---
 

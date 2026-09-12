@@ -71,7 +71,7 @@ class TeamRequestLifecycleTests(DatabaseTestCase):
 
     def test_creating_team_invalidates_former_requests_without_deleting_history(self):
         player, target_teams, applications, invitations = self.request_set()
-        new_team = teams.create_team(self.db, "新建自己的队伍", player.id)
+        new_team = teams.create_team(self.db, "新建自己的队伍", player.id, captain_qq="123456789")
         self.assertEqual(new_team.captain_id, player.id)
         self.assert_invalidated(applications + invitations)
         self.assertEqual(self.db.query(TeamApplication).filter_by(user_id=player.id).count(), 2)
@@ -190,7 +190,7 @@ class TeamRequestLifecycleTests(DatabaseTestCase):
         original_count = self.db.query(Team).count()
         with patch.object(teams, "recalc_team_rating", side_effect=RuntimeError("评分写入失败")):
             with self.assertRaises(RuntimeError):
-                teams.create_team(self.db, "本次创建应回滚", player.id)
+                teams.create_team(self.db, "本次创建应回滚", player.id, captain_qq="123456789")
         self.assertEqual(self.db.query(Team).count(), original_count)
         self.assertIsNone(self.db.query(TeamMember).filter_by(user_id=player.id).first())
         self.assert_open(applications + invitations)
