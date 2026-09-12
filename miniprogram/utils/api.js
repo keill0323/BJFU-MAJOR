@@ -155,7 +155,10 @@ function uploadFile(path, filePath, raw = true) {
  * 每个方法对应后端一个路由，字段名与后端 Pydantic schema 保持一致
  */
 module.exports = {
-  getRecruitmentPlayers: (beforeId, keyword) => request('/api/recruitment/players?keyword=' + encodeURIComponent(keyword || '') + (beforeId ? '&before_id=' + encodeURIComponent(beforeId) : '')),
+  getRecruitmentPlayers: (beforeId, keyword, filters = {}) => request('/api/recruitment/players?keyword=' + encodeURIComponent(keyword || '')
+    + (beforeId ? '&before_id=' + encodeURIComponent(beforeId) : '')
+    + (filters.rank ? '&rank=' + encodeURIComponent(filters.rank) : '')
+    + (filters.identity ? '&identity=' + encodeURIComponent(filters.identity) : '')),
   getPersonalNoticeSummary: () => request('/api/notifications/summary'),
   getMyTeamApplications: () => request('/api/notifications/team-applications'),
   getRecruitmentPosts: (beforeId) => request('/api/recruitment' + (beforeId ? '?before_id=' + encodeURIComponent(beforeId) : '')),

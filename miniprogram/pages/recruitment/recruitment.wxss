@@ -1,4 +1,17 @@
 .recruitment-page { padding: 24rpx; }
+.player-filters { margin-bottom: 24rpx; padding: 24rpx; background: #fff; border: 1rpx solid #dfe9ee; border-radius: 22rpx; }
+.filter-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; min-height: 54rpx; color: #17384f; font-size: 27rpx; font-weight: 700; }
+.filter-clear { background: transparent; color: #087f8c; font-weight: 500; font-size: 24rpx; padding: 12rpx 0 12rpx 16rpx; }
+.filter-pickers { display: flex; gap: 16rpx; margin-top: 16rpx; }
+.filter-picker { flex: 1; min-width: 0; }
+.filter-control { min-height: 110rpx; padding: 16rpx 18rpx; border: 1rpx solid #cadce3; border-radius: 16rpx; color: #23495f; background: #f7fafb; box-sizing: border-box; }
+.filter-control.active { border-color: #69b5b9; background: #ebf8f6; color: #076d76; }
+.filter-label { display: block; font-size: 22rpx; color: #607c8d; margin-bottom: 7rpx; }
+.filter-control > view { display: flex; align-items: center; justify-content: space-between; gap: 8rpx; font-size: 25rpx; font-weight: 650; line-height: 1.5; }
+.filter-control > view > text:first-child { min-width: 0; word-break: break-all; }
+.filter-arrow { flex-shrink: 0; color: #087f8c; font-size: 28rpx; }
+.filter-summary { display: block; margin-top: 18rpx; font-size: 24rpx; line-height: 1.7; color: #507186; word-break: break-all; }
+.filter-retry { margin: 24rpx auto 0; width: 300rpx; max-width: 100%; min-height: 88rpx; }
 .hero { padding: 36rpx; border-radius: 28rpx; background: linear-gradient(125deg,#102e43,#096d78); color: #fff; overflow: hidden; }
 .eyebrow { display: block; font-size: 20rpx; letter-spacing: 4rpx; color: #91e6df; font-weight: 700; }
 .headline { display: block; margin: 16rpx 0; font-size: 58rpx; font-weight: 800; letter-spacing: 2rpx; }

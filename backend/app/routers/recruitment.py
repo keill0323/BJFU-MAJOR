@@ -24,8 +24,9 @@ def my_post(db: Session = Depends(get_db), user=Depends(get_current_user)):
 
 @router.get("/players")
 def players(before_id: int = Query(None, ge=1), limit: int = Query(20, ge=1, le=50),
-            keyword: str = Query("", max_length=64), db: Session = Depends(get_db)):
-    return service.public_players(db, before_id, limit, keyword)
+            keyword: str = Query("", max_length=64), rank: service.RankFilter = Query(""),
+            identity: service.IdentityFilter = Query(""), db: Session = Depends(get_db)):
+    return service.public_players(db, before_id, limit, keyword, rank=rank, identity=identity)
 
 
 @router.put("/{team_id}")

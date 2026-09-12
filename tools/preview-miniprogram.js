@@ -45,11 +45,17 @@ function createEnvironment(fixtures, route, guest = false) {
   const reads = {
     getPersonalNoticeSummary: () => ({ invitation_count: 2, application_count: 3, schedule_count: 1, total: 6 }),
     getMyTeamApplications: () => [{ id: 2, team_name: fixtures.team.name, nickname: '林间新队友', game_id: 'Forest_support', rank: 'A+', individual_rating: 35, identity: 'new_student', is_verified: true, user_description: '平日晚上在线，喜欢团队配合。', message: '我主打辅助和道具，晚上可以训练，希望找到长期一起进步的队友。' }],
-    getRecruitmentPlayers: () => ({ items: [
-      { id: 21, nickname: '林间新队友', game_id: 'Forest_support', rank: 'A+', individual_rating: 35, is_verified: true, identity: 'new_student', user_description: '主打辅助，平日晚上在线。', has_team: false },
-      { id: 22, nickname: '白桦学长', game_id: 'Birch_AWP', rank: 'S10', individual_rating: 58, is_verified: true, identity: 'senior', user_description: '喜欢狙击，也可以补位。', has_team: true, team_name: '白桦竞技' },
-      { id: 23, nickname: '等待认证的同学', game_id: '', rank: null, individual_rating: 0, is_verified: false, identity: null, has_team: false }
-    ], has_more: false, next_cursor: null }),
+    getRecruitmentPlayers: (beforeId, keyword, filters = {}) => {
+      const rows = [
+        { id: 21, nickname: '林间新队友', game_id: 'Forest_support', rank: 'A+', individual_rating: 35, is_verified: true, identity: 'new_student', user_description: '主打辅助，平日晚上在线。', has_team: false },
+        { id: 22, nickname: '白桦学长', game_id: 'Birch_AWP', rank: 'S10', individual_rating: 58, is_verified: true, identity: 'senior', user_description: '喜欢狙击，也可以补位。', has_team: true, team_name: '白桦竞技' },
+        { id: 23, nickname: '等待认证的同学', game_id: '', rank: null, individual_rating: 0, is_verified: false, identity: null, has_team: false }
+      ]
+      return { items: rows.filter(row => (!keyword || (row.nickname + row.game_id).includes(keyword))
+        && (!filters.rank || row.rank === filters.rank || (filters.rank === 's_gold' && row.rank === 'S10') || (filters.rank === 'unranked' && !row.rank))
+        && (!filters.identity || row.identity === filters.identity || (filters.identity === 'unknown' && !row.identity))),
+        has_more: false, next_cursor: null, filters: { rank: filters.rank || '', identity: filters.identity || '' } }
+    },
     getRecruitmentPosts: () => ({ items: ['林间突击队', '北京林业大学非常长名字的招募队伍', '白桦竞技'].map((team_name, i) => ({ id: i + 1, team_id: i + 10, team_name, member_count: 3, rating: 180, content: i === 0 ? '缺一名步枪手、一名辅助。\nB 段左右，平日 19:00 后可以训练。欢迎新生，沟通友好，一起进步！' : '寻找能并肩作战的队友，位置不限。欢迎申请，一起磨合！', updated_at: '2026-09-12T16:00:00' })), has_more: false, next_cursor: null }),
     getMyRecruitment: () => ({ team_id: 10, team_name: fixtures.team.name, content: '寻找新队友，欢迎申请！', is_active: true, can_publish: true }),
     getMe: () => fixtures.user, getMyTeam: () => fixtures.team,
@@ -235,6 +241,7 @@ async function pageData(name) {
     if (page.onUserChange) page.onUserChange({ detail: { user: nav.data.user } })
   } else if (route === 'recruitment') {
     await page.load()
+    if (name === 'recruitment-filtered') { await page.onRankFilter({ detail: { value: page.data.rankOptions.findIndex(option => option.value === 'A+') } }); await page.onIdentityFilter({ detail: { value: 1 } }) }
     if (name === 'recruitment-edit') { page.setData({ tab: 'posts' }); page.edit() }
   } else if (route === 'team') {
     await page.refreshAll()
@@ -484,7 +491,7 @@ async function main() {
   const arg = name => args.includes(name) ? args[args.indexOf(name) + 1] : null
   const requested = arg('--page')
   const supported = ['index', 'index-guest', 'index-manager', 'index-manager-error', 'team', 'teams', 'verify', 'verify-empty', 'profile', 'login', 'match', 'match-knockout', 'match-three', 'match-four', 'match-awaiting', 'admin', 'admin-registration', 'admin-windows', 'admin-windows-four', 'admin-challenger', 'admin-challenger-four', 'admin-awaiting', 'admin-roster-locked', 'hall', 'hall-players', 'hall-empty', 'workbench', 'workbench-verify', 'workbench-users', 'workbench-rankapps', 'workbench-teams', 'workbench-matches', 'workbench-create', 'workbench-create-empty', 'workbench-blocked', 'workbench-empty', 'workbench-error', 'champion', 'champion-edit', 'champion-readonly']
-  supported.push('workbench-team-profile', 'recruitment', 'recruitment-edit', 'recruitment-guest', 'messages', 'match-standings', 'match-history', 'admin-standings', 'admin-history')
+  supported.push('workbench-team-profile', 'recruitment-filtered', 'recruitment', 'recruitment-edit', 'recruitment-guest', 'messages', 'match-standings', 'match-history', 'admin-standings', 'admin-history')
   if (requested && !supported.includes(requested)) throw new Error('Unsupported page: ' + requested)
   const directory = arg('--out') ? path.resolve(arg('--out')) : fs.mkdtempSync(path.join(os.tmpdir(), 'bjfu-layout-preview-'))
   const tempRoot = path.resolve(os.tmpdir())

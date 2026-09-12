@@ -1,19 +1,83 @@
 """招募不依赖赛事报名；沿用队伍审核与队长权限。"""
 from datetime import datetime
+from typing import Literal, get_args
 from fastapi import HTTPException
-from sqlalchemy import func, or_
+from sqlalchemy import Integer, and_, case, cast, func, or_
 from app.models.team import Team, TeamMember, TeamStatus
 from app.models.user import User
 from app.models.recruitment import RecruitmentPost
 from app.services.team_service import _team_transaction
 
 
-def public_players(db, before_id=None, limit=20, keyword=""):
+RankFilter = Literal["", "D", "C", "C+", "C++", "B", "B+", "B++", "A", "A+", "A++",
+                     "s", "s_gold", "s_diamond", "s_demon", "unranked"]
+IdentityFilter = Literal["", "new_student", "senior", "unknown"]
+_STANDARD_RANKS = ("D", "C", "C+", "C++", "B", "B+", "B++", "A", "A+", "A++")
+
+
+def _ascii_digits(value):
+    """Portable ASCII validation; unlike casts, rejects Unicode digits and suffixes."""
+    remaining = value
+    for digit in "0123456789":
+        remaining = func.replace(remaining, digit, "")
+    return and_(func.length(value) > 0, func.length(remaining) == 0)
+
+
+def _rank_condition(selected):
+    rank = func.coalesce(User.rank, "")
+    # HEX keeps case and trailing spaces exact even under MySQL's default collation.
+    encoded = func.hex(rank)
+    if selected in _STANDARD_RANKS:
+        return encoded == selected.encode("ascii").hex().upper()
+    tail = func.substr(rank, 2)
+    digits = _ascii_digits(tail)
+    stars = cast(case((digits, tail), else_="-1"), Integer)
+    numbered_s = and_(func.hex(func.substr(rank, 1, 1)) == "53", digits,
+                      stars.between(0, 50))
+    legacy_s = encoded == "53"
+    if selected == "s":
+        return or_(legacy_s, and_(numbered_s, stars < 10))
+    if selected == "s_gold":
+        return and_(numbered_s, stars.between(10, 24))
+    if selected == "s_diamond":
+        return and_(numbered_s, stars.between(25, 49))
+    if selected == "s_demon":
+        return and_(numbered_s, stars == 50)
+    valid_standard = encoded.in_([r.encode("ascii").hex().upper() for r in _STANDARD_RANKS])
+    return ~or_(valid_standard, legacy_s, numbered_s)
+
+
+def _identity_condition(selected):
+    from app.services import auth_service
+
+    manual = func.coalesce(User.identity, "")
+    student_id = func.coalesce(User.student_id, "")
+    standard_id = and_(func.length(student_id) == 9, _ascii_digits(student_id))
+    enrollment_year = 2000 + cast(func.substr(student_id, 1, 2), Integer)
+    # Keep auth_service.effective_identity's manual priority and dynamic year rule.
+    automatic = case((enrollment_year >= auth_service.datetime.now().year - 1,
+                      "new_student"), else_="senior")
+    manual_identity = case(
+        (func.hex(manual) == "new_student".encode("ascii").hex().upper(), "new_student"),
+        (func.hex(manual) == "senior".encode("ascii").hex().upper(), "senior"),
+        else_="unknown")
+    identity = case((func.length(manual) > 0, manual_identity),
+                    (standard_id, automatic), else_="unknown")
+    return case((User.is_verified.is_(True), identity), else_="unknown") == selected
+
+
+def public_players(db, before_id=None, limit=20, keyword="", *, rank="", identity=""):
     """所有非隐藏用户；不按报名、认证或是否已有队伍筛除。只投影公开字段。"""
     from app.services.auth_service import effective_identity
+    if rank not in get_args(RankFilter) or identity not in get_args(IdentityFilter):
+        raise HTTPException(422, "不支持的段位或身份筛选")
     query = (db.query(User, TeamMember.team_id, Team.name, Team.is_hidden)
              .outerjoin(TeamMember, TeamMember.user_id == User.id)
              .outerjoin(Team, Team.id == TeamMember.team_id).filter(User.is_hidden.is_(False)))
+    if rank:
+        query = query.filter(_rank_condition(rank))
+    if identity:
+        query = query.filter(_identity_condition(identity))
     if keyword.strip():
         query = query.filter(or_(User.nickname.contains(keyword.strip(), autoescape=True),
                                  User.game_id.contains(keyword.strip(), autoescape=True)))
@@ -27,7 +91,8 @@ def public_players(db, before_id=None, limit=20, keyword=""):
                   team_name=name if team_id and not hidden else None)
              for u, team_id, name, hidden in rows[:limit]]
     return dict(items=items, has_more=len(rows) > limit,
-                next_cursor=items[-1]["id"] if len(rows) > limit else None)
+                next_cursor=items[-1]["id"] if len(rows) > limit else None,
+                filters=dict(rank=rank, identity=identity))
 
 
 def public_posts(db, before_id=None, limit=20):

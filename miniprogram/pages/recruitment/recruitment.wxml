@@ -3,12 +3,21 @@
   <view class="hero"><text class="eyebrow">FIND YOUR FIVE</text><text class="headline">还差一个你。</text><text class="hero-copy">先找到队友，再一起报名。<text>无需报名赛事，也能申请入队。</text></text><view class="hero-rule"><text>TEAM UP</text><view></view><text>PLAY TOGETHER</text></view></view>
   <view class="directory-tabs"><view class="directory-tab {{tab === 'players' ? 'selected' : ''}}" bindtap="switchTab" data-tab="players">全部选手</view><view class="directory-tab {{tab === 'posts' ? 'selected' : ''}}" bindtap="switchTab" data-tab="posts">队伍招募</view></view>
   <view wx:if="{{tab === 'players'}}" class="player-search"><input value="{{keyword}}" bindinput="onKeyword" bindconfirm="searchPlayers" placeholder="搜索昵称或游戏 ID" maxlength="64" confirm-type="search"/><button class="secondary" bindtap="searchPlayers">搜索</button></view>
-  <view wx:if="{{loading}}" class="state">正在加载招募大厅…</view>
+  <view wx:if="{{tab === 'players'}}" class="player-filters">
+    <view class="filter-heading"><text>筛选选手</text><button wx:if="{{rankFilter || identityFilter}}" class="filter-clear" bindtap="clearPlayerFilters">清除筛选</button></view>
+    <view class="filter-pickers">
+      <picker class="filter-picker" mode="selector" range="{{rankOptions}}" range-key="label" value="{{rankIndex}}" bindchange="onRankFilter"><view class="filter-control {{rankFilter ? 'active' : ''}}"><text class="filter-label">段位</text><view><text>{{rankOptions[rankIndex].label}}</text><text class="filter-arrow">⌄</text></view></view></picker>
+      <picker class="filter-picker" mode="selector" range="{{identityOptions}}" range-key="label" value="{{identityIndex}}" bindchange="onIdentityFilter"><view class="filter-control {{identityFilter ? 'active' : ''}}"><text class="filter-label">身份</text><view><text>{{identityOptions[identityIndex].label}}</text><text class="filter-arrow">⌄</text></view></view></picker>
+    </view>
+    <text wx:if="{{rankFilter || identityFilter}}" class="filter-summary">{{rankOptions[rankIndex].label}} · {{identityOptions[identityIndex].label}}{{query ? ' · 搜索「' + query + '」' : ''}}</text>
+  </view>
+  <view wx:if="{{loading && tab === 'posts'}}" class="state">正在加载招募大厅…</view>
   <block wx:elif="{{tab === 'players'}}">
     <text class="directory-caption">未报名、已入队的选手也会展示。新老生身份以认证结果为准。</text>
     <view wx:if="{{accountFailed}}" class="state compact" bindtap="load">队伍信息加载失败，重试后可邀请选手</view>
-    <view wx:if="{{playersFailed}}" class="state" bindtap="load">选手列表加载失败 · 点击重试</view>
-    <view wx:elif="{{players.length === 0}}" class="state">{{query ? '没有找到符合条件的选手' : '暂时没有可展示的选手'}}</view>
+    <view wx:if="{{playersLoading}}" class="state">正在查找符合条件的选手…</view>
+    <view wx:elif="{{playersFailed}}" class="state"><text>{{playersError}}</text><button class="secondary filter-retry" bindtap="loadPlayers">重新加载选手</button></view>
+    <view wx:elif="{{players.length === 0}}" class="state">{{query || rankFilter || identityFilter ? '没有找到符合条件的选手，试试调整筛选或关键词' : '暂时没有可展示的选手'}}</view>
     <block wx:else>
       <view wx:for="{{players}}" wx:key="id" class="post">
         <view class="post-head"><view class="emblem"><image wx:if="{{item.avatarFull}}" src="{{item.avatarFull}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view><view class="team-copy"><text class="team-name">{{item.displayName}}</text><text class="muted">游戏 ID：{{item.game_id || '未设置'}}</text></view></view>
@@ -16,7 +25,7 @@
         <text wx:if="{{item.user_description}}" class="post-content">{{item.user_description}}</text>
         <view class="post-foot"><text class="muted">{{item.has_team ? (item.team_name || '已入队') : '未加入队伍'}}</text><button wx:if="{{mine && !accountFailed && !item.has_team}}" class="apply" bindtap="invite" data-id="{{item.id}}" disabled="{{!!inviting}}" loading="{{inviting === item.id}}">邀请入队</button><text wx:elif="{{!item.has_team}}" class="muted">由队长发起邀请</text></view>
       </view>
-      <view wx:if="{{playersMore}}" class="state compact" bindtap="loadMorePlayers">{{loadingMore ? '正在加载…' : '查看更多选手'}}</view>
+      <view wx:if="{{playersMore}}" class="state compact" bindtap="loadMorePlayers">{{playersLoadingMore ? '正在加载…' : '查看更多选手'}}</view>
     </block>
   </block>
   <block wx:else>

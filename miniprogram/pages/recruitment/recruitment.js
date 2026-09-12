@@ -4,10 +4,19 @@ const { rankDisplay } = require('../../utils/rank.js')
 Page({
   data: { tab: 'players', players: [], playersFailed: false, playersMore: false, playersCursor: null,
     keyword: '', query: '', inviting: null,
+    rankFilter: '', identityFilter: '', rankIndex: 0, identityIndex: 0,
+    rankOptions: [{ value: '', label: '全部段位' },
+      ...['D', 'C', 'C+', 'C++', 'B', 'B+', 'B++', 'A', 'A+', 'A++'].map(value => ({ value, label: value })),
+      { value: 's', label: '普通 S · 0–9 星' }, { value: 's_gold', label: '金 S · 10–24 星' },
+      { value: 's_diamond', label: '钻 S · 25–49 星' }, { value: 's_demon', label: '魔王 S · 50 星' },
+      { value: 'unranked', label: '段位待认证' }],
+    identityOptions: [{ value: '', label: '全部身份' }, { value: 'new_student', label: '新生' },
+      { value: 'senior', label: '老生' }, { value: 'unknown', label: '身份待确认' }],
+    playersLoading: true, playersLoadingMore: false, playersError: '',
     posts: [], mine: null, myTeam: null, token: '', loading: true, failed: false, accountFailed: false,
     more: false, cursor: null, loadingMore: false, editing: false, draft: '', saving: false, applying: null },
   onShow() { this.load() },
-  onUnload() { this._requestId = (this._requestId || 0) + 1 },
+  onUnload() { this._requestId = (this._requestId || 0) + 1; this._playersRequestId = (this._playersRequestId || 0) + 1 },
   onPullDownRefresh() { return this.load().finally(() => wx.stopPullDownRefresh()) },
   onReachBottom() { return this.loadMore() },
   current(id, token) { return id === this._requestId && token === (wx.getStorageSync('token') || '') },
@@ -23,14 +32,51 @@ Page({
   })) },
   switchTab(e) { if (['players', 'posts'].includes(e.currentTarget.dataset.tab)) this.setData({ tab: e.currentTarget.dataset.tab }) },
   onKeyword(e) { this.setData({ keyword: e.detail.value }) },
-  searchPlayers() { this.setData({ query: this.data.keyword.trim() }); return this.load() },
+  searchPlayers() { this.setData({ query: this.data.keyword.trim() }); return this.loadPlayers() },
+  onRankFilter(e) { return this.changePlayerFilter('rank', e.detail.value) },
+  onIdentityFilter(e) { return this.changePlayerFilter('identity', e.detail.value) },
+  changePlayerFilter(kind, value) {
+    const index = Number(value), option = this.data[kind + 'Options'][index]
+    if (!Number.isInteger(index) || !option || option.value === this.data[kind + 'Filter']) return
+    this.setData({ [kind + 'Index']: index, [kind + 'Filter']: option.value })
+    return this.loadPlayers()
+  },
+  clearPlayerFilters() {
+    if (!this.data.rankFilter && !this.data.identityFilter) return
+    this.setData({ rankFilter: '', identityFilter: '', rankIndex: 0, identityIndex: 0 })
+    return this.loadPlayers()
+  },
+  playerFilters() { return { rank: this.data.rankFilter, identity: this.data.identityFilter } },
+  playersCurrent(id, token) { return id === this._playersRequestId && token === (wx.getStorageSync('token') || '') },
+  checkPlayerFilters(page, filters) {
+    // 旧接口会忽略未知查询参数，不能把未筛选结果标成筛选成功。
+    if ((filters.rank || filters.identity) && (!page.filters || page.filters.rank !== filters.rank || page.filters.identity !== filters.identity)) {
+      throw { detail: '当前服务器尚未支持选手筛选，请更新后端后重试' }
+    }
+  },
+  async loadPlayers() {
+    const id = this._playersRequestId = (this._playersRequestId || 0) + 1
+    const token = this._playersToken = wx.getStorageSync('token') || ''
+    const query = this.data.query, filters = this.playerFilters()
+    this.setData({ players: [], playersMore: false, playersCursor: null, playersFailed: false, playersError: '', playersLoading: true, playersLoadingMore: false })
+    try {
+      const page = await api.getRecruitmentPlayers(null, query, filters)
+      if (!this.playersCurrent(id, token)) return
+      this.checkPlayerFilters(page, filters)
+      this.setData({ players: this.decoratePlayers(page.items), playersMore: page.has_more, playersCursor: page.next_cursor })
+    } catch (err) {
+      if (this.playersCurrent(id, token)) this.setData({ playersFailed: true, playersError: err.detail || '选手列表加载失败，请重试' })
+    } finally {
+      if (this.playersCurrent(id, token)) this.setData({ playersLoading: false })
+    }
+  },
   async load() {
     const id = this._requestId = (this._requestId || 0) + 1
     const token = wx.getStorageSync('token') || ''
     this.setData({ token, loading: true, failed: false, accountFailed: false, loadingMore: false,
       mine: null, myTeam: null, editing: false })
     const results = await Promise.allSettled([api.getRecruitmentPosts(), token ? api.getMyRecruitment() : null, token ? api.getMyTeam() : null,
-      api.getRecruitmentPlayers(null, this.data.query)])
+      this.loadPlayers()])
     if (!this.current(id, token)) return
     const update = { loading: false, accountFailed: results[1].status === 'rejected' || results[2].status === 'rejected' }
     if (results[0].status === 'fulfilled') {
@@ -39,11 +85,6 @@ Page({
     } else Object.assign(update, { posts: [], failed: true, more: false })
     if (results[1].status === 'fulfilled') update.mine = results[1].value
     if (results[2].status === 'fulfilled') update.myTeam = results[2].value
-    if (results[3].status === 'fulfilled') Object.assign(update, {
-      players: this.decoratePlayers(results[3].value.items), playersMore: results[3].value.has_more,
-      playersCursor: results[3].value.next_cursor, playersFailed: false
-    })
-    else Object.assign(update, { players: [], playersFailed: true, playersMore: false })
     this.setData(update)
   },
   async loadMore() {
@@ -60,17 +101,20 @@ Page({
     finally { if (this.current(id, token)) this.setData({ loadingMore: false }) }
   },
   async loadMorePlayers() {
-    if (!this.data.playersMore || this.data.loading || this.data.loadingMore || this.data.playersFailed) return
-    const id = this._requestId, token = this.data.token
-    this.setData({ loadingMore: true })
+    if (!this.data.playersMore || this.data.playersLoading || this.data.playersLoadingMore || this.data.playersFailed) return
+    const id = this._playersRequestId, token = this._playersToken, filters = this.playerFilters()
+    const query = this.data.query, cursor = this.data.playersCursor
+    this.setData({ playersLoadingMore: true })
     try {
-      const page = await api.getRecruitmentPlayers(this.data.playersCursor, this.data.query)
-      if (!this.current(id, token)) return
+      const page = await api.getRecruitmentPlayers(cursor, query, filters)
+      if (!this.playersCurrent(id, token)) return
+      this.checkPlayerFilters(page, filters)
       const seen = new Set(this.data.players.map(p => p.id))
       this.setData({ players: this.data.players.concat(this.decoratePlayers(page.items.filter(p => !seen.has(p.id)))),
         playersMore: page.has_more, playersCursor: page.next_cursor })
-    } catch (err) { wx.showToast({ title: err.detail || '选手加载失败，请重试', icon: 'none' }) }
-    finally { if (this.current(id, token)) this.setData({ loadingMore: false }) }
+    } catch (err) {
+      if (this.playersCurrent(id, token)) wx.showToast({ title: err.detail || '选手加载失败，请重试', icon: 'none' })
+    } finally { if (this.playersCurrent(id, token)) this.setData({ playersLoadingMore: false }) }
   },
   invite(e) {
     const player = this.data.players.find(p => p.id === Number(e.currentTarget.dataset.id))
