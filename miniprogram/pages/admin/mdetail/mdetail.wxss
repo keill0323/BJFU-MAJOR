@@ -1,3 +1,4 @@
+@import "../../../styles/team-profile-sheet.wxss";
 @import "../../match/match.wxss";
 
 /* Management uses the same scoreboard system with its own operation controls. */

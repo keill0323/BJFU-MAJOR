@@ -1,3 +1,4 @@
+@import "../../styles/team-profile-sheet.wxss";
 /* 管理工作台：待办在前，内容与操作分层。 */
 .page { padding: 8rpx 0 calc(40rpx + env(safe-area-inset-bottom)); }
 .workbench-head { display: flex; align-items: center; gap: 24rpx; margin: 16rpx 24rpx 24rpx; padding: 32rpx; border-radius: 26rpx; background: #102a43; color: #fff; }

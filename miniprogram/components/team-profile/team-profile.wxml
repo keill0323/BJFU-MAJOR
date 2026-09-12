@@ -1,0 +1,48 @@
+<view class="team-profile">
+  <view wx:if="{{loading}}" class="profile-state">
+    <view class="state-emblem"><image src="/images/brand/team.svg" mode="aspectFit"/></view>
+    <text class="state-title">正在加载队伍</text>
+    <text class="state-copy">获取队伍资料与当前阵容</text>
+  </view>
+  <view wx:elif="{{error}}" class="profile-state">
+    <text class="state-title">暂时无法查看</text>
+    <text class="state-copy">{{error}}</text>
+    <button class="retry-button" bindtap="loadTeam">重新加载</button>
+  </view>
+  <block wx:elif="{{team}}">
+    <view class="profile-surface team-identity">
+      <view class="identity-top"><text class="micro-label">TEAM / {{team.id}}</text><text class="status-pill status-{{team.status_class}}">{{team.status_text}}</text></view>
+      <view class="identity-main">
+        <view class="team-emblem"><image wx:if="{{team.logo_full}}" src="{{team.logo_full}}" mode="aspectFill"/><text wx:else>{{team.logo_initial}}</text></view>
+        <view class="identity-copy"><text class="team-name">{{team.name}}</text><text class="captain-copy">队长 · {{team.captain_name}}</text></view>
+      </view>
+      <text class="team-description">{{team.description}}</text>
+      <view class="team-stats">
+        <view class="team-stat"><text class="stat-value accent">{{team.display_rating}}</text><text class="stat-caption">队伍水平分</text></view>
+        <view class="team-stat"><text class="stat-value">{{team.member_count}}</text><text class="stat-caption">当前队员</text></view>
+        <view class="team-stat"><text class="stat-value">{{team.ranked_count}}</text><text class="stat-caption">已录入段位</text></view>
+      </view>
+      <text class="rating-note">水平分按评分最高的 5 名队员合计</text>
+      <text class="created-copy">创建于 {{team.created_date}}</text>
+    </view>
+
+    <view class="profile-surface roster">
+      <view class="roster-heading"><view><text class="micro-label">ROSTER</text><text class="section-title">队伍阵容</text></view><text class="roster-count">{{members.length}} 人</text></view>
+      <view class="identity-summary"><text class="identity-chip new_student">新生 {{team.new_student_count}}</text><text class="identity-chip senior">老生 {{team.senior_count}}</text><text class="identity-chip unknown">待确认 {{team.unknown_count}}</text></view>
+      <text class="roster-note">学籍已认证 {{team.verified_count}} / {{members.length}} 人</text>
+      <view wx:if="{{members.length === 0}}" class="empty-roster">暂无成员信息</view>
+      <view wx:for="{{members}}" wx:key="user_id" class="member-card">
+        <view class="member-top">
+          <view class="member-avatar"><image wx:if="{{item.avatar_full}}" src="{{item.avatar_full}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view>
+          <view class="member-copy"><view class="member-name-line"><text class="member-name">{{item.display_name}}</text><text wx:if="{{item.is_captain}}" class="captain-label">队长</text></view><text class="member-id">用户 ID · {{item.user_id || '—'}}</text></view>
+        </view>
+        <text class="member-game">游戏 ID：{{item.game_id || '暂未设置'}}</text>
+        <view class="member-rank-line">
+          <view class="rank-detail"><image class="rank-badge" src="{{item.rank_icon}}" mode="aspectFit"/><text class="rank-label {{item.rank_set ? '' : 'rank-unset'}}">{{item.rank_label}}</text></view>
+          <view class="member-score"><text class="score-value">{{item.score_text}}</text><text class="score-caption">水平分</text></view>
+        </view>
+        <view class="member-tags"><text class="identity-chip {{item.identity}}">{{item.identity_text}}</text><text class="verification-tag {{item.is_verified ? 'verified' : ''}}">{{item.verification_text}}</text></view>
+      </view>
+    </view>
+  </block>
+</view>

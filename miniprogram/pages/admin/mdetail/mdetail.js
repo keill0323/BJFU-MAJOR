@@ -38,6 +38,7 @@ Page({
     legendStage: 0,
     // 队伍历史弹层
     showHistory: false,
+    historyTab: 'profile',
     historyTeam: null,
     historyRounds: [],
     historySections: [],
@@ -382,8 +383,12 @@ Page({
     const historyTeam = this.data.rankingTeams.find(t => t.team_id == tid) || {
       team_id: tid, team_name: source ? (source.team1_id == tid ? source.team1_name : source.team2_name) : '队伍'
     }
-    this.setData({ showHistory: true, historyTeam, historyRounds,
+    this.setData({ showHistory: true, historyTab: 'profile', historyTeam, historyRounds,
       historySections: buildTeamHistory(tid, allRounds) })
+  },
+  switchHistoryTab(e) {
+    const tab = e.currentTarget.dataset.tab
+    if (tab === 'profile' || tab === 'history') this.setData({ historyTab: tab })
   },
   closeHistory() {
     this.setData({ showHistory: false, historyTeam: null, historyRounds: [], historySections: [] })

@@ -54,7 +54,8 @@ function createEnvironment(fixtures, route, guest = false) {
     getMyRecruitment: () => ({ team_id: 10, team_name: fixtures.team.name, content: '寻找新队友，欢迎申请！', is_active: true, can_publish: true }),
     getMe: () => fixtures.user, getMyTeam: () => fixtures.team,
     getMatches: () => fixtures.matches, searchMatches: () => fixtures.matches,
-    getMatch: () => fixtures.detail.match, getTeam: () => fixtures.team,
+    getMatch: () => fixtures.detail.match, getTeam: id => ({ ...fixtures.team, id: Number(id),
+      name: (fixtures.detail.teams.find(team => team.team_id == id) || {}).team_name || fixtures.team.name }),
     getAdminTeams: () => [{ ...fixtures.team, status: 'pending' }, { ...fixtures.team, id: 11, name: '白桦竞技', status: 'approved' }],
     adminListUsers: () => fixtures.adminUsers || [fixtures.user],
     getVerifyList: () => fixtures.verifyUsers || [{ ...fixtures.user, is_verified: false, verify_image: '/images/brand/forest-crest.svg', ai_review_status: 'pending', ai_review_reason: '示例：请核对在校信息。' }],
@@ -77,7 +78,7 @@ function createEnvironment(fixtures, route, guest = false) {
   const api = new Proxy({ BASE: '' }, {
     get(target, key) {
       if (key in target) return target[key]
-      if (reads[key]) return async () => clone(reads[key]())
+      if (reads[key]) return async (...args) => clone(reads[key](...args))
       throw new Error('Preview refuses unsupported API access: ' + String(key))
     }
   })
@@ -254,7 +255,7 @@ async function pageData(name) {
     await page.onLoad({ tab: name === 'hall-players' ? 'players' : 'champions' })
     if (name === 'hall') page.toggleRoster({ currentTarget: { dataset: { id: 2 } } })
   } else if (route === 'workbench') {
-    const tab = name.startsWith('workbench-create') ? 'matches' : name.split('-')[1]
+    const tab = name.startsWith('workbench-create') ? 'matches' : name === 'workbench-team-profile' ? 'teams' : name.split('-')[1]
     await page.onLoad({ tab: ['verify', 'rankapps', 'teams', 'matches', 'users'].includes(tab) ? tab : 'overview' })
     if (name === 'workbench-create') page.setData({
       showCreateMatch: true,
@@ -264,6 +265,7 @@ async function pageData(name) {
     })
     if (name === 'workbench-create-empty') page.setData({ showCreateMatch: true })
     if (name === 'workbench-users') page.updateStudentIdDraft(103, { open: true })
+    if (name === 'workbench-team-profile') page.showTeamDetail({ currentTarget: { dataset: { id: fixtures.team.id } } })
   } else if (route === 'champion') {
     await page.onLoad({ matchId: 1 })
   } else if (route === 'admin') {
@@ -277,8 +279,21 @@ async function pageData(name) {
     page.setData({ tab: 'teams' })
     if (name.endsWith('-history')) page.showTeam({ currentTarget: { dataset: { id: 5 } } })
   }
+  let teamProfile = null
+  if (page.data.showTeamDetailPanel || (route === 'admin' && page.data.showHistory)) {
+    const profileId = page.data.detailTeamId || page.data.historyTeam.team_id
+    fixtures.team.members.forEach((member, i) => {
+      member.is_verified = i < 4
+      member.rank = ['S32', 'A++', 'A+', 'C+', 'S10'][i]
+    })
+    const profile = loadDefinition('components/team-profile/team-profile.js', context, 'Component')
+    profile.setData({ teamId: profileId })
+    await profile.loadTeam()
+    if (profile.data.error) throw new Error('Team profile fixture loading failed: ' + name)
+    teamProfile = profile.data
+  }
   if (page.data.loadFailed || page.data.loadError) throw new Error('Page fixture loading failed: ' + name)
-  return { route, pagePath, data: page.data, nav: nav.data }
+  return { route, pagePath, data: page.data, nav: nav.data, teamProfile }
 }
 
 function parseWxml(source) {
@@ -378,9 +393,10 @@ function browserCss(source) {
     .replace(/url\(['"]?(\/images\/[^)'"\s]+)['"]?\)/g, (_, resource) => 'url("' + resourceUrl(resource) + '")')
 }
 
-function createRenderer(navData) {
+function createRenderer(navData, teamProfileData = null) {
   const navTree = parseWxml(fs.readFileSync(path.join(appRoot, 'components/nav-drawer/nav-drawer.wxml'), 'utf8'))
   const returnTree = parseWxml(fs.readFileSync(path.join(appRoot, 'components/event-return/event-return.wxml'), 'utf8'))
+  const profileTree = teamProfileData ? parseWxml(fs.readFileSync(path.join(appRoot, 'components/team-profile/team-profile.wxml'), 'utf8')) : null
   function children(nodes, scope) {
     let output = '', branchTaken = false, chainOpen = false
     for (const node of nodes) {
@@ -411,6 +427,7 @@ function createRenderer(navData) {
     if (node.tag === 'block') return children(node.children, scope)
     if (node.tag === 'nav-drawer') return '<div class="preview-component">' + children(navTree.children, { ...navData, title: interpolate(attrs.title, scope), showAdminNotice: attrs['show-admin-notice'] ? !!evaluate(attrs['show-admin-notice'], scope) : !!navData.showAdminNotice }) + '</div>'
     if (node.tag === 'event-return') return '<div class="preview-component">' + children(returnTree.children, {}) + '</div>'
+    if (node.tag === 'team-profile') return profileTree ? '<div class="preview-component">' + children(profileTree.children, teamProfileData) + '</div>' : ''
     let tag = ({ view: 'div', text: 'span', image: 'img', 'scroll-view': 'div', swiper: 'div', 'swiper-item': 'div', picker: 'div', switch: 'input', input: 'input', textarea: 'textarea', button: 'button' })[node.tag] || 'div'
     let htmlAttrs = ''
     const extraClass = node.tag === 'swiper' ? ' mini-swiper' : node.tag === 'swiper-item' ? ' mini-swiper-item' : node.tag === 'scroll-view' ? (attrs['scroll-y'] ? ' mini-scroll-y' : ' mini-scroll-x') : ''
@@ -447,16 +464,16 @@ function createRenderer(navData) {
 }
 
 async function writePreview(name, directory) {
-  const { route, pagePath, data, nav } = await pageData(name)
+  const { route, pagePath, data, nav, teamProfile } = await pageData(name)
   const base = path.join(appRoot, pagePath)
   const tree = parseWxml(fs.readFileSync(base + '.wxml', 'utf8'))
   tree.scope = data
-  const css = browserCss(cssSource(path.join(appRoot, 'app.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/nav-drawer/nav-drawer.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/event-return/event-return.wxss')) + '\n' + cssSource(base + '.wxss'))
+  const css = browserCss(cssSource(path.join(appRoot, 'app.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/nav-drawer/nav-drawer.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/event-return/event-return.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/team-profile/team-profile.wxss')) + '\n' + cssSource(base + '.wxss'))
   const config = JSON.parse(fs.readFileSync(base + '.json', 'utf8'))
   const nativeNav = config.navigationStyle !== 'custom' ? '<div class="preview-native-nav"><span>‹</span><strong>' + escapeHtml(config.navigationBarTitleText || '北林CS2校赛') + '</strong><span>•••</span></div>' : ''
   const html = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'"><title>' + name + ' · 离线布局预览</title><style>'
     + 'html,body{margin:0;padding:0;width:100%;min-height:100%;}div{box-sizing:border-box}button,input,textarea{font:inherit;box-sizing:border-box}button{cursor:pointer}img{display:inline-block;vertical-align:middle}img[data-fit="cover"]{object-fit:cover}img[data-fit="contain"]{object-fit:contain}.mini-swiper-item{width:100%;height:100%;overflow:hidden}.mini-scroll-y{overflow-y:auto}.mini-scroll-x{overflow-x:auto}.preview-native-nav{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 0;height:64px;background:white;color:#102a43;font-size:15px}.preview-native-nav span{font-size:22px}.preview-disclaimer{padding:20px;text-align:center;font-size:11px;line-height:1.7;color:#6d8193;background:#f3f7fa}[hidden]{display:none!important}'
-    + css + '</style></head><body>' + nativeNav + createRenderer(nav)(tree) + '<div class="preview-disclaimer">离线布局预览 · 全部为示例数据<br>真实 WXML / WXSS 与页面数据逻辑转换；不替代微信开发者工具及真机验收。</div></body></html>'
+    + css + '</style></head><body>' + nativeNav + createRenderer(nav, teamProfile)(tree) + '<div class="preview-disclaimer">离线布局预览 · 全部为示例数据<br>真实 WXML / WXSS 与页面数据逻辑转换；不替代微信开发者工具及真机验收。</div></body></html>'
   const output = path.join(directory, name + '.html')
   fs.writeFileSync(output, html)
   return { page: name, html: output, bytes: Buffer.byteLength(html) }
@@ -467,7 +484,7 @@ async function main() {
   const arg = name => args.includes(name) ? args[args.indexOf(name) + 1] : null
   const requested = arg('--page')
   const supported = ['index', 'index-guest', 'index-manager', 'index-manager-error', 'team', 'teams', 'verify', 'verify-empty', 'profile', 'login', 'match', 'match-knockout', 'match-three', 'match-four', 'match-awaiting', 'admin', 'admin-registration', 'admin-windows', 'admin-windows-four', 'admin-challenger', 'admin-challenger-four', 'admin-awaiting', 'admin-roster-locked', 'hall', 'hall-players', 'hall-empty', 'workbench', 'workbench-verify', 'workbench-users', 'workbench-rankapps', 'workbench-teams', 'workbench-matches', 'workbench-create', 'workbench-create-empty', 'workbench-blocked', 'workbench-empty', 'workbench-error', 'champion', 'champion-edit', 'champion-readonly']
-  supported.push('recruitment', 'recruitment-edit', 'recruitment-guest', 'messages', 'match-standings', 'match-history', 'admin-standings', 'admin-history')
+  supported.push('workbench-team-profile', 'recruitment', 'recruitment-edit', 'recruitment-guest', 'messages', 'match-standings', 'match-history', 'admin-standings', 'admin-history')
   if (requested && !supported.includes(requested)) throw new Error('Unsupported page: ' + requested)
   const directory = arg('--out') ? path.resolve(arg('--out')) : fs.mkdtempSync(path.join(os.tmpdir(), 'bjfu-layout-preview-'))
   const tempRoot = path.resolve(os.tmpdir())

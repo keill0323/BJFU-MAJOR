@@ -1,0 +1,18 @@
+/* 管理后台两处队伍详情共用外层，资料内容由 team-profile 组件负责。 */
+.team-profile-mask { position: fixed; inset: 0; z-index: 120; display: flex; align-items: flex-end; justify-content: center; background: rgba(16,42,67,.48); }
+.team-profile-panel { width: 100%; max-width: 900rpx; height: 88vh; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; background: #fff; border-radius: 32rpx 32rpx 0 0; padding-bottom: env(safe-area-inset-bottom); }
+.team-profile-header { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; flex-shrink: 0; padding: 26rpx 30rpx 20rpx; border-bottom: 1rpx solid #e2ebf0; }
+.team-profile-kicker { display: block; color: #087f8c; font-size: 20rpx; letter-spacing: 2rpx; font-weight: 650; }
+.team-profile-title { display: block; color: #102a43; font-size: 34rpx; font-weight: 750; margin-top: 4rpx; }
+.team-profile-close { margin: 0; min-height: 88rpx; min-width: 100rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0 20rpx; border: 1rpx solid #d8e7ea; background: #f3f8f9; color: #304d64; font-size: 26rpx; line-height: 1.5; border-radius: 18rpx; }
+.team-profile-close::after { border: 0; }
+.team-profile-scroll { flex: 1; height: 0; min-height: 0; width: 100%; }
+.team-profile-content { padding: 24rpx; background: #f3f7fa; }
+.team-profile-tabs { display: flex; flex-shrink: 0; padding: 10rpx 26rpx; gap: 12rpx; border-bottom: 1rpx solid #e2ebf0; }
+.team-profile-tab { flex: 1; text-align: center; padding: 20rpx 12rpx; font-size: 28rpx; color: #526b7e; border-radius: 14rpx; }
+.team-profile-tab.active { background: #e7f5f5; color: #087f8c; font-weight: 700; }
+.team-profile-records { padding: 28rpx 28rpx 40rpx; }
+.team-profile-record-name { display: block; color: #102a43; font-size: 32rpx; font-weight: 700; word-break: break-all; margin-bottom: 8rpx; }
+.team-card-footer { justify-content: space-between; align-items: center; }
+.team-profile-entry { display: flex; align-items: center; gap: 20rpx; min-height: 88rpx; font-size: 26rpx; font-weight: 650; color: #087f8c; }
+.team-profile-entry > text { font-size: 36rpx; }

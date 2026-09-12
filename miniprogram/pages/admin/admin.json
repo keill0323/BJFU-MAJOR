@@ -1,5 +1,8 @@
 {
   "navigationBarTitleText": "管理后台",
-  "usingComponents": { "event-return": "/components/event-return/event-return" },
+  "usingComponents": {
+    "event-return": "/components/event-return/event-return",
+    "team-profile": "/components/team-profile/team-profile"
+  },
   "enablePullDownRefresh": true
 }

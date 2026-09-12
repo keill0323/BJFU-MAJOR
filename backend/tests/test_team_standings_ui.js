@@ -104,6 +104,7 @@ for (const admin of [false, true]) {
     assert.doesNotMatch(render(), /净胜|999|队伍状态|teams-swiper/)
     page.showTeam({ currentTarget: { dataset: { id: '1' } } })
     assert.equal(page.data.showHistory, true)
+    if (admin) page.switchHistoryTab({ currentTarget: { dataset: { tab: 'history' } } })
     assert.deepEqual(page.data.historySections.map(s => [s.wins, s.losses]), [[1, 0], [0, 1]])
     assert.match(render(), /1 胜 · 0 负/)
     assert.match(render(), /0 胜 · 1 负/)

@@ -46,8 +46,7 @@ Page({
     showUserDetailPanel: false,
     detailUser: null,
     showTeamDetailPanel: false,
-    detailTeam: null,
-    detailMembers: [],
+    detailTeamId: 0,
     // 赛事管理
     matches: [],
     // 创建赛事表单
@@ -264,20 +263,15 @@ Page({
     this.setData({ showUserDetailPanel: false })
   },
 
-  // 点击队伍卡片看详情（拉成员列表）
-  async showTeamDetail(e) {
-    const id = e.currentTarget.dataset.id
-    try {
-      const team = await api.getTeam(id)
-      const members = (team.members || []).map(m => Object.assign({}, m, { display_rank: rankDisplay(m.rank) }))
-      this.setData({ detailTeam: team, detailMembers: members, showTeamDetailPanel: true })
-    } catch (err) {
-      this.showErr(err, '加载队伍详情失败')
-    }
+  // 立即打开资料卡；成员加载和切换竞态由复用组件处理。
+  showTeamDetail(e) {
+    const id = Number(e.currentTarget.dataset.id)
+    if (!Number.isSafeInteger(id) || id <= 0) return
+    this.setData({ detailTeamId: id, showTeamDetailPanel: true })
   },
 
   closeTeamDetail() {
-    this.setData({ showTeamDetailPanel: false })
+    this.setData({ showTeamDetailPanel: false, detailTeamId: 0 })
   },
 
   // 空处理器：阻止弹层内点击冒泡到遮罩

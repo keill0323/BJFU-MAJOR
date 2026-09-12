@@ -154,7 +154,8 @@
         <view class="btn-primary small-btn" catchtap="approveTeam" data-id="{{item.id}}">通过</view>
         <view class="btn-danger small-btn" catchtap="rejectTeam" data-id="{{item.id}}">驳回</view>
       </view>
-      <view class="user-actions">
+      <view class="user-actions team-card-footer">
+        <view class="team-profile-entry" catchtap="showTeamDetail" data-id="{{item.id}}">查看资料与阵容 <text>›</text></view>
         <view class="btn-danger small-btn" catchtap="deleteTeam" data-id="{{item.id}}">删除</view>
       </view>
     </view>
@@ -233,22 +234,11 @@
     </view>
   </view>
 
-  <!-- 队伍详情弹层 -->
-  <view wx:if="{{showTeamDetailPanel}}" class="mask" bindtap="closeTeamDetail">
-    <view class="detail-panel" catchtap="noop">
-      <view class="detail-header">
-        <text class="section-title">队伍详情</text>
-        <text class="detail-close" bindtap="closeTeamDetail">✕</text>
-      </view>
-      <view wx:if="{{detailTeam}}">
-        <text class="team-name">{{detailTeam.name}}</text>
-        <text class="team-meta">队长: {{detailTeam.captain_name || '#' + detailTeam.captain_id}} | 评分: {{detailTeam.rating || 0}}</text>
-        <text class="section-title">成员（{{detailMembers.length}}）</text>
-        <view wx:for="{{detailMembers}}" wx:key="user_id" class="member-row">
-          <text class="member-name">{{item.nickname || item.game_id || '用户' + item.user_id}}</text>
-          <text class="member-rank">{{item.display_rank || '-'}} · {{item.rating || 0}}分</text>
-        </view>
-      </view>
+  <!-- 与赛事管理共用的队伍资料 -->
+  <view wx:if="{{showTeamDetailPanel}}" class="team-profile-mask" bindtap="closeTeamDetail">
+    <view class="team-profile-panel" catchtap="noop">
+      <view class="team-profile-header"><view><text class="team-profile-kicker">TEAM PROFILE</text><text class="team-profile-title">队伍详情</text></view><button class="team-profile-close" bindtap="closeTeamDetail" aria-label="关闭队伍详情">关闭</button></view>
+      <scroll-view scroll-y class="team-profile-scroll"><view class="team-profile-content"><team-profile team-id="{{detailTeamId}}"/></view></scroll-view>
     </view>
   </view>
   </block>

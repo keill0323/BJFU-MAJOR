@@ -31,7 +31,7 @@
     <!-- ===== 队伍 tab：统一赛事排名 ===== -->
     <view wx:if="{{tab === 'teams'}}" class="card standings-card">
       <text class="section-title">赛事队伍</text>
-      <text class="section-caption">按阶段与名次展示，同名次并列。点击队伍查看分阶段战绩。</text>
+      <text class="section-caption">按阶段与名次展示，同名次并列。点击队伍查看阵容资料和分阶段战绩。</text>
       <view wx:if="{{rankingTeams.length === 0}}" class="empty">暂无队伍</view>
       <view wx:for="{{rankingTeams}}" wx:key="team_id" class="standing-row" bindtap="showTeam" data-id="{{item.team_id}}">
         <view class="standing-main">
@@ -255,25 +255,27 @@
     </view>
   </view>
 
-  <!-- 队伍分阶段战绩 -->
-  <view wx:if="{{showHistory && historyTeam}}" class="mask" bindtap="closeHistory">
-    <view class="team-history-panel" catchtap="noop">
-      <view class="detail-header">
-        <view class="standing-copy"><text class="section-title">{{historyTeam.team_name}}</text><text class="team-meta">分阶段对局 · 比分以本队为先</text></view>
-        <image class="detail-close" src="/images/icons/x.svg" bindtap="closeHistory"/>
-      </view>
-      <scroll-view scroll-y class="team-history-scroll">
-        <view wx:if="{{historySections.length === 0}}" class="empty">暂无对阵，生成赛程后可查看各阶段战绩</view>
-        <view wx:for="{{historySections}}" wx:key="key" wx:for-item="section" class="record-section">
-          <view class="record-heading"><text class="record-title">{{section.title}}</text><text class="record-stats">{{section.record_text}}</text></view>
-          <text wx:if="{{section.extra_text}}" class="team-meta">{{section.extra_text}}</text>
-          <view wx:for="{{section.rounds}}" wx:key="id" wx:for-item="game" class="record-game">
-            <view class="record-match"><text class="record-opponent">vs {{game.opponent}}</text><text class="record-result {{game.result_class}}">{{game.outcome}}</text></view>
-            <view class="record-score"><text>{{game.score_text}}</text><text class="team-meta">{{game.format_text}} · 第 {{game.round_number}} 场</text></view>
-            <text wx:if="{{game.maps_text}}" class="record-maps">{{game.maps_text}}</text>
+  <!-- 队伍资料与本场战绩 -->
+  <view wx:if="{{showHistory && historyTeam}}" class="team-profile-mask" bindtap="closeHistory">
+    <view class="team-profile-panel" catchtap="noop">
+      <view class="team-profile-header"><view><text class="team-profile-kicker">TEAM PROFILE</text><text class="team-profile-title">队伍详情</text></view><button class="team-profile-close" bindtap="closeHistory" aria-label="关闭队伍详情">关闭</button></view>
+      <view class="team-profile-tabs"><view class="team-profile-tab {{historyTab === 'profile' ? 'active' : ''}}" bindtap="switchHistoryTab" data-tab="profile">队伍资料</view><view class="team-profile-tab {{historyTab === 'history' ? 'active' : ''}}" bindtap="switchHistoryTab" data-tab="history">本场战绩</view></view>
+      <scroll-view scroll-y class="team-profile-scroll" scroll-into-view="{{historyTab === 'history' ? 'team-record-start' : 'team-profile-start'}}">
+        <view id="team-profile-start" class="team-profile-content" hidden="{{historyTab !== 'profile'}}"><team-profile team-id="{{historyTeam.team_id}}"/></view>
+        <view wx:if="{{historyTab === 'history'}}" id="team-record-start" class="team-profile-records">
+          <text class="team-profile-record-name">{{historyTeam.team_name}}</text><text class="team-meta">{{match.name}} · 比分以本队为先</text>
+          <view wx:if="{{historySections.length === 0}}" class="empty">暂无对阵，生成赛程后可查看各阶段战绩</view>
+          <view wx:for="{{historySections}}" wx:key="key" wx:for-item="section" class="record-section">
+            <view class="record-heading"><text class="record-title">{{section.title}}</text><text class="record-stats">{{section.record_text}}</text></view>
+            <text wx:if="{{section.extra_text}}" class="team-meta">{{section.extra_text}}</text>
+            <view wx:for="{{section.rounds}}" wx:key="id" wx:for-item="game" class="record-game">
+              <view class="record-match"><text class="record-opponent">vs {{game.opponent}}</text><text class="record-result {{game.result_class}}">{{game.outcome}}</text></view>
+              <view class="record-score"><text>{{game.score_text}}</text><text class="team-meta">{{game.format_text}} · 第 {{game.round_number}} 场</text></view>
+              <text wx:if="{{game.maps_text}}" class="record-maps">{{game.maps_text}}</text>
+            </view>
           </view>
+          <view class="btn-outline small-btn" bindtap="exportTeamCsv" data-id="{{historyTeam.team_id}}">导出该队</view>
         </view>
-        <view class="btn-outline small-btn" bindtap="exportTeamCsv" data-id="{{historyTeam.team_id}}">导出该队</view>
       </scroll-view>
     </view>
   </view>

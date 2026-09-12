@@ -1,0 +1,70 @@
+:host { display: block; min-width: 0; }
+.team-profile { width: 100%; min-width: 0; color: #102a43; font-size: 28rpx; line-height: 1.5; }
+.profile-surface { box-sizing: border-box; border: 1rpx solid #dfebef; border-radius: 24rpx; background: #fff; padding: 28rpx; margin-bottom: 22rpx; }
+.identity-top, .identity-main, .roster-heading, .member-top, .member-name-line, .member-rank-line, .rank-detail, .member-score { display: flex; align-items: center; }
+.identity-top { justify-content: space-between; flex-wrap: wrap; gap: 12rpx; margin-bottom: 26rpx; }
+.micro-label { display: block; color: #617e8e; font-size: 22rpx; font-weight: 600; letter-spacing: 2rpx; }
+.status-pill { padding: 7rpx 12rpx; border-radius: 8rpx; color: #816428; background: #fcf4e1; font-size: 23rpx; }
+.status-approved { color: #086975; background: #e7f6f2; }
+.status-rejected { color: #a7473d; background: #fff0ed; }
+.status-unknown { color: #526f81; background: #f0f5f7; }
+.identity-main { align-items: flex-start; gap: 22rpx; }
+.team-emblem { width: 108rpx; height: 108rpx; flex-shrink: 0; border-radius: 24rpx; background: #e7f5f2; color: #087f8c; font-size: 48rpx; font-weight: 700; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.team-emblem image, .member-avatar image { width: 100%; height: 100%; }
+.identity-copy, .member-copy { flex: 1; min-width: 0; }
+.team-name { display: block; font-size: 36rpx; line-height: 1.4; font-weight: 700; word-break: break-all; }
+.captain-copy { display: block; margin-top: 10rpx; font-size: 25rpx; color: #506f81; word-break: break-all; }
+.team-description { display: block; margin: 26rpx 0; color: #536f81; font-size: 26rpx; line-height: 1.75; white-space: pre-wrap; word-break: break-all; }
+.team-stats { display: flex; border-top: 1rpx solid #e6eef2; padding-top: 24rpx; }
+.team-stat { flex: 1; min-width: 0; border-left: 1rpx solid #e6eef2; padding-left: 18rpx; }
+.team-stat:first-child { border-left: 0; padding-left: 0; flex: 1.15; }
+.stat-value { display: block; font-size: 42rpx; line-height: 1.2; font-weight: 700; word-break: break-all; }
+.accent { color: #087f8c; }
+.stat-caption { display: block; font-size: 22rpx; color: #587588; margin-top: 10rpx; }
+.rating-note, .created-copy { display: block; color: #627f90; font-size: 23rpx; margin-top: 18rpx; }
+.created-copy { margin-top: 8rpx; }
+.roster-heading { justify-content: space-between; gap: 16rpx; }
+.section-title { display: block; font-size: 32rpx; font-weight: 700; margin-top: 3rpx; }
+.roster-count { color: #087580; background: #eaf6f3; border-radius: 10rpx; padding: 8rpx 15rpx; font-size: 25rpx; flex-shrink: 0; }
+.identity-summary, .member-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 12rpx; margin-top: 20rpx; }
+.identity-chip, .verification-tag { display: inline-block; border-radius: 8rpx; padding: 5rpx 12rpx; font-size: 24rpx; line-height: 1.5; color: #567080; background: #edf3f6; }
+.new_student { color: #086c5c; background: #e3f6eb; }
+.senior { color: #245a8d; background: #eaf2fc; }
+.unknown { color: #79602e; background: #faf1df; }
+.verification-tag.verified { color: #166e75; background: #e9f5f5; }
+.roster-note { display: block; margin-top: 12rpx; color: #5c798c; font-size: 23rpx; }
+.member-card { border-top: 1rpx solid #e3ecf1; margin-top: 24rpx; padding-top: 24rpx; }
+.member-top { gap: 18rpx; }
+.member-avatar { width: 80rpx; height: 80rpx; flex-shrink: 0; border-radius: 20rpx; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #edf5f7; color: #447284; font-size: 34rpx; font-weight: 600; }
+.member-name-line { flex-wrap: wrap; gap: 8rpx 12rpx; }
+.member-name { font-size: 29rpx; font-weight: 600; line-height: 1.5; max-width: 100%; word-break: break-all; }
+.captain-label { font-size: 22rpx; border: 1rpx solid #e3c794; color: #8a6525; background: #fff8e9; padding: 2rpx 9rpx; border-radius: 6rpx; flex-shrink: 0; }
+.member-id { display: block; color: #5d7b8c; font-size: 23rpx; margin-top: 5rpx; word-break: break-all; }
+.member-game { display: block; margin-top: 17rpx; color: #4e6c7e; font-size: 25rpx; line-height: 1.65; word-break: break-all; }
+.member-rank-line { justify-content: space-between; gap: 18rpx; margin-top: 18rpx; padding: 15rpx 18rpx; border-radius: 14rpx; background: #f3f8fa; }
+.rank-detail { min-width: 0; flex: 1; gap: 14rpx; }
+.rank-badge { width: 60rpx; height: 60rpx; flex-shrink: 0; }
+.rank-label { color: #086d77; font-size: 25rpx; font-weight: 600; word-break: break-all; }
+.rank-unset { color: #637d8d; font-weight: 400; }
+.member-score { flex-direction: column; align-items: flex-end; flex-shrink: 0; max-width: 130rpx; }
+.score-value { color: #173e57; font-size: 30rpx; font-weight: 700; word-break: break-all; }
+.score-caption { color: #5c788a; font-size: 22rpx; }
+.member-tags { margin-top: 16rpx; }
+.empty-roster { padding: 40rpx 12rpx 16rpx; color: #587689; font-size: 26rpx; text-align: center; }
+.profile-state { min-height: 300rpx; box-sizing: border-box; padding: 60rpx 24rpx; text-align: center; }
+.state-emblem { width: 96rpx; height: 96rpx; margin: 0 auto 24rpx; border-radius: 24rpx; background: #e9f6f2; display: flex; align-items: center; justify-content: center; }
+.state-emblem image { width: 48rpx; height: 48rpx; }
+.state-title { display: block; color: #173b53; font-size: 32rpx; font-weight: 600; }
+.state-copy { display: block; margin-top: 14rpx; color: #557587; font-size: 26rpx; line-height: 1.7; word-break: break-all; }
+.retry-button { margin: 30rpx auto 0; min-height: 92rpx; width: 280rpx; max-width: 100%; padding: 22rpx 28rpx; border-radius: 16rpx; border: 1rpx solid #cce7e2; color: #076b74; background: #e9f7f3; font-size: 28rpx; line-height: 1.6; }
+.retry-button::after { border: none; }
+.retry-button:active { background: #d9efe9; }
+@media (max-width: 350px) {
+  .profile-surface { padding: 24rpx; }
+  .identity-main { gap: 18rpx; }
+  .team-emblem { width: 94rpx; height: 94rpx; }
+  .team-name { font-size: 34rpx; }
+  .member-rank-line { gap: 12rpx; padding: 14rpx; }
+  .rank-detail { gap: 10rpx; }
+  .rank-badge { width: 54rpx; height: 54rpx; }
+}
