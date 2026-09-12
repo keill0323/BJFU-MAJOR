@@ -3,17 +3,29 @@
     <block wx:if="{{currentRoute && currentRoute !== '/pages/index/index'}}">
       <button class="topbar-return" bindtap="goEvents" hover-class="topbar-return-pressed" aria-label="返回赛事中心"><text class="topbar-return-arrow" aria-hidden="true">‹</text><text>返回赛事</text></button>
       <view class="topbar-copy"><text class="topbar-title">{{title}}</text></view>
-      <view class="menu-button" bindtap="openDrawer" aria-role="button" aria-label="{{adminTodoCount > 0 ? '打开导航菜单，有管理待办' : '打开导航菜单'}}"><view></view><view></view><text wx:if="{{isManager && (adminTodoCount > 0 || adminTodoError)}}" class="menu-dot"></text></view>
+      <view class="menu-button" bindtap="openDrawer" aria-role="button" aria-label="{{!adminTodoError && adminTodoCount > 0 ? '打开导航菜单，有管理待办' : '打开导航菜单'}}"><view></view><view></view><text wx:if="{{isManager && !adminTodoError && adminTodoCount > 0}}" class="menu-dot"></text></view>
     </block>
     <block wx:else>
-      <view class="menu-button" bindtap="openDrawer" aria-role="button" aria-label="{{adminTodoCount > 0 ? '打开导航菜单，有管理待办' : '打开导航菜单'}}"><view></view><view></view><text wx:if="{{isManager && (adminTodoCount > 0 || adminTodoError)}}" class="menu-dot"></text></view>
+      <view class="menu-button" bindtap="openDrawer" aria-role="button" aria-label="{{!adminTodoError && adminTodoCount > 0 ? '打开导航菜单，有管理待办' : '打开导航菜单'}}"><view></view><view></view><text wx:if="{{isManager && !adminTodoError && adminTodoCount > 0}}" class="menu-dot"></text></view>
       <view class="topbar-copy"><text class="topbar-title">{{title}}</text><text class="topbar-subtitle">北京林业大学 · CS2 校赛</text></view>
     </block>
   </view>
 </view>
-<view wx:if="{{isManager && showAdminNotice && (adminTodoCount > 0 || adminTodoError)}}" class="admin-notice" bindtap="goAdmin" aria-role="button" aria-label="管理待办，进入处理">
-  <view class="admin-notice-copy"><view class="admin-notice-heading"><text>管理待办</text><text class="admin-count">{{adminTodoError ? '待更新' : adminTodoBadge + ' 项待处理'}}</text></view><text class="admin-notice-sub">{{adminTodoSummary}}</text></view>
-  <text class="admin-notice-action">去处理 ›</text>
+<view wx:if="{{isManager && showAdminNotice && (adminTodoCount > 0 || adminTodoError)}}" class="admin-notice {{adminTodoError ? 'admin-notice-unavailable' : ''}}">
+  <view class="admin-notice-heading"><text>{{adminTodoError ? '待办状态暂时不可用' : '需要你审核'}}</text><text wx:if="{{!adminTodoError}}" class="admin-count">{{adminTodoBadge}} 项待处理</text></view>
+  <block wx:if="{{adminTodoError}}">
+    <text class="admin-notice-sub">{{adminTodoErrorText}}</text>
+    <text wx:if="{{adminTodoCount > 0}}" class="admin-notice-sub">上次记录：{{adminTodoSummary}}。请刷新确认。</text>
+    <view class="admin-notice-actions"><view class="admin-notice-action" bindtap="goAdmin" aria-role="button">进入管理后台 ›</view><view class="admin-notice-action" bindtap="retryAdminTodos" aria-role="button">{{adminTodoLoading ? '正在重试…' : '重新获取'}}</view></view>
+  </block>
+  <block wx:else>
+    <text class="admin-notice-sub">点击下面的事项，直接打开对应审核列表。</text>
+    <view class="admin-task-list">
+      <view wx:for="{{adminTodoItems}}" wx:key="key" class="admin-task" bindtap="goAdminTodo" data-tab="{{item.tab}}" aria-role="button">
+        <text class="admin-task-title">{{item.title}} {{item.count}} {{item.unit}}</text><text class="admin-task-action">去审核 ›</text>
+      </view>
+    </view>
+  </block>
 </view>
 <view wx:if="{{open}}" class="drawer-mask" bindtap="closeDrawer" catchtouchmove="preventMove"></view>
 <view class="drawer {{open ? 'drawer-open' : ''}}">
@@ -32,7 +44,7 @@
     <view class="drawer-item" bindtap="go" data-url="/pages/verify/verify"><image src="/images/brand/shield.svg"/><text>认证中心</text></view>
     <view class="drawer-item" bindtap="go" data-url="/pages/settings/settings"><image src="/images/icons/settings.svg"/><text>设置</text></view>
     <view class="drawer-item" bindtap="go" data-url="/pages/rules/rules"><image src="/images/icons/swords.svg"/><text>赛事规则</text></view>
-    <view wx:if="{{isManager}}" class="drawer-item" bindtap="goAdmin"><image src="/images/icons/settings.svg"/><text>管理后台</text><text wx:if="{{adminTodoCount > 0 || adminTodoError}}" class="drawer-todo-badge">{{adminTodoError ? '待更新' : adminTodoBadge}}</text></view>
+    <view wx:if="{{isManager}}" class="drawer-item" bindtap="goAdmin"><image src="/images/icons/settings.svg"/><text>管理后台</text><text wx:if="{{adminTodoCount > 0 || adminTodoError}}" class="drawer-todo-badge {{adminTodoError ? 'drawer-status-unknown' : ''}}">{{adminTodoError ? '未更新' : adminTodoBadge}}</text></view>
     <view class="drawer-item account-action {{user ? 'danger' : ''}}" bindtap="go" data-url="/pages/login/login">{{user ? '退出登录' : '登录 / 注册'}}<text>↗</text></view>
     <text class="drawer-footer">让热爱上场。</text>
   </scroll-view>

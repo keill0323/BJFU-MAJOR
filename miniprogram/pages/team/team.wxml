@@ -2,7 +2,7 @@
 <view class="team-space">
   <view class="page-heading">
     <view><text class="eyebrow">TEAM SPACE</text><text class="page-title">一起上场</text></view>
-    <view class="text-link" bindtap="goTeams">所有队伍 <text class="link-arrow">›</text></view>
+    <view class="text-link" bindtap="goRecruitment">招募大厅 <text class="link-arrow">›</text></view>
   </view>
 
   <view wx:if="{{loading}}" class="surface state-card">
@@ -43,7 +43,7 @@
       <view wx:for="{{members}}" wx:key="user_id" class="member-row">
         <text class="roster-no">{{item.roster_no}}</text>
         <view class="member-avatar"><image wx:if="{{item.avatar_full}}" src="{{item.avatar_full}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view>
-        <view class="member-copy"><view class="member-name-line"><text class="member-name">{{item.display_name}}</text><text wx:if="{{item.role === 'captain'}}" class="captain-label">队长</text></view><text class="member-game">{{item.game_id || '暂未设置游戏 ID'}}</text><view wx:if="{{isCaptain && item.role !== 'captain'}}" class="remove-member" bindtap="kickMember" data-uid="{{item.user_id}}" data-name="{{item.display_name}}">移除队员</view></view>
+        <view class="member-copy"><view class="member-name-line"><text class="member-name">{{item.display_name}}</text><text wx:if="{{item.role === 'captain'}}" class="captain-label">队长</text></view><text class="member-game">{{item.game_id || '暂未设置游戏 ID'}}</text><text class="member-identity">{{!item.is_verified ? '身份待确认 · 学籍未认证' : item.identity === 'new_student' ? '新生' : item.identity === 'senior' ? '老生' : '新老生身份待确认'}}</text><view wx:if="{{isCaptain && item.role !== 'captain'}}" class="remove-member" bindtap="kickMember" data-uid="{{item.user_id}}" data-name="{{item.display_name}}">移除队员</view></view>
         <view class="member-rating"><text class="rank-value {{item.rank ? '' : 'rank-unset'}}">{{item.display_rank || '待认证'}}</text><text class="member-score">{{item.score_text}} 水平分</text></view>
       </view>
       <view wx:if="{{members.length === 0}}" class="inline-empty">暂无成员信息，请下拉刷新</view>
@@ -53,15 +53,16 @@
       <view class="section-heading"><view><text class="micro-label">APPLICATIONS</text><text class="section-title">入队申请</text></view><text class="count-pill {{applications.length ? 'count-active' : ''}}">{{applications.length}}</text></view>
       <view wx:if="{{applications.length === 0}}" class="request-empty"><text>暂时没有待处理申请</text><text class="request-empty-sub">分享队伍，或去人才市场寻找队友</text></view>
       <view wx:for="{{applications}}" wx:key="id" class="request-row">
-        <text class="request-name">{{item.nickname || '玩家' + item.user_id}}</text><text class="request-meta">{{item.game_id || '暂未设置游戏 ID'}} · ID {{item.user_id}}</text>
-        <text wx:if="{{item.message}}" class="request-message">{{item.message}}</text>
+        <text class="request-name">{{item.nickname || '玩家' + item.user_id}}</text><view class="applicant-profile"><image wx:if="{{item.avatarFull}}" class="applicant-avatar" src="{{item.avatarFull}}" mode="aspectFill"/><view class="applicant-copy"><text class="applicant-game">游戏 ID：{{item.game_id || '未设置'}}</text><view class="applicant-tags"><text>{{item.displayRank || '段位待认证'}}</text><text>{{item.individual_rating || 0}} 水平分</text><text>{{!item.is_verified ? '学籍待认证' : item.identity === 'new_student' ? '新生 · 已认证' : item.identity === 'senior' ? '老生 · 已认证' : '已认证 · 身份待确认'}}</text></view></view></view><text wx:if="{{item.user_description}}" class="applicant-description">个人介绍：{{item.user_description}}</text>
+        <text wx:if="{{item.message}}" class="request-message">入队自我介绍：{{item.message}}</text>
         <view class="request-actions"><view class="action muted small" bindtap="rejectApp" data-id="{{item.id}}">拒绝</view><view class="action primary small" bindtap="approveApp" data-id="{{item.id}}">同意入队</view></view>
       </view>
     </view>
 
     <view class="surface collaboration-card">
       <view class="section-heading"><text class="section-title">队伍协作</text></view>
-      <view wx:if="{{isCaptain}}" class="recruit-actions"><view class="action primary" bindtap="openMarket">人才市场</view><view class="action secondary" bindtap="openRecruit">按学号招募</view></view>
+      <view wx:if="{{isCaptain}}" class="recruit-actions"><view class="action primary" bindtap="goRecruitment">全部选手</view><view class="action secondary" bindtap="openRecruit">按学号招募</view></view>
+      <view class="action secondary" bindtap="goRecruitment">招募大厅 · 发布 / 查看招募</view>
       <button class="action share-action" open-type="share">分享队伍</button>
       <view class="team-footer"><text>{{isCaptain ? '队长负责招募与队伍报名' : '报名由队长统一安排'}}</text><view wx:if="{{isCaptain}}" class="danger-link" bindtap="disbandTeam">解散队伍</view><view wx:else class="danger-link" bindtap="leaveTeam">退出队伍</view></view>
     </view>
@@ -72,7 +73,7 @@
       <block wx:if="{{loggedIn}}"><view class="field-heading"><text>队伍名称</text><text class="field-count">{{teamName.length}} / 20</text></view><input class="team-input" placeholder="给队伍起一个名字" placeholder-class="input-placeholder" value="{{teamName}}" bindinput="onNameInput" maxlength="20"/><view class="action primary" bindtap="createTeam">创建队伍</view><text class="create-note">创建后需等待管理员审核</text></block>
       <view wx:else class="action primary" bindtap="goLogin">登录后创建队伍</view>
     </view>
-    <view class="browse-card" bindtap="goTeams"><view><text class="browse-title">也可以先找到合适的队伍</text><text class="browse-copy">查看阵容与水平分，向队长申请加入</text></view><text class="browse-arrow">›</text></view>
+    <view class="browse-card" bindtap="goRecruitment"><view><text class="browse-title">也可以先找到合适的队伍</text><text class="browse-copy">查看阵容与水平分，向队长申请加入</text></view><text class="browse-arrow">›</text></view>
   </block>
 </view>
 
@@ -105,3 +106,5 @@
     </scroll-view>
   </view>
 </view>
+
+<subscribe-notice></subscribe-notice>

@@ -18,9 +18,13 @@ REVIEW_PROMPT = """请审核这张学信网截图 / 教务系统截图 / 校园�
 请检查：
 1. 学校名称是否为「北京林业大学」（截图可能写作：北京林业大学、北林、Beijing Forestry University、BJFU，均视为同一学校）
 2. 是否包含姓名和学号（校园卡/电子校园卡若只有卡号而无学号，不视为有效）
-3. 是否有明显P图、涂抹、拼接痕迹
-4. 是否像本人上传的截图
+3. 学校名称、姓名、学号等关键认证内容是否有明显篡改或拼接痕迹
+4. 身份证号和证件照片属于非必要敏感信息，允许用户将其打码、涂黑、模糊或遮挡，也允许学信网页面自身以星号隐藏身份证号。只要学校名称、姓名、学号仍清晰可读，不得仅因身份证号或证件照片打码判定凭证无效或降低置信度。
+无需提供或恢复完整身份证号、人脸照片，不要尝试猜测被遮挡的内容。若学号本身被遮挡或无法准确读出，则 student_id 返回 null，交人工核对。
 特别注意：如果截图中的学校不是北京林业大学（是其他学校），必须判定 is_valid=false。
+学号提取与是否通过审核分别判断：即使整体置信度较低或需要人工复核，也要在 student_id 中保留图片里清晰可读的学号。
+本科自动认证采用9位数字学号（2位入学年份加7位数字）。硕士、博士等学号格式可能不同，不要强行补成9位、截断或仅因位数不同判定凭证无效；如实提取，交管理员核验学号及新老生身份。
+仅抄录「学号 / Student ID」对应的数字，保留开头的 0；不要把卡号、身份证号、电话号码、日期当成学号。看不清、被遮挡或存在多个无法区分的学号时返回 null，不要猜测。
 请只返回 JSON 格式（不要任何其他文字），格式如下：
 {"is_valid": true或false, "confidence": 0到1之间的小数, "reason": "判断理由（中文简短）", "student_id": "截图中的学号，没有则写null"}
 如果不确定，confidence 给低值（如 0.5 以下）。"""
@@ -105,6 +109,14 @@ def _review_fields(result):
     return float(confidence), reason
 
 
+def normalize_student_id(value):
+    """Keep student IDs as text, including leading zeroes; never guess OCR digits."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value if re.fullmatch(r"[0-9]{6,20}", value) else None
+
+
 def validate_verify_result(result):
     confidence, reason = _review_fields(result)
     is_valid = result.get("is_valid")
@@ -113,10 +125,8 @@ def validate_verify_result(result):
     student_id = result.get("student_id")
     if student_id is not None and not isinstance(student_id, str):
         raise ValueError("AI 学号必须为文本")
-    student_id = student_id.strip() if student_id else None
     # 自动通过只接受常规数字学号；其他凭证交管理员确认，不直接拒绝。
-    if student_id and not re.fullmatch(r"[0-9]{6,20}", student_id):
-        student_id = None
+    student_id = normalize_student_id(student_id)
     return {"is_valid": is_valid, "confidence": confidence,
             "reason": reason, "student_id": student_id}
 

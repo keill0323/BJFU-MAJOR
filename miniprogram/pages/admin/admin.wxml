@@ -3,31 +3,45 @@
 <view class="page">
   <view class="workbench-head">
     <view class="workbench-copy"><text class="workbench-kicker">MAJOR · MANAGEMENT</text><text class="workbench-title">管理工作台</text><text class="workbench-caption">{{user.role === 'reviewer' ? '审核员' : '管理员'}} · 待办优先，有序办赛</text></view>
-    <view class="workbench-total"><text class="workbench-number">{{todos ? todos.total : '—'}}</text><text>{{todoError ? '待办待更新' : '待处理'}}</text></view>
+    <view class="workbench-total"><text class="workbench-number">{{todos && !todoError ? todos.total : '—'}}</text><text>{{todoError ? '暂未更新' : '待处理'}}</text></view>
   </view>
   <view wx:if="{{permissionLoading}}" class="load-state">正在确认管理权限…</view>
   <block wx:if="{{user}}">
     <view class="admin-tabs">
       <view wx:for="{{tabs}}" wx:key="id" class="admin-tab {{tab === item.id ? 'active' : ''}}" data-tab="{{item.id}}" bindtap="switchTab" aria-role="button">
-        <text>{{item.label}}</text><text wx:if="{{item.countKey && todos && todos[item.countKey] > 0}}" class="tab-badge">{{todos[item.countKey] > 99 ? '99+' : todos[item.countKey]}}</text>
+        <text>{{item.label}}</text><text wx:if="{{item.countKey && todos && !todoError && todos[item.countKey] > 0}}" class="tab-badge">{{todos[item.countKey] > 99 ? '99+' : todos[item.countKey]}}</text>
       </view>
     </view>
-    <view wx:if="{{todoError}}" class="notice error-notice"><view><text class="notice-title">待办数量更新失败</text><text class="notice-copy">{{todos ? '下方保留上次记录，请刷新确认最新待办。' : '暂时无法确认待办数量，请稍后重试。'}}</text></view><view class="text-action" bindtap="retryTodos">重试</view></view>
+    <view wx:if="{{todoError}}" class="notice unavailable-notice"><view><text class="notice-title">待办状态暂时不可用</text><text class="notice-copy">{{todoErrorText}}</text><text wx:if="{{todos}}" class="notice-copy">下方保留上次记录，请刷新确认最新待办。</text></view><view class="text-action" bindtap="retryTodos">{{todoLoading ? '重试中…' : '重试'}}</view></view>
     <view wx:elif="{{todoLoading}}" class="sync-state">正在更新待办…</view>
+
+    <view wx:if="{{tab !== 'overview' && todoItems.length && !todoError}}" class="card pending-shortcuts">
+      <view class="queue-heading"><text class="section-title">需要你审核</text><view class="text-action" bindtap="switchTab" data-tab="overview">查看全部待办 ›</view></view>
+      <view class="pending-shortcut-list"><view wx:for="{{todoItems}}" wx:key="key" class="pending-shortcut" bindtap="openTodo" data-tab="{{item.tab}}" aria-role="button"><text>{{item.title}}</text><text class="pending-shortcut-count">{{item.count}} {{item.unit}} ›</text></view></view>
+    </view>
 
     <view wx:if="{{tab === 'overview'}}">
       <view class="section-heading"><text class="section-title">待办事项</text><text class="section-caption">点击进入审核</text></view>
       <view wx:if="{{todos && todos.total === 0 && !todoLoading && !todoError}}" class="notice clear-notice"><text>当前没有待办，下拉可查看最新情况。</text></view>
       <view class="todo-grid">
-        <view wx:for="{{todoCards}}" wx:key="tab" class="todo-card {{todos && todos[item.key] > 0 ? 'has-pending' : ''}}" bindtap="switchTab" data-tab="{{item.tab}}" aria-role="button">
+        <view wx:for="{{todoCards}}" wx:key="tab" class="todo-card {{todos && !todoError && todos[item.key] > 0 ? 'has-pending' : ''}}" bindtap="openTodo" data-tab="{{item.tab}}" aria-role="button">
           <view class="todo-card-top"><image class="todo-icon" src="/images/brand/{{item.icon}}.svg" mode="aspectFit"/><text class="todo-number">{{todos ? todos[item.key] : '—'}}</text></view>
           <text class="todo-title">{{item.title}}</text><view class="todo-footer"><text>{{item.subtitle}}</text><text class="todo-arrow">›</text></view>
         </view>
       </view>
+    </view>
+    <block wx:if="{{tab === 'overview' || tab === 'matches'}}">
       <view wx:if="{{todos && todos.registration_matches.length}}" class="card registration-queue">
         <view class="queue-heading"><text class="section-title">待审核赛事报名</text><text class="section-caption">按赛事处理</text></view>
-        <view wx:for="{{todos.registration_matches}}" wx:key="match_id" class="queue-row" bindtap="goMDetail" data-id="{{item.match_id}}" aria-role="button"><view class="queue-copy"><text class="queue-name">{{item.match_name}}</text><text class="queue-caption">{{item.roster_locked ? '已分组，请查看并处理遗留报名' : '审核后进入待分组名单'}}</text></view><text class="queue-count">{{item.count}} 待办</text><text class="queue-arrow">›</text></view>
+        <view wx:for="{{todos.registration_matches}}" wx:key="match_id" class="queue-row" bindtap="goMDetail" data-id="{{item.match_id}}" aria-role="button"><view class="queue-copy"><text class="queue-name">{{item.match_name}}</text><text class="queue-caption">点击审核报名，通过后进入待分组名单</text></view><text class="queue-count">{{item.count}} 队待审</text><text class="queue-arrow">›</text></view>
       </view>
+      <view wx:if="{{todos && todos.blocked_registration_matches.length}}" class="card blocked-queue">
+        <view class="queue-heading"><text class="section-title">已锁定赛事的历史报名</text><text class="section-caption">不计入待办</text></view>
+        <text class="blocked-explanation">这些赛事已分组或生成对阵，无法继续审核报名。原记录保留，可进入详情核对。</text>
+        <view wx:for="{{todos.blocked_registration_matches}}" wx:key="match_id" class="queue-row" bindtap="goMDetail" data-id="{{item.match_id}}" aria-role="button"><view class="queue-copy"><text class="queue-name">{{item.match_name}}</text><text class="queue-caption">查看历史报名记录</text></view><text class="queue-count">{{item.count}} 队</text><text class="queue-arrow">›</text></view>
+      </view>
+    </block>
+    <view wx:if="{{tab === 'overview'}}">
       <view class="section-heading"><text class="section-title">常用管理</text></view>
       <view class="card management-links">
         <view class="management-link" bindtap="switchTab" data-tab="matches"><view><text class="link-title">赛事管理</text><text class="link-caption">报名、赛程与赛事设置</text></view><text>›</text></view>
@@ -53,8 +67,19 @@
         <text class="tag {{item.role === 'admin' ? 'tag-red' : item.role === 'reviewer' ? 'tag-orange' : 'tag-gray'}}">{{item.role === 'admin' ? '管理员' : item.role === 'reviewer' ? '审核员' : '用户'}}</text>
       </view>
       <text class="user-name">{{item.nickname || '未设昵称'}} {{item.game_id ? '(' + item.game_id + ')' : ''}}</text>
-      <text class="user-meta">学号: {{item.student_id || '未认证'}} | {{item.is_verified ? '已认证' : '未认证'}} | 段位: {{item.display_rank || '-'}} | 评分: {{item.individual_rating || 0}}</text>
+      <text class="user-meta">学号: {{item.student_id || '未填写'}} | {{item.is_verified ? '已认证' : '未认证'}} | 段位: {{item.display_rank || '-'}} | 评分: {{item.individual_rating || 0}}</text>
+      <view wx:if="{{item.verify_image && !item.student_id && studentIdDrafts[item.id].open}}" class="student-id-editor" catchtap="noop">
+        <text class="student-id-title">补充学号</text>
+        <text class="student-id-hint">保存学号会保留当前认证状态。</text>
+        <image class="verify-shot" src="{{item.verify_image_full}}" mode="aspectFit" bindtap="previewVerify" data-url="{{item.verify_image_full}}"/>
+        <text class="student-id-label">凭证上的学号</text>
+        <input class="input student-id-input" type="number" maxlength="20" placeholder="6～20 位数字学号" placeholder-class="form-placeholder" value="{{studentIdDrafts[item.id].value}}" disabled="{{studentIdDrafts[item.id].saving}}" bindinput="onStudentIdInput" data-id="{{item.id}}" data-source="users"/>
+        <text class="student-id-hint">{{studentIdDrafts[item.id].hint}}</text>
+        <text wx:if="{{studentIdDrafts[item.id].error}}" class="student-id-error">{{studentIdDrafts[item.id].error}}</text>
+        <button class="btn-primary small-btn student-id-action student-id-save" catchtap="saveStudentId" data-id="{{item.id}}" data-source="users" loading="{{studentIdDrafts[item.id].saving}}" disabled="{{studentIdDrafts[item.id].saving || studentIdDrafts[item.id].recognizing}}">{{studentIdDrafts[item.id].saving ? '正在保存' : '保存学号'}}</button>
+      </view>
       <view class="user-actions">
+        <button wx:if="{{item.verify_image && !item.student_id}}" class="btn-outline small-btn student-id-action" catchtap="recognizeStudentId" data-id="{{item.id}}" data-source="users" loading="{{studentIdDrafts[item.id].recognizing}}" disabled="{{studentIdDrafts[item.id].recognizing || studentIdDrafts[item.id].saving}}">{{studentIdDrafts[item.id].recognizing ? '正在识别' : studentIdDrafts[item.id].open ? '重新识别学号' : '识别学号'}}</button>
         <view class="btn-outline small-btn" catchtap="setStudentId" data-id="{{item.id}}">设学号</view>
         <view class="btn-outline small-btn" catchtap="setRank" data-id="{{item.id}}">设段位</view>
         <view class="btn-outline small-btn" catchtap="setIdentity" data-id="{{item.id}}">设身份</view>
@@ -84,9 +109,16 @@
         <text wx:if="{{item.ai_review_reason}}" class="ai-suggest-reason">{{item.ai_review_reason}}</text>
       </view>
       <image wx:if="{{item.verify_image_full}}" class="verify-shot" src="{{item.verify_image_full}}" mode="aspectFit" bindtap="previewVerify" data-url="{{item.verify_image_full}}"/>
+      <view class="student-id-editor">
+        <view class="student-id-heading"><text class="student-id-title">确认学号</text><button class="btn-outline small-btn student-id-action student-id-recognize" bindtap="recognizeStudentId" data-id="{{item.id}}" data-source="verify" loading="{{studentIdDrafts[item.id].recognizing}}" disabled="{{studentIdDrafts[item.id].recognizing || studentIdDrafts[item.id].saving}}">{{studentIdDrafts[item.id].recognizing ? '正在识别' : studentIdDrafts[item.id].value ? '重新识别' : '识别学号'}}</button></view>
+        <input class="input student-id-input" type="number" maxlength="20" placeholder="6～20 位数字学号" placeholder-class="form-placeholder" value="{{studentIdDrafts[item.id].value}}" disabled="{{studentIdDrafts[item.id].saving}}" bindinput="onStudentIdInput" data-id="{{item.id}}" data-source="verify"/>
+        <text class="student-id-hint">{{studentIdDrafts[item.id].hint}}</text>
+        <text class="student-id-hint">核对学号和图片后，点击「确认并通过」。</text>
+        <text wx:if="{{studentIdDrafts[item.id].error}}" class="student-id-error">{{studentIdDrafts[item.id].error}}</text>
+      </view>
       <view class="user-actions">
-        <view class="btn-primary small-btn" bindtap="verifyPass" data-id="{{item.id}}">通过</view>
-        <view class="btn-danger small-btn" bindtap="verifyReject" data-id="{{item.id}}">驳回</view>
+        <button class="btn-primary small-btn student-id-action" bindtap="verifyPass" data-id="{{item.id}}" loading="{{studentIdDrafts[item.id].saving}}" disabled="{{studentIdDrafts[item.id].saving || studentIdDrafts[item.id].recognizing}}">{{studentIdDrafts[item.id].saving ? '正在提交' : '确认并通过'}}</button>
+        <button class="btn-danger small-btn student-id-action" bindtap="verifyReject" data-id="{{item.id}}" disabled="{{studentIdDrafts[item.id].saving || studentIdDrafts[item.id].recognizing}}">驳回</button>
       </view>
     </view>
   </view>
@@ -147,32 +179,33 @@
     <!-- 创建赛事 -->
     <view wx:if="{{showCreateMatch}}" id="create-match-form" class="card create-card">
       <text class="section-title">新建赛事</text>
+      <text class="create-caption">填写基本信息，再选择报名时间。</text>
       <text class="field-label">赛事名称</text>
-      <input class="input" placeholder="赛事名称" value="{{newMatch.name}}" bindinput="onMatchName"/>
+      <input class="input" placeholder="例如：2026届起源杯" placeholder-class="form-placeholder" value="{{newMatch.name}}" bindinput="onMatchName"/>
       <text class="field-label">赛事类型</text>
       <view class="type-row">
-        <view class="type-option {{newMatch.match_type === 'major' ? 'active' : ''}}" bindtap="onMatchType" data-type="major">大赛</view>
-        <view class="type-option {{newMatch.match_type === 'freshman' ? 'active' : ''}}" bindtap="onMatchType" data-type="freshman">新生赛</view>
+        <view class="type-option {{newMatch.match_type === 'major' ? 'active' : ''}}" bindtap="onMatchType" data-type="major" aria-role="button">大赛</view>
+        <view class="type-option {{newMatch.match_type === 'freshman' ? 'active' : ''}}" bindtap="onMatchType" data-type="freshman" aria-role="button">新生赛</view>
       </view>
       <view class="input-row">
-        <view class="input-group"><text class="field-label">队伍上限</text><input class="input" type="number" placeholder="队伍上限" value="{{newMatch.max_teams}}" bindinput="onMatchMax"/></view>
-        <view class="input-group"><text class="field-label">每队人数</text><input class="input" type="number" placeholder="每队人数" value="{{newMatch.team_size}}" bindinput="onMatchSize"/></view>
+        <view class="input-group"><text class="field-label">队伍上限</text><input class="input" type="number" placeholder="队伍数量" placeholder-class="form-placeholder" value="{{newMatch.max_teams}}" bindinput="onMatchMax"/></view>
+        <view class="input-group"><text class="field-label">每队人数</text><input class="input" type="number" placeholder="队员人数" placeholder-class="form-placeholder" value="{{newMatch.team_size}}" bindinput="onMatchSize"/></view>
       </view>
       <text class="field-label">赛事简介 · 选填</text>
-      <input class="input" placeholder="赛事简介" value="{{newMatch.description}}" bindinput="onMatchDesc"/>
+      <textarea class="input description-input" placeholder="填写赛事介绍、参赛规则等，可换行" placeholder-class="form-placeholder" maxlength="-1" value="{{newMatch.description}}" bindinput="onMatchDesc"/>
       <view class="registration-fields">
         <text class="registration-title">报名时间 <text class="registration-optional">选填 · 北京时间</text></text>
         <text class="registration-label">开始报名</text>
         <view class="registration-pickers">
-          <picker mode="date" value="{{registrationStartDate}}" data-field="registrationStartDate" bindchange="onRegistrationInput"><view class="registration-picker">{{registrationStartDate || '选择日期'}}</view></picker>
-          <picker mode="time" value="{{registrationStartTime}}" data-field="registrationStartTime" bindchange="onRegistrationInput"><view class="registration-picker">{{registrationStartTime || '选择时间'}}</view></picker>
-          <text class="registration-clear" bindtap="clearRegistrationLimit" data-side="start">清除</text>
+          <picker class="registration-date" mode="date" value="{{registrationStartDate}}" data-field="registrationStartDate" bindchange="onRegistrationInput"><view class="registration-picker {{registrationStartDate ? '' : 'picker-placeholder'}}">{{registrationStartDate || '选择日期'}}<text class="picker-arrow">⌄</text></view></picker>
+          <picker class="registration-time" mode="time" value="{{registrationStartTime}}" data-field="registrationStartTime" bindchange="onRegistrationInput"><view class="registration-picker {{registrationStartTime ? '' : 'picker-placeholder'}}">{{registrationStartTime || '选择时间'}}<text class="picker-arrow">⌄</text></view></picker>
+          <view class="registration-clear" bindtap="clearRegistrationLimit" data-side="start" aria-role="button">清除</view>
         </view>
         <text class="registration-label">截止报名</text>
         <view class="registration-pickers">
-          <picker mode="date" value="{{registrationEndDate}}" data-field="registrationEndDate" bindchange="onRegistrationInput"><view class="registration-picker">{{registrationEndDate || '选择日期'}}</view></picker>
-          <picker mode="time" value="{{registrationEndTime}}" data-field="registrationEndTime" bindchange="onRegistrationInput"><view class="registration-picker">{{registrationEndTime || '选择时间'}}</view></picker>
-          <text class="registration-clear" bindtap="clearRegistrationLimit" data-side="end">清除</text>
+          <picker class="registration-date" mode="date" value="{{registrationEndDate}}" data-field="registrationEndDate" bindchange="onRegistrationInput"><view class="registration-picker {{registrationEndDate ? '' : 'picker-placeholder'}}">{{registrationEndDate || '选择日期'}}<text class="picker-arrow">⌄</text></view></picker>
+          <picker class="registration-time" mode="time" value="{{registrationEndTime}}" data-field="registrationEndTime" bindchange="onRegistrationInput"><view class="registration-picker {{registrationEndTime ? '' : 'picker-placeholder'}}">{{registrationEndTime || '选择时间'}}<text class="picker-arrow">⌄</text></view></picker>
+          <view class="registration-clear" bindtap="clearRegistrationLimit" data-side="end" aria-role="button">清除</view>
         </view>
         <text class="registration-hint">留空表示该端不限制。时间设置不会自动修改赛事状态，赛事处于「报名中」时才可报名。</text>
       </view>

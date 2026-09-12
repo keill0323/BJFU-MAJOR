@@ -10,11 +10,23 @@ from fastapi.staticfiles import StaticFiles
 from app.database import engine, Base
 from app.config import settings
 import app.models
-from app.routers import auth, team, match, hall, admin
+from app.routers import auth, team, match, hall, admin, notifications, recruitment
+from contextlib import asynccontextmanager
+import threading
+from app.services import wechat_service
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="北京林业大学CS2校赛报名系统", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app):
+    stop = threading.Event()
+    if wechat_service.templates():
+        threading.Thread(target=wechat_service.worker, args=(stop,), daemon=True, name="wechat-outbox").start()
+    yield
+    stop.set()
+
+
+app = FastAPI(title="北京林业大学CS2校赛报名系统", version="1.0.0", lifespan=lifespan)
 
 # 挂载上传文件目录（学信网截图等），保证图片可通过 /uploads/xxx 访问
 _upload_dir = Path(settings.UPLOAD_DIR)
@@ -37,6 +49,8 @@ app.include_router(team.router)
 app.include_router(match.router)
 app.include_router(hall.router)
 app.include_router(admin.router)
+app.include_router(notifications.router)
+app.include_router(recruitment.router)
 
 
 @app.get("/")

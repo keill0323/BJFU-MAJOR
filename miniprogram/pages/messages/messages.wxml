@@ -1,23 +1,44 @@
 <view class="page">
   <nav-drawer title="消息" show-admin-notice="{{true}}"></nav-drawer>
-  <view class="page-intro"><text class="page-eyebrow">INBOX</text><text class="page-heading">每一步进展，都在这里</text><text class="page-caption">查看入队邀请与段位审核结果。</text></view>
+  <view class="page-intro"><text class="page-eyebrow">INBOX</text><text class="page-heading">每一步进展，都在这里</text><text class="page-caption">约赛通知、入队邀请、入队申请与段位审核结果。</text></view>
 
   <view wx:if="{{!token}}" class="card guest-card"><text class="empty-title">登录后，接收你的参赛消息</text><text class="empty-sub">队伍邀请和审核进展会与你的账号同步</text><view class="btn-primary" bindtap="goLogin">前往登录</view></view>
   <view wx:elif="{{loading}}" class="empty">正在加载消息…</view>
   <view wx:elif="{{loadError}}" class="card retry-card"><text>部分消息暂时未能加载</text><view bindtap="loadMessages">点击重试</view></view>
 
   <!-- 空状态 -->
-  <view wx:if="{{token && !loading && !loadError && invitations.length === 0 && rankApplications.length === 0}}" class="empty">
+  <view wx:if="{{token && !loading && !loadError && invitations.length === 0 && teamApplications.length === 0 && rankApplications.length === 0 && scheduleNotices.length === 0}}" class="empty">
     <view class="empty-box">
       <image class="empty-ic" src="/images/icons/mail.svg"/>
       <text class="empty-title">暂无消息</text>
-      <text class="empty-sub">入队邀请、段位申请会出现在这里</text>
+      <text class="empty-sub">约赛通知、入队邀请、段位申请会出现在这里</text>
     </view>
   </view>
 
   <block wx:if="{{token && !loading}}">
+    <view wx:if="{{scheduleNotices.length > 0 || noticeError}}" class="card schedule-card" id="notice-schedules">
+      <view class="group-title"><text class="group-name">约赛通知</text><text class="group-count {{unreadSchedules ? 'unread-count' : ''}}">{{unreadSchedules}} 条未读</text></view>
+      <text class="msg-sub">点击通知查看当前对阵并处理；通知中的时间为当时记录。</text>
+      <view wx:if="{{noticeError}}" class="notice-error" bindtap="loadMessages">{{noticeError}} · 点击重试</view>
+      <view wx:for="{{scheduleNotices}}" wx:key="id" class="schedule-notice {{item.is_read ? '' : 'notice-unread'}}" data-id="{{item.id}}" bindtap="openScheduleNotice">
+        <view class="notice-heading"><text class="msg-title">{{item.title}}</text><text wx:if="{{!item.is_read}}" class="unread-dot"></text></view>
+        <text class="msg-sub">{{item.match_name}}</text>
+        <text class="notice-versus">{{item.team1_name}} vs {{item.team2_name}}</text>
+        <text class="notice-time">约赛时间：{{item.timeText}}（北京时间）</text>
+        <view class="notice-footer"><text>{{item.createdText}}</text><text class="notice-link">{{openingNotice === item.id ? '正在打开…' : item.round_available ? '查看 / 处理 ›' : '历史通知'}}</text></view>
+      </view>
+      <view wx:if="{{hasMoreNotices && !noticeError}}" class="notice-more" bindtap="loadMoreNotices">{{loadingMore ? '正在加载…' : '查看更多约赛通知'}}</view>
+    </view>
+    <view wx:if="{{teamApplications.length > 0}}" class="card" id="notice-applications">
+      <view class="group-title"><text class="group-name">入队申请</text><text class="group-count">{{teamApplications.length}} 条待处理</text></view>
+      <view wx:for="{{teamApplications}}" wx:key="id" class="application-notice">
+        <text class="msg-title">{{item.nickname || '选手'}} 申请加入 {{item.team_name}}</text><view class="applicant-profile"><image wx:if="{{item.avatarFull}}" class="applicant-avatar" src="{{item.avatarFull}}" mode="aspectFill"/><view class="applicant-copy"><text class="applicant-game">游戏 ID：{{item.game_id || '未设置'}}</text><view class="applicant-tags"><text>{{item.displayRank || '段位待认证'}}</text><text>{{item.individual_rating || 0}} 水平分</text><text>{{!item.is_verified ? '学籍待认证' : item.identity === 'new_student' ? '新生 · 已认证' : item.identity === 'senior' ? '老生 · 已认证' : '已认证 · 身份待确认'}}</text></view></view></view><text wx:if="{{item.user_description}}" class="applicant-description">个人介绍：{{item.user_description}}</text>
+        <text wx:if="{{item.message}}" class="msg-sub application-message">入队自我介绍：{{item.message}}</text>
+        <view class="application-actions"><button class="msg-btn reject" bindtap="handleApplication" data-id="{{item.id}}" data-action="reject">拒绝</button><button class="msg-btn accept" bindtap="handleApplication" data-id="{{item.id}}" data-action="approve">同意入队</button></view>
+      </view>
+    </view>
     <!-- 入队邀请 -->
-    <view wx:if="{{invitations.length > 0}}" class="card">
+    <view wx:if="{{invitations.length > 0}}" class="card" id="notice-invitations">
       <view class="group-title">
         <text class="group-name">入队邀请</text>
         <text class="group-count">{{invitations.length}}</text>
@@ -56,3 +77,5 @@
     </view>
   </block>
 </view>
+
+<subscribe-notice></subscribe-notice>

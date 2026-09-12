@@ -21,6 +21,7 @@ function loadPage(methods = {}, todoMethods = {}) {
     return (...args) => { calls.api.push([key, ...args]); return target[key](...args) }
   } })
   const todos = {
+    getTodoItems: require(path.join(root, 'miniprogram/utils/admin-todos.js')).getTodoItems,
     refresh: force => { calls.todos.push(force); return (todoMethods.refresh || (async () => summary()))(force) },
     invalidate: () => { calls.invalidations++; if (todoMethods.invalidate) todoMethods.invalidate() }
   }
@@ -115,6 +116,59 @@ test('confirmed empty overview renders success only after counts finish loading'
   assert.match(render(page), /当前没有待办/)
 })
 
+test('todo shortcuts remain explicit on other tabs and force a fresh queue read', async () => {
+  let reads = 0
+  const { page, calls } = loadPage({
+    getMatches: async () => [], getVerifyList: async () => [{ id: ++reads, nickname: '待审选手' }]
+  }, { refresh: async () => summary({ rank_application_count: 0, team_count: 0, registration_count: 0, total: 2, registration_matches: [] }) })
+  await page.onLoad({ tab: 'matches' })
+  assert.deepEqual(plain(page.data.todoItems).map(item => item.tab), ['verify'])
+  const html = render(page)
+  assert.match(html, /需要你审核/)
+  assert.match(html, /查看全部待办/)
+  assert.match(html, /2 份 ›/)
+  await page.openTodo(event({ tab: 'verify' }))
+  assert.equal(page.data.verifyUsers[0].id, 1)
+  await page.switchTab(event({ tab: 'matches' }))
+  await page.openTodo(event({ tab: 'verify' }))
+  assert.equal(page.data.verifyUsers[0].id, 2)
+  assert.equal(calls.todos.length, 3)
+  await page.openTodo(event({ tab: 'invalid' }))
+  assert.equal(page.data.tab, 'verify')
+  assert.equal(calls.todos.length, 3)
+})
+
+test('matches deep link identifies the exact pending event and opens its registration detail', async () => {
+  const { page, calls } = loadPage({ getMatches: async () => [] })
+  await page.onLoad({ tab: 'matches' })
+  const html = render(page)
+  assert.match(html, /待审核赛事报名/)
+  assert.match(html, /秋季赛事/)
+  assert.match(html, /4 队待审/)
+  page.goMDetail(event({ id: 7 }))
+  assert.equal(calls.navigations[0].url, '/pages/admin/mdetail/mdetail?matchId=7')
+})
+
+test('locked historical registrations stay inspectable without actionable badges', async () => {
+  const { page, calls } = loadPage({ getMatches: async () => [] }, { refresh: async () => summary({
+    verification_count: 0, rank_application_count: 0, team_count: 0, registration_count: 0, total: 0,
+    registration_matches: [], blocked_registration_count: 2,
+    blocked_registration_matches: [{ match_id: 8, match_name: '已分组赛事', count: 2, roster_locked: true }]
+  }) })
+  await page.onLoad()
+  let html = render(page)
+  assert.match(html, /当前没有待办/)
+  assert.match(html, /已锁定赛事的历史报名/)
+  assert.match(html, /不计入待办/)
+  assert.doesNotMatch(html, /待审核赛事报名|tab-badge|has-pending/)
+  await page.switchTab(event({ tab: 'matches' }))
+  html = render(page)
+  assert.match(html, /已分组赛事/)
+  assert.doesNotMatch(html, /需要你审核|队待审/)
+  page.goMDetail(event({ id: 8 }))
+  assert.equal(calls.navigations[0].url, '/pages/admin/mdetail/mdetail?matchId=8')
+})
+
 test('queue loading errors do not masquerade as empty and retry restores the list', async () => {
   let fail = true
   const { page } = loadPage({ getVerifyList: async () => { if (fail) throw new Error('offline'); return [] } })
@@ -142,7 +196,7 @@ test('returning to the dashboard refreshes counts and only the selected tab', as
 test('review invalidates shared counts and updates only the current queue', async () => {
   let approved = false
   const { page, calls } = loadPage({
-    getVerifyList: async () => approved ? [] : [{ id: 8, nickname: '选手', verify_image: '/uploads/school.png' }],
+    getVerifyList: async () => approved ? [] : [{ id: 8, nickname: '选手', verify_image: '/uploads/school.png', ai_student_id: '260123456' }],
     adminUpdateUser: async () => { approved = true }
   }, { refresh: async () => summary({ verification_count: approved ? 0 : 1 }) })
   await page.onLoad({ tab: 'verify' })
@@ -241,4 +295,214 @@ test('return refresh asks shared store again after another page invalidated an i
   await old
   assert.equal(page.data.todos.total, 3)
   assert.equal(page.data.todoLoading, false)
+})
+
+test('confirmed OCR school ID is submitted with approval and its exact evidence once', async () => {
+  const save = deferred()
+  let approved = false
+  const { page, calls } = loadPage({
+    getVerifyList: async () => approved ? [] : [{ id: 8, ai_student_id: '001234567', verify_image: '/uploads/school.png' }],
+    adminUpdateUser: () => save.promise.then(() => { approved = true; return { student_id: '001234568', is_verified: true } })
+  })
+  await page.onLoad({ tab: 'verify' })
+  assert.equal(page.data.studentIdDrafts[8].value, '001234567')
+  assert.match(render(page), /确认并通过/)
+  page.onStudentIdInput({ ...event({ id: 8, source: 'verify' }), detail: { value: ' 001234568 ' } })
+  const pending = page.verifyPass(event({ id: 8 }))
+  await page.verifyPass(event({ id: 8 }))
+  const writes = calls.api.filter(call => call[0] === 'adminUpdateUser')
+  assert.equal(writes.length, 1)
+  assert.deepEqual(plain(writes[0].slice(1)), [8, {
+    student_id: '001234568', is_verified: true, expected_verify_image: '/uploads/school.png'
+  }])
+  assert.equal(page.data.studentIdDrafts[8].saving, true)
+  save.resolve()
+  await pending
+  assert.equal(page.data.verifyUsers.length, 0)
+  assert.equal(calls.invalidations, 1)
+})
+
+test('a masked-ID-card submission saves the prefilled school ID on approval without typing or rerunning OCR', async () => {
+  let approved = false
+  const { page, calls } = loadPage({
+    getVerifyList: async () => approved ? [] : [{ id: 8, student_id: null, ai_student_id: '260123456',
+      verify_image: '/uploads/masked-national-id.png', ai_review_status: 'pending',
+      ai_review_reason: '身份证号已遮挡，学号清晰可读，待人工复核' }],
+    adminUpdateUser: async (_id, payload) => {
+      approved = true
+      return { student_id: payload.student_id, is_verified: payload.is_verified }
+    }
+  })
+  await page.onLoad({ tab: 'verify' })
+  assert.equal(page.data.studentIdDrafts[8].edited, false)
+  await page.verifyPass(event({ id: 8 }))
+  const write = calls.api.find(call => call[0] === 'adminUpdateUser')
+  assert.deepEqual(plain(write.slice(1)), [8, { student_id: '260123456', is_verified: true,
+    expected_verify_image: '/uploads/masked-national-id.png' }])
+  assert.equal(calls.api.filter(call => call[0] === 'adminUpdateUser').length, 1)
+  assert.equal(calls.api.filter(call => call[0] === 'adminRecognizeStudentId').length, 0)
+  assert.equal(page.data.verifyUsers.length, 0)
+  assert.equal(calls.invalidations, 1)
+})
+
+test('missing or invalid school IDs cannot approve and existing saved IDs take priority over OCR', async () => {
+  const { page, calls } = loadPage({ getVerifyList: async () => [
+    { id: 8, verify_image: '/uploads/school.png' },
+    { id: 9, student_id: '260222222', ai_student_id: '260999999', verify_image: '/uploads/other.png' }
+  ] })
+  await page.onLoad({ tab: 'verify' })
+  assert.equal(page.data.studentIdDrafts[9].value, '260222222')
+  for (const value of ['', '123', '26 0123456', '２６０１２３４５６', 'x123456', '2'.repeat(21)]) {
+    page.onStudentIdInput({ ...event({ id: 8, source: 'verify' }), detail: { value } })
+    await page.verifyPass(event({ id: 8 }))
+    assert.match(page.data.studentIdDrafts[8].error, /学号/)
+  }
+  assert.equal(calls.api.filter(call => call[0] === 'adminUpdateUser').length, 0)
+  assert.equal(calls.invalidations, 0)
+})
+
+test('re-recognition fills a candidate but does not approve or overwrite typing in flight', async () => {
+  let result = deferred()
+  const { page, calls } = loadPage({
+    getVerifyList: async () => [{ id: 8, verify_image: '/uploads/school.png' }],
+    adminRecognizeStudentId: () => result.promise
+  })
+  await page.onLoad({ tab: 'verify' })
+  let pending = page.recognizeStudentId(event({ id: 8, source: 'verify' }))
+  await page.recognizeStudentId(event({ id: 8, source: 'verify' }))
+  assert.equal(calls.api.filter(call => call[0] === 'adminRecognizeStudentId').length, 1)
+  result.resolve({ student_id: '260123456', confidence: 0.7, reason: '需核对', verify_image: '/uploads/school.png' })
+  await pending
+  assert.equal(page.data.studentIdDrafts[8].value, '260123456')
+  assert.equal(page.data.studentIdDrafts[8].recognizing, false)
+  assert.equal(calls.api.filter(call => call[0] === 'adminUpdateUser').length, 0)
+  result = deferred()
+  pending = page.recognizeStudentId(event({ id: 8, source: 'verify' }))
+  page.onStudentIdInput({ ...event({ id: 8, source: 'verify' }), detail: { value: '260111111' } })
+  result.resolve({ student_id: '260999999', confidence: 0.9, verify_image: '/uploads/school.png' })
+  await pending
+  assert.equal(page.data.studentIdDrafts[8].value, '260111111')
+  assert.match(page.data.studentIdDrafts[8].hint, /保留.*填写内容/)
+})
+
+test('failed recognition and conflicting confirmation keep the input and evidence for correction', async () => {
+  const { page, calls } = loadPage({
+    getVerifyList: async () => [{ id: 8, ai_student_id: '260123456', verify_image: '/uploads/school.png' }],
+    adminRecognizeStudentId: async () => { throw { detail: '识别暂时失败' } },
+    adminUpdateUser: async () => { throw { detail: '该学号已被其他用户使用' } }
+  })
+  await page.onLoad({ tab: 'verify' })
+  await page.recognizeStudentId(event({ id: 8 }))
+  assert.match(page.data.studentIdDrafts[8].error, /识别暂时失败/)
+  assert.equal(page.data.studentIdDrafts[8].value, '260123456')
+  await page.verifyPass(event({ id: 8 }))
+  assert.match(page.data.studentIdDrafts[8].error, /其他用户/)
+  assert.equal(page.data.studentIdDrafts[8].saving, false)
+  assert.equal(page.data.verifyUsers[0].verify_image, '/uploads/school.png')
+  assert.equal(page.data.studentIdDrafts[8].value, '260123456')
+  assert.equal(calls.invalidations, 0)
+  assert.equal(calls.toasts.length, 0)
+})
+
+test('recognition for an old image or unloaded page cannot restore its candidate', async () => {
+  const first = deferred(), last = deferred()
+  let image = '/uploads/old.png', reads = 0
+  const { page } = loadPage({
+    getVerifyList: async () => [{ id: 8, verify_image: image }],
+    adminRecognizeStudentId: () => ++reads === 1 ? first.promise : last.promise
+  })
+  await page.onLoad({ tab: 'verify' })
+  const old = page.recognizeStudentId(event({ id: 8 }))
+  image = '/uploads/new.png'
+  await page.loadVerifyList()
+  first.resolve({ student_id: '260123456', confidence: 0.9, verify_image: '/uploads/old.png' })
+  await old
+  assert.equal(page.data.studentIdDrafts[8].image, '/uploads/new.png')
+  assert.equal(page.data.studentIdDrafts[8].value, '')
+  const newer = page.recognizeStudentId(event({ id: 8 }))
+  page.onUnload()
+  const snapshot = plain(page.data)
+  last.resolve({ student_id: '260999999', confidence: 0.9, verify_image: '/uploads/new.png' })
+  await newer
+  assert.deepEqual(plain(page.data), snapshot)
+})
+
+test('already verified users can recognize and save missing school IDs without reapproving', async () => {
+  let saved = ''
+  const { page, calls } = loadPage({
+    adminListUsers: async () => [{ id: 8, student_id: saved, is_verified: true, verify_image: '/uploads/legacy.png' }],
+    adminRecognizeStudentId: async () => ({ student_id: '260123456', confidence: 0.8, verify_image: '/uploads/legacy.png' }),
+    adminUpdateUser: async (id, payload) => { saved = payload.student_id; return { id, student_id: saved, is_verified: true } }
+  })
+  await page.onLoad({ tab: 'users' })
+  assert.match(render(page), /识别学号/)
+  await page.recognizeStudentId(event({ id: 8, source: 'users' }))
+  assert.match(render(page), /保存学号/)
+  await page.saveStudentId(event({ id: 8 }))
+  const write = calls.api.find(call => call[0] === 'adminUpdateUser')
+  assert.deepEqual(plain(write.slice(1)), [8, { student_id: '260123456', expected_verify_image: '/uploads/legacy.png' }])
+  assert.equal(page.data.users[0].is_verified, true)
+  assert.equal(page.data.users[0].student_id, '260123456')
+})
+
+test('a candidate arriving on refresh fills untouched drafts and preserves manual corrections', async () => {
+  let candidate = ''
+  const { page } = loadPage({ getVerifyList: async () => [{ id: 8, ai_student_id: candidate, verify_image: '/uploads/school.png' }] })
+  await page.onLoad({ tab: 'verify' })
+  candidate = '260123456'
+  await page.loadVerifyList()
+  assert.equal(page.data.studentIdDrafts[8].value, '260123456')
+  page.onStudentIdInput({ ...event({ id: 8, source: 'verify' }), detail: { value: '260222222' } })
+  candidate = '260999999'
+  await page.loadVerifyList()
+  assert.equal(page.data.studentIdDrafts[8].value, '260222222')
+})
+
+test('school ID recognition API sends the evidence version without a verification write', async () => {
+  const requests = [], module = { exports: {} }
+  let failure = null
+  vm.runInNewContext(fs.readFileSync(path.join(root, 'miniprogram/utils/api.js'), 'utf8'), { module, wx: {
+    getStorageSync: () => 'token', request(options) {
+      requests.push(options)
+      options.success(failure || { statusCode: 200, data: { student_id: '260123456', confidence: 0.8, verify_image: '/uploads/school.png' } })
+    }
+  } })
+  const result = await module.exports.adminRecognizeStudentId(8, '/uploads/school.png')
+  assert.equal(result.student_id, '260123456')
+  assert.equal(requests.length, 1)
+  assert.equal(requests[0].method, 'POST')
+  assert.ok(requests[0].url.endsWith('/api/auth/admin/users/8/recognize-student-id'))
+  assert.deepEqual(plain(requests[0].data), { expected_verify_image: '/uploads/school.png' })
+  failure = { statusCode: 404, data: { detail: 'Not Found' } }
+  await assert.rejects(module.exports.adminRecognizeStudentId(8, '/uploads/school.png'), err => err.code === 'BACKEND_UPGRADE_REQUIRED')
+  failure = { statusCode: 404, data: { detail: '认证图片已不存在' } }
+  await assert.rejects(module.exports.adminRecognizeStudentId(8, '/uploads/school.png'), err => err.detail === '认证图片已不存在' && !err.code)
+  assert.equal(requests.length, 3)
+})
+
+test('rejection cancellation unlocks the card and old-image confirmations cannot reject a new upload', async () => {
+  let image = '/uploads/old.png'
+  const { page, calls } = loadPage({
+    getVerifyList: async () => [{ id: 8, ai_student_id: '260123456', verify_image: image }],
+    adminUpdateUser: async () => { throw { statusCode: 409, detail: '认证图片已更新' } }
+  })
+  await page.onLoad({ tab: 'verify' })
+  await page.verifyReject(event({ id: 8 }))
+  await page.verifyReject(event({ id: 8 }))
+  assert.equal(calls.modals.length, 1)
+  await calls.modals[0].success({ confirm: false })
+  assert.equal(page.data.studentIdDrafts[8].saving, false)
+  await page.verifyReject(event({ id: 8 }))
+  image = '/uploads/new.png'
+  await page.loadVerifyList()
+  await calls.modals[1].success({ confirm: true, content: '旧凭证不清楚' })
+  assert.equal(calls.api.filter(call => call[0] === 'adminUpdateUser').length, 0)
+  await page.verifyReject(event({ id: 8 }))
+  await calls.modals[2].success({ confirm: true, content: '重新提交' })
+  const write = calls.api.find(call => call[0] === 'adminUpdateUser')
+  assert.deepEqual(plain(write[2]), { is_verified: false, verify_image: '', verify_reject_reason: '重新提交', expected_verify_image: '/uploads/new.png' })
+  assert.equal(page.data.verifyUsers.length, 1)
+  assert.match(page.data.studentIdDrafts[8].error, /认证图片已更新/)
+  assert.equal(page.data.studentIdDrafts[8].saving, false)
+  assert.equal(calls.invalidations, 0)
 })

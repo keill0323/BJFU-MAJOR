@@ -22,10 +22,15 @@
 .hero-rank-detail { display: flex; align-items: center; gap: 16rpx; flex: 1; min-width: 0; margin-right: 20rpx; }
 .hero-rank-icon { display: block; width: 86rpx; height: 100rpx; flex-shrink: 0; }
 .hero-rank-copy { min-width: 0; }.hero-rank { word-break: break-all; }.hero-rating { flex-shrink: 0; }
-.shortcut-grid { display: flex; background: #fff; border: 1rpx solid #e2ebf0; border-radius: 26rpx; padding: 26rpx 8rpx; margin-top: 24rpx; }
+.shortcut-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 28rpx; background: #fff; border: 1rpx solid #e2ebf0; border-radius: 26rpx; padding: 26rpx 8rpx; margin-top: 24rpx; }
 .shortcut { flex: 1; min-width: 0; display: flex; align-items: center; flex-direction: column; font-size: 23rpx; font-weight: 600; color: #304d64; white-space: nowrap; }
 .shortcut-icon { width: 78rpx; height: 72rpx; display: flex; align-items: center; justify-content: center; background: #edf7f7; border-radius: 20rpx; margin-bottom: 12rpx; }
 .shortcut-icon image { width: 42rpx; height: 42rpx; }.shortcut:active .shortcut-icon { background: #d5eeed; }
+.personal-notice { margin-top: 24rpx; padding: 24rpx; border: 1rpx solid #bcdde1; border-radius: 24rpx; background: #eff9f8; }
+.personal-notice-head { display: flex; justify-content: space-between; align-items: center; color: #125965; font-size: 28rpx; font-weight: 700; }
+.personal-badge { padding: 4rpx 14rpx; background: #087f8c; color: #fff; font-size: 22rpx; border-radius: 99rpx; }
+.personal-task { display: flex; justify-content: space-between; align-items: center; padding-top: 20rpx; font-size: 26rpx; color: #234c60; }
+.personal-count { margin-left: 8rpx; font-weight: 800; color: #b44935; }.personal-link,.personal-retry { color: #087f8c; font-size: 24rpx; }.personal-retry { margin-top: 16rpx; }
 .section-heading { display: flex; justify-content: space-between; align-items: flex-end; margin: 42rpx 2rpx 22rpx; }
 .section-kicker { display: block; font-size: 18rpx; color: #62798c; letter-spacing: 2rpx; font-weight: 600; }.section-title { display: block; font-size: 38rpx; color: #102a43; font-weight: 800; margin-top: 4rpx; }
 .rules-link { font-size: 23rpx; color: #527187; padding: 12rpx 0 8rpx 16rpx; }.rules-link text { color: #087f8c; margin-left: 8rpx; }

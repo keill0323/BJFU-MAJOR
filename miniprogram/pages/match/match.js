@@ -26,8 +26,11 @@ Page({
     challengerTeams: [],
     legendTeams: [],
     playoffTeams: [],
-    teamsSwiper: [],         // 队伍状态分阶段（挑战者/传奇/淘汰赛）
-    teamsStage: 0,
+    showHistory: false,
+    historyTeam: null,
+    historyRounds: [],
+    historySections: [],
+    allRounds: [],
     rankingTeams: [],        // 队伍排名
     // 对阵（按阶段）
     challengerSwiper: [],    // 挑战者组：小组赛分组，三组赛制另有附加赛
@@ -60,6 +63,7 @@ Page({
     const id = options.id
     if (!id) return
     this.matchId = id
+    this._notificationRoundId = Number(options.roundId) || null
     const requestId = this._detailRequestId = (this._detailRequestId || 0) + 1
     try {
       const detail = await api.getMatchDetail(id)
@@ -73,7 +77,8 @@ Page({
       if (wx.getStorageSync('token')) {
         await this.loadMyStatus()
       }
-      this.checkRulePrompt()
+      if (this._notificationRoundId) this.openNotificationRound()
+      else this.checkRulePrompt()
     } catch (err) {
       if (requestId !== this._detailRequestId) return
       this.setData({ loadFailed: true })
@@ -100,6 +105,7 @@ Page({
       if (wx.getStorageSync('token')) {
         await this.loadMyStatus()
       }
+      if (this._notificationRoundId) this.openNotificationRound()
     } catch (err) {
       if (requestId === this._detailRequestId) wx.showToast({ title: '刷新失败', icon: 'error' })
     } finally {
@@ -203,95 +209,11 @@ Page({
       { title: '下区', rounds: rounds.filter(r => r.group_name === '下区') }
     ]
 
-    // 淘汰赛名次
-    const koFinal = koSorted.length >= 5 ? koSorted[4] : null
-    const koSemi = koSorted.slice(2, 4)
-    const koRankOf = (teamId) => {
-      if (koFinal && koFinal.status === 'finished' && koFinal.winner_id != null && (koFinal.team1_id == teamId || koFinal.team2_id == teamId)) {
-        return koFinal.winner_id == teamId ? '冠军' : '亚军'
-      }
-      for (const r of koSemi) {
-        if ((r.team1_id == teamId || r.team2_id == teamId) && r.status === 'finished' && r.winner_id != teamId) {
-          return '四强'
-        }
-      }
-      const played = koSorted.some(r => r.team1_id == teamId || r.team2_id == teamId)
-      return played ? '六强' : ''
-    }
-
-    // 阶段状态判定
-    const challengerStatusOf = (t) => {
-      if (t.stage === 'legend' || t.stage === 'playoff') return '已晋级'
-      if (t.stage === 'challenger') return '进行中'
-      if (t.group_name === '上区' || t.group_name === '下区' || t.group_name === '淘汰赛') return '已晋级'
-      return '已淘汰'
-    }
-    const legendStatusOf = (t) => {
-      if (t.stage === 'playoff') return '已晋级'
-      if (t.stage === 'legend') return '进行中'
-      if (t.group_name === '淘汰赛') return '已晋级'
-      return '已淘汰'
-    }
-
     const legendTeams = teams.filter(t => t.stage === 'legend')
     const waitingTeams = teams.filter(tournament.isWaitingForGroup)
     const challengerTeams = teams.filter(t => t.stage === 'challenger' && !tournament.isWaitingForGroup(t))
     const playoffTeams = teams.filter(t => t.stage === 'playoff')
-
-    const challengerTab = teams.filter(t => {
-      if (tournament.isWaitingForGroup(t)) return false
-      if (t.stage === 'challenger') return true
-      if (isChallengerGroup(t.group_name) || t.group_name === '附加赛') return true
-      return t.seed > 4
-    }).map(t => Object.assign({}, t, { stage_status: challengerStatusOf(t) }))
-    const legendTab = teams.filter(t =>
-      t.stage === 'legend' || t.stage === 'playoff' ||
-      (t.stage === 'eliminated' && ['上区', '下区', '淘汰赛'].indexOf(t.group_name) >= 0)
-    )
-      .map(t => Object.assign({}, t, { stage_status: legendStatusOf(t) }))
-    const playoffTab = teams.filter(t => t.stage === 'playoff' ||
-      (t.stage === 'eliminated' && t.group_name === '淘汰赛'))
-      .map(t => Object.assign({}, t, { ko_rank: koRankOf(t.team_id) }))
-
-    const teamsSwiper = [
-      { title: '挑战者组', type: 'challenger', teams: challengerTab },
-      { title: '传奇组', type: 'legend', teams: legendTab },
-      { title: '淘汰赛', type: 'playoff', teams: playoffTab }
-    ]
-
-    // 队伍排名：名次 → 胜场 → 净胜分 → rating
-    const stageWeightOf = (t) => {
-      if (t.ko_rank === '冠军') return 0
-      if (t.ko_rank === '亚军') return 1
-      if (t.ko_rank === '四强') return 2
-      if (t.ko_rank === '六强') return 3
-      if (t.stage === 'legend') return 4
-      if (tournament.isWaitingForGroup(t)) return 6
-      if (t.stage === 'challenger') return 5
-      return 6
-    }
-    const rankingTeams = teams.slice()
-      .map(t => {
-        const ko_rank = koRankOf(t.team_id)
-        // 排名状态：淘汰赛名次 > 阶段状态 > 待分组
-        let stage_text = '待分组'
-        if (ko_rank) stage_text = ko_rank
-        else if (tournament.isWaitingForGroup(t)) stage_text = '待分组'
-        else if (t.registration_status === 'pending') stage_text = '报名待审核'
-        else if (t.registration_status === 'rejected') stage_text = '报名未通过'
-        else if (t.stage === 'legend') stage_text = '传奇组'
-        else if (t.stage === 'challenger') stage_text = '挑战者'
-        else if (t.stage === 'playoff') stage_text = '已晋级'
-        else if (t.stage === 'eliminated') stage_text = '已淘汰'
-        return Object.assign({}, t, { ko_rank, stage_text })
-      })
-      .sort((a, b) => {
-        const w = stageWeightOf(a) - stageWeightOf(b)
-        if (w !== 0) return w
-        if (b.wins !== a.wins) return b.wins - a.wins
-        if ((b.diff || 0) !== (a.diff || 0)) return (b.diff || 0) - (a.diff || 0)
-        return (b.rating || 0) - (a.rating || 0)
-      })
+    const rankingTeams = tournament.buildTeamRanking(teams, rounds)
 
     this.setData({
       loadFailed: false,
@@ -305,8 +227,9 @@ Page({
       challengerTeams,
       legendTeams,
       playoffTeams,
-      teamsSwiper,
+
       rankingTeams,
+      allRounds: rounds,
       challengerSwiper,
       challengerStage,
       groupCount,
@@ -316,9 +239,23 @@ Page({
     })
   },
 
+  showTeam(e) {
+    const tid = e.currentTarget.dataset.id
+    if (!tid) return
+    const allRounds = this.data.allRounds
+    const historyRounds = allRounds.filter(r => r.team1_id == tid || r.team2_id == tid)
+    const source = historyRounds[0]
+    const historyTeam = this.data.rankingTeams.find(t => t.team_id == tid) || {
+      team_id: tid, team_name: source ? (source.team1_id == tid ? source.team1_name : source.team2_name) : '队伍'
+    }
+    this.setData({ showHistory: true, historyTeam, historyRounds,
+      historySections: tournament.buildTeamHistory(tid, allRounds) })
+  },
+  closeHistory() {
+    this.setData({ showHistory: false, historyTeam: null, historyRounds: [], historySections: [] })
+  },
+
   switchTab(e) { this.setData({ tab: e.currentTarget.dataset.tab }) },
-  switchTeamsStage(e) { this.setData({ teamsStage: Number(e.currentTarget.dataset.idx) }) },
-  onTeamsSwiper(e) { this.setData({ teamsStage: e.detail.current }) },
   selectChallengerStage(value) {
     const index = Number(value)
     this.setData({ challengerStage: Number.isInteger(index) && index >= 0 && index < this.data.challengerSwiper.length ? index : 0 })
@@ -530,7 +467,7 @@ Page({
     if (isCaptain && myTeamId) {
       if (r.team1_id === myTeamId) my_side = 'team1'
       else if (r.team2_id === myTeamId) my_side = 'team2'
-      can_operate = !!my_side
+      can_operate = !!my_side && r.status === 'pending' && !!r.team1_id && !!r.team2_id
     }
     if (my_side === 'team1') i_confirmed = !!r.team1_confirmed
     else if (my_side === 'team2') i_confirmed = !!r.team2_confirmed
@@ -538,6 +475,24 @@ Page({
   },
 
   // 打开时间协商面板
+  openNotificationRound() {
+    const roundId = this._notificationRoundId
+    this._notificationRoundId = null
+    const round = (this.detail && this.detail.rounds || []).find(r => r.id === roundId)
+    if (!round) {
+      wx.showToast({ title: '该对阵已移除，请查看最新赛程', icon: 'none' })
+      return
+    }
+    const tab = round.group_name === '淘汰赛' ? 'knockout' : ['上区', '下区'].includes(round.group_name) ? 'legend' : 'challenger'
+    const updates = { tab }
+    if (tab === 'legend') updates.legendStage = Math.max(0, this.data.legendSwiper.findIndex(s => s.rounds.some(r => r.id === roundId)))
+    if (tab === 'challenger') updates.challengerStage = Math.max(0, this.data.challengerSwiper.findIndex(s => (s.rounds || []).some(r => r.id === roundId)))
+    this.setData(updates)
+    const current = this.decorateRound(round, this.data.myTeamId, this.data.isCaptain)
+    if (current.can_operate) this.openSchedule({ currentTarget: { dataset: { id: roundId } } })
+    else wx.showToast({ title: round.status !== 'pending' ? '该对阵已开始或结束' : '仅当前参赛队长可处理约赛', icon: 'none' })
+  },
+
   openSchedule(e) {
     const rid = e.currentTarget.dataset.id
     const r = (this.detail && this.detail.rounds || []).find(x => x.id == rid)

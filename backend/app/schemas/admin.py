@@ -1,5 +1,5 @@
 """Minimal administrator inbox counts; no private review material."""
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RegistrationTodo(BaseModel):
@@ -16,3 +16,5 @@ class AdminTodos(BaseModel):
     registration_count: int
     total: int
     registration_matches: list[RegistrationTodo]
+    blocked_registration_count: int = 0
+    blocked_registration_matches: list[RegistrationTodo] = Field(default_factory=list)

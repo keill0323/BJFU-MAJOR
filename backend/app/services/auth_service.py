@@ -6,13 +6,15 @@ Since: 2026-7-22
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from pathlib import Path
 import json
+import re
 import urllib.request
 
 from fastapi import Depends, HTTPException, Header
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from sqlalchemy import cast, String
+from sqlalchemy import and_, cast, func, or_, String
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -64,8 +66,8 @@ def _rank_rating(rank: str) -> Optional[int]:
 
 
 def _auto_identity(student_id: Optional[str]) -> Optional[str]:
-    """根据学号自动识别身份（新生/老登）"""
-    if not student_id or len(student_id) < 2 or not student_id[:2].isdigit():
+    """仅对九位数字学号按入学年份识别；其他格式交管理员核验。"""
+    if not isinstance(student_id, str) or not re.fullmatch(r"[0-9]{9}", student_id):
         return None
     enroll_year = 2000 + int(student_id[:2])
     current_year = datetime.now().year
@@ -83,6 +85,17 @@ def effective_identity(user) -> Optional[str]:
     if user.identity:
         return user.identity
     return _auto_identity(user.student_id)
+
+
+MANUAL_STUDENT_ID_HINT = "非9位数字学号需人工认证，请联系管理员（QQ：3761215994）核验学号及新老生身份。"
+
+
+def student_id_review_hint(user) -> Optional[str]:
+    """为非标准学号提供现有报名错误提示；不把未知格式猜成硕士或博士。"""
+    sid = (user.ai_student_id or user.student_id) if not user.is_verified else user.student_id
+    if sid and not re.fullmatch(r"[0-9]{9}", sid):
+        return MANUAL_STUDENT_ID_HINT
+    return None
 
 
 def hash_password(password: str) -> str:
@@ -140,11 +153,21 @@ def get_all_users(db: Session, keyword: Optional[str] = None) -> list:
     return query.order_by(User.id.asc()).all()
 
 
+def pending_verification_condition():
+    """人工待审条件；人工驳回已完成，AI 驳回仍允许人工复核。"""
+    return and_(
+        User.verify_image.isnot(None),
+        func.length(func.trim(User.verify_image)) > 0,
+        User.is_verified.is_(False),
+        or_(User.ai_review_status.is_(None), User.ai_review_status != "manual_reject"),
+    )
+
+
 def get_unverified_users(db: Session) -> list:
-    """列出待认证审核的用户：已上传学信网截图但尚未通过"""
+    """列出有效凭证尚待人工审核的用户，重新上传后可再次进入队列。"""
     return (
         db.query(User)
-        .filter(User.verify_image.isnot(None), User.is_verified.is_(False))
+        .filter(pending_verification_condition())
         .order_by(User.created_at.asc())
         .all()
     )
@@ -161,6 +184,7 @@ def update_verify_image(db: Session, user_id: int, url: str) -> Optional[User]:
         user.ai_review_status = "pending"
         user.ai_review_reason = None
         user.ai_review_confidence = 0
+        user.ai_student_id = None
         db.commit()
         db.refresh(user)
     return user
@@ -179,9 +203,14 @@ def apply_verify_result(db: Session, user_id: int, image_url: str, result) -> Op
             or user.ai_review_status != "pending" or result is None):
         return user
 
+    user.ai_student_id = result["student_id"]
     user.ai_review_reason = result["reason"]
     user.ai_review_confidence = result["confidence"]
-    if result["confidence"] >= 0.9 and result["is_valid"] is True:
+    if result["student_id"] and not re.fullmatch(r"[0-9]{9}", result["student_id"]):
+        # 候选学号保留供管理员核验；非本科格式不自动通过，也不因此驳回。
+        user.ai_review_status = "pending"
+        user.ai_review_reason = MANUAL_STUDENT_ID_HINT
+    elif result["confidence"] >= 0.9 and result["is_valid"] is True:
         sid = result["student_id"]
         exists = (db.query(User.id).filter(User.student_id == sid, User.id != user_id)
                   .first()) if sid else None
@@ -205,10 +234,50 @@ def apply_verify_result(db: Session, user_id: int, image_url: str, result) -> Op
                 and user.ai_review_status == "pending"):
             user.ai_review_reason = "该学号已被其他用户使用，待人工核验"
             user.ai_review_confidence = result["confidence"]
+            user.ai_student_id = result["student_id"]
             db.commit()
     if user:
         db.refresh(user)
     return user
+
+
+def recognize_student_id(db: Session, user_id: int, expected_verify_image: str) -> dict:
+    """管理员重读既有凭证，只保存待确认学号，不改变人工审核结论。"""
+    from app.services import ai_review_service
+
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    image_url = user.verify_image
+    if not image_url:
+        raise HTTPException(status_code=400, detail="该用户没有在校认证图片，请手动填写学号")
+    if image_url != expected_verify_image:
+        raise HTTPException(status_code=409, detail="认证图片已更新，请刷新后重新核对")
+    if not settings.AI_REVIEW_ENABLED:
+        raise HTTPException(status_code=400, detail="学号识别暂未开启，可对照图片手动填写")
+    if not image_url.startswith("/uploads/") or "\\" in image_url:
+        raise HTTPException(status_code=400, detail="该凭证不支持自动识别，请对照图片填写学号")
+    upload_root = Path(settings.UPLOAD_DIR).resolve()
+    image_path = (upload_root / image_url[len("/uploads/"):]).resolve()
+    if not image_path.is_relative_to(upload_root):
+        raise HTTPException(status_code=400, detail="认证图片路径无效")
+    if not image_path.is_file():
+        raise HTTPException(status_code=404, detail="认证图片已不存在，请手动填写学号或重新提交凭证")
+    snapshot = (user.student_id, user.is_verified, user.ai_review_status)
+    # Do not hold a database transaction while waiting for the vision service.
+    db.rollback()
+    try:
+        result = ai_review_service.validate_verify_result(ai_review_service.review_image(str(image_path)))
+    except Exception:
+        raise HTTPException(status_code=502, detail="学号识别暂时失败，请重试或对照图片填写") from None
+    user = _lock_user(db, user_id)
+    if (not user or user.verify_image != image_url
+            or (user.student_id, user.is_verified, user.ai_review_status) != snapshot):
+        raise HTTPException(status_code=409, detail="认证资料或审核状态已更新，请刷新后重新核对")
+    user.ai_student_id = result["student_id"]
+    db.commit()
+    return {"student_id": result["student_id"], "confidence": result["confidence"],
+            "reason": result["reason"], "verify_image": image_url}
 
 
 def update_self_profile(db: Session, user_id: int, nickname: Optional[str] = None, game_id: Optional[str] = None) -> Optional[User]:
@@ -227,13 +296,22 @@ def update_self_profile(db: Session, user_id: int, nickname: Optional[str] = Non
 def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = None, is_verified: Optional[bool] = None,
                       rank: Optional[str] = None, individual_rating: Optional[int] = None,
                       identity: Optional[str] = None, verify_image: Optional[str] = None,
-                      verify_reject_reason: Optional[str] = None) -> Optional[User]:
+                      verify_reject_reason: Optional[str] = None,
+                      expected_verify_image: Optional[str] = None) -> Optional[User]:
     """管理员修改用户资料（学号、审核状态、段位、身份等）"""
-    from app.services.ai_review_service import normalize_rank
+    from app.services.ai_review_service import normalize_rank, normalize_student_id
     from sqlalchemy.exc import IntegrityError
 
-    user = get_user_by_id(db, user_id)
+    user = _lock_user(db, user_id)
     if user:
+        if expected_verify_image is not None and user.verify_image != expected_verify_image:
+            raise HTTPException(status_code=409, detail="认证图片已更新，请刷新后重新核对")
+        if student_id is not None:
+            student_id = normalize_student_id(student_id)
+            if not student_id:
+                raise HTTPException(status_code=400, detail="学号须为 6–20 位数字，请对照图片确认")
+        if is_verified is True and not normalize_student_id(student_id if student_id is not None else user.student_id):
+            raise HTTPException(status_code=400, detail="请先确认并填写学号，再通过在校认证")
         if student_id is not None:
             user.student_id = student_id
         # 身份：仅管理员显式指定（研1/博1认证）时写入；设学号不写死，读取时动态算
@@ -243,6 +321,8 @@ def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = Non
             user.is_verified = is_verified
             # 人工审核同步 AI 状态，避免出现「已认证但状态仍为初审中」的矛盾
             user.ai_review_status = "manual_pass" if is_verified else "manual_reject"
+            if is_verified:
+                user.verify_reject_reason = None
         if rank is not None:
             # 段位写入统一归一化（安全审查 #11：防止 s10/王者 等非法值入库）
             normalized = normalize_rank(rank)
@@ -256,6 +336,8 @@ def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = Non
         if individual_rating is not None:
             user.individual_rating = individual_rating
         if verify_image is not None:
+            if user.verify_image != (verify_image or None):
+                user.ai_student_id = None
             user.verify_image = verify_image or None   # 空字符串表示清除截图
         if verify_reject_reason is not None:
             user.verify_reject_reason = verify_reject_reason or None   # 空字符串表示清除驳回原因

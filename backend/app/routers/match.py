@@ -15,6 +15,7 @@ from app.database import get_db
 from app.schemas.match import MatchCreateRequest, MatchInfo, MatchDetailInfo, RoundInfo, RoundUpdateRequest, MatchStatusUpdateRequest, MatchAdminDetail, StageWindowInfo, StageWindowUpdate, RoundScheduleRequest, RoundScheduleActionRequest, RegistrationWindowUpdateRequest
 from app.models.match import MatchStatus
 from app.services import match_service
+from app.services.visibility_service import public_match_detail, public_rounds
 from app.services.auth_service import get_current_user, require_admin
 from app.models.team import Team, TeamStatus
 
@@ -111,7 +112,7 @@ def get_match_detail_public(
     db: Session = Depends(get_db),
 ):
     """普通用户查看赛事详情（队伍进度 + 对阵，含 BO3 小分），用于用户端赛事页展示"""
-    return _get_detail_with_roster_state(db, match_id)
+    return public_match_detail(db, _get_detail_with_roster_state(db, match_id))
 
 
 @router.get("/{match_id}/admin-detail", response_model=MatchAdminDetail)
@@ -127,7 +128,7 @@ def get_match_admin_detail(
 @router.get("/{match_id}/rounds", response_model=list[RoundInfo])
 def get_rounds(match_id: int, db: Session = Depends(get_db)):
     """获取赛事所有对阵"""
-    return match_service.get_rounds_by_match(db, match_id)
+    return public_rounds(db, match_service.get_rounds_by_match(db, match_id))
 
 
 # ===== CSV 导出辅助 =====

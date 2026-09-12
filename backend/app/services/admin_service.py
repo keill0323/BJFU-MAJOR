@@ -5,13 +5,14 @@ from sqlalchemy.orm import Session
 from app.models.match import Match, MatchRound, Registration, RegistrationStatus, StageStatus, TeamProgress
 from app.models.team import Team, TeamStatus
 from app.models.user import RankApplication, User
+from app.services.auth_service import pending_verification_condition
 
 
 def get_todos(db: Session):
-    # Match the existing review-list predicates, including unverified submissions
-    # that were flagged/rejected by AI and still need a human decision.
+    # Reuse the review-list predicate so completed manual decisions cannot keep
+    # their badge alive; AI-rejected evidence still needs a human decision.
     counts = db.execute(select(
-        select(func.count(User.id)).where(User.verify_image.isnot(None), User.is_verified.is_(False)).scalar_subquery(),
+        select(func.count(User.id)).where(pending_verification_condition()).scalar_subquery(),
         select(func.count(RankApplication.id)).where(RankApplication.status == "pending").scalar_subquery(),
         select(func.count(Team.id)).where(Team.status == TeamStatus.PENDING).scalar_subquery(),
     )).one()
@@ -39,11 +40,16 @@ def get_todos(db: Session):
         Match.id.label("match_id"), Match.name.label("match_name"), pending.c.count,
         or_(locked_progress, locked_rounds).label("roster_locked"),
     ).join(pending, pending.c.match_id == Match.id).order_by(Match.created_at.desc(), Match.id.desc()).all()
-    registration_matches = [dict(row._mapping) for row in rows]
+    # Once seeded/grouped, the approval API forbids changing the roster. Keep
+    # historical pending records visible for inspection, outside actionable work.
+    registration_matches = [dict(row._mapping) for row in rows if not row.roster_locked]
+    blocked_registration_matches = [dict(row._mapping) for row in rows if row.roster_locked]
     registration_count = sum(row["count"] for row in registration_matches)
     return {
         "verification_count": counts[0], "rank_application_count": counts[1],
         "team_count": counts[2], "registration_count": registration_count,
         "total": sum(counts) + registration_count,
         "registration_matches": registration_matches,
+        "blocked_registration_count": sum(row["count"] for row in blocked_registration_matches),
+        "blocked_registration_matches": blocked_registration_matches,
     }

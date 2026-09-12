@@ -55,10 +55,10 @@ test('approved unseeded teams render as waiting and are absent from challenger l
   assert.equal(calls.modals.length, 0)
   assert.deepEqual(plain(page.data.waitingTeams.map(t => t.team_id)), [1])
   assert.equal(page.data.challengerTeams.length, 0)
-  assert.equal(page.data.teamsSwiper[0].teams.length, 0)
+  assert.equal(page.data.rankingTeams.length, 3)
   assert.equal(page.data.rankingTeams.find(t => t.team_id === 1).stage_text, '待分组')
   assert.equal(page.data.rankingTeams.find(t => t.team_id === 2).stage_text, '报名待审核')
-  assert.match(render(page), /待分组 · 1 支/)
+  assert.match(render(page), /待分组/)
   assert.match(render(page), /通过报名/)
   page.data.tab = 'challenger'
   const html = render(page)
@@ -74,7 +74,7 @@ test('seeded teams belong to the actual stages and no longer appear as waiting',
   assert.equal(page.data.rosterLocked, true)
   assert.deepEqual(plain(page.data.challengerTeams.map(t => t.team_id)), [2])
   assert.deepEqual(plain(page.data.legendTeams.map(t => t.team_id)), [1])
-  assert.equal(page.data.teamsSwiper[0].teams[0].stage_status, '进行中')
+  assert.equal(page.data.rankingTeams.find(t => t.team_id === 2).stage_text, '挑战者组')
   assert.doesNotMatch(render(page), /waiting-card/)
 })
 

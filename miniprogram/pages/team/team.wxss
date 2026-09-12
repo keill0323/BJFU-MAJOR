@@ -119,3 +119,7 @@ page { background: #f3f7fa; color: #102a43; }
 .player-rank { color: #087f8c; background: #ecf8f5; padding: 4rpx 12rpx; border-radius: 6rpx; }
 .player-description { display: block; font-size: 23rpx; color: #7e96a7; margin: 14rpx 0 0 82rpx; line-height: 1.65; word-break: break-all; }
 @media (max-width: 350px) { .team-space { padding-left: 22rpx; padding-right: 22rpx; } .surface { padding: 26rpx; } .roster-no { display: none; } .member-row { gap: 13rpx; } .team-name { font-size: 35rpx; } .stat-value { font-size: 38rpx; } }
+
+.applicant-profile { display: flex; gap: 16rpx; align-items: center; margin: 18rpx 0; }.applicant-avatar { width: 72rpx; height: 72rpx; border-radius: 16rpx; flex-shrink: 0; }.applicant-copy { flex: 1; min-width: 0; }.applicant-game { display: block; color: #486579; font-size: 24rpx; overflow-wrap: anywhere; }.applicant-tags { display: flex; flex-wrap: wrap; gap: 10rpx; margin-top: 12rpx; }.applicant-tags text { color: #16616c; background: #eaf6f5; border-radius: 8rpx; padding: 4rpx 10rpx; font-size: 21rpx; }.applicant-description { display: block; font-size: 24rpx; color: #526e82; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 14rpx; }
+
+.member-identity { display: inline-block; margin-top: 10rpx; padding: 4rpx 10rpx; border-radius: 8rpx; color: #126a70; background: #e5f4f2; font-size: 22rpx; }

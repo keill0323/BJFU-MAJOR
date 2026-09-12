@@ -4,7 +4,7 @@ Author: keill
 Since: 2026-7-24
 """
 
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Header
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -14,7 +14,7 @@ from app.schemas.team import (
     TalentMarketItem, UpdateMarketDescription, ApplyJoinRequest, TeamApplicationInfo,
     InviteRequest, InvitationInfo, RecruitByStudentRequest,
 )
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.team import Team
 from app.services import team_service, upload_service
 from app.services.auth_service import get_current_user, require_admin
@@ -69,7 +69,7 @@ def recruit_by_student(
         raise HTTPException(status_code=404, detail="队伍不存在")
     if team.captain_id != current_user.id:
         raise HTTPException(status_code=403, detail="只有队长才能拉人入队")
-    user = db.query(User).filter(User.student_id == request.student_id).first()
+    user = db.query(User).filter(User.student_id == request.student_id, User.is_hidden.is_(False)).first()
     if not user:
         raise HTTPException(status_code=404, detail="未找到该学号对应的用户")
     team_service.join_team(db, request.team_id, user.id)
@@ -192,12 +192,21 @@ def reject_application(
 
 
 @router.get("/{team_id}", response_model=TeamInfo)
-def get_team(team_id: int, db: Session = Depends(get_db)):
+def get_team(team_id: int, db: Session = Depends(get_db), authorization: Optional[str] = Header(None)):
     """获取队伍详情"""
     team = team_service.get_team_by_id(db, team_id)
     if not team:
         raise HTTPException(status_code=404, detail="队伍不存在")
-    return team
+    viewer = get_current_user(db, authorization) if isinstance(authorization, str) else None
+    if viewer and viewer.role in (UserRole.ADMIN, UserRole.REVIEWER):
+        return team
+    if team.is_hidden:
+        raise HTTPException(status_code=404, detail="队伍不存在")
+    result = TeamInfo.model_validate(team)
+    visible_members = {member.user_id for member in team.members if member.user and not member.user.is_hidden}
+    result.members = [member for member in result.members if member.user_id in visible_members]
+    result.member_count = len(result.members)
+    return result
 
 
 @router.post("/{team_id}/logo", response_model=TeamInfo)
@@ -325,4 +334,3 @@ def delete_team(
     if not team:
         raise HTTPException(status_code=404, detail="队伍不存在")
     return {"message": "队伍已删除"}
-    

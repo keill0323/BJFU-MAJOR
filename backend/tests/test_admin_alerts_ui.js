@@ -5,7 +5,8 @@ const path = require('node:path')
 const vm = require('node:vm')
 const { parseWxml, createRenderer } = require('../../tools/preview-miniprogram.js')
 const root = path.resolve(__dirname, '../../miniprogram')
-const counts = n => ({ verification_count: n, rank_application_count: 0, team_count: 0, registration_count: 0, total: n, registration_matches: [] })
+const counts = n => ({ verification_count: n, rank_application_count: 0, team_count: 0, registration_count: 0, total: n,
+  registration_matches: [], blocked_registration_count: 0, blocked_registration_matches: [] })
 const deferred = () => {
   let resolve, reject
   const promise = new Promise((yes, no) => { resolve = yes; reject = no })
@@ -42,6 +43,24 @@ function setup(getTodos, initialToken = 'admin-token') {
     return instance
   }
   return { store, storage, header, navigations }
+}
+
+function renderHeader(instance) {
+  const tree = parseWxml('<nav-drawer title="北林 MAJOR" show-admin-notice="{{true}}"/>')
+  tree.scope = {}
+  return createRenderer(instance.data)(tree)
+}
+
+function headerAction(value, attribute = 'class') {
+  const tree = parseWxml(fs.readFileSync(path.join(root, 'components/nav-drawer/nav-drawer.wxml'), 'utf8'))
+  const search = node => {
+    if (node.attrs && node.attrs[attribute] === value) return node
+    for (const child of node.children || []) {
+      const found = search(child)
+      if (found) return found
+    }
+  }
+  return search(tree)
 }
 
 test('admin surfaces share an in-flight summary and a short cache without reading full lists', async () => {
@@ -129,7 +148,7 @@ test('only managers fetch and see actionable header notices and numeric drawer b
   tree.scope = {}
   const html = createRenderer(manager.data)(tree)
   assert.match(html, /5 项待处理/)
-  assert.match(html, /认证 5/)
+  assert.match(html, /在校认证 5 份/)
   assert.match(html, /drawer-todo-badge/)
   manager.goAdmin()
   assert.equal(navigations[0].url, '/pages/admin/admin')
@@ -140,6 +159,113 @@ test('only managers fetch and see actionable header notices and numeric drawer b
   ordinary.goAdmin()
   assert.equal(navigations.length, 1)
   assert.doesNotMatch(createRenderer(ordinary.data)(tree), /class="admin-notice"/)
+})
+
+test('each positive category exposes its real review action and opens that exact admin tab', async () => {
+  const action = headerAction('admin-task')
+  assert.ok(action, 'A rendered category must expose a tappable action')
+  assert.equal(action.attrs['data-tab'], '{{item.tab}}')
+  for (const [key, tab, label, unit] of [
+    ['verification_count', 'verify', '在校认证', '份'],
+    ['rank_application_count', 'rankapps', '段位申请', '份'],
+    ['team_count', 'teams', '新建队伍', '支'],
+    ['registration_count', 'matches', '赛事报名', '队']
+  ]) {
+    const summary = { ...counts(0), [key]: 2, total: 2 }
+    const { header, navigations } = setup(async () => summary)
+    const manager = header(tab === 'rankapps' ? 'reviewer' : 'admin')
+    await manager.loadUser()
+    await manager.loadAdminTodos()
+    const html = renderHeader(manager)
+    assert.match(html, new RegExp(label + ' 2 ' + unit))
+    assert.equal((html.match(/class="admin-task"/g) || []).length, 1, 'Zero-count categories have no false action')
+    assert.equal(manager.data.adminTodoItems.length, 1)
+    const item = manager.data.adminTodoItems[0]
+    assert.equal(item.tab, tab)
+    manager.setData({ open: true })
+    manager[action.attrs.bindtap]({ currentTarget: { dataset: { tab: item.tab } } })
+    assert.equal(navigations[0].url, '/pages/admin/admin?tab=' + tab)
+    assert.equal(manager.data.open, false)
+    manager[action.attrs.bindtap]({ currentTarget: { dataset: { tab: 'users' } } })
+    assert.equal(navigations.length, 1, 'An unknown review category cannot open another management function')
+    const ordinary = header('user')
+    await ordinary.loadUser()
+    ordinary[action.attrs.bindtap]({ currentTarget: { dataset: { tab } } })
+    assert.equal(navigations.length, 1, 'Non-managers cannot use a review shortcut')
+  }
+})
+
+test('initial summary failure shows unknown status, and retry replaces it with fresh actionable categories', async () => {
+  const retryAction = headerAction('retryAdminTodos', 'bindtap')
+  assert.ok(retryAction, 'The error notice must expose a retry action')
+  let fail = true
+  const { header } = setup(async () => {
+    if (fail) throw { detail: '暂时无法连接服务器' }
+    return { ...counts(0), rank_application_count: 3, total: 3 }
+  })
+  const manager = header()
+  await manager.loadUser()
+  await manager.loadAdminTodos()
+  const unavailable = renderHeader(manager)
+  assert.match(unavailable, /待办状态暂时不可用/)
+  assert.match(unavailable, /暂时无法连接服务器/)
+  assert.match(unavailable, /重新获取/)
+  assert.match(unavailable, /未更新/)
+  assert.doesNotMatch(unavailable, /需要你审核|项待处理|class="menu-dot"|class="admin-task"/)
+  assert.equal(manager.data.adminTodoCount, null)
+  assert.equal(manager.data.adminTodoItems.length, 0)
+  fail = false
+  await manager[retryAction.attrs.bindtap]()
+  const refreshed = renderHeader(manager)
+  assert.match(refreshed, /段位申请 3 份/)
+  assert.match(refreshed, /3 项待处理/)
+  assert.doesNotMatch(refreshed, /待办状态暂时不可用|暂时无法连接服务器|未更新/)
+})
+
+test('failed cached counts stay explicitly stale during retry, and a successful zero result clears every badge', async () => {
+  let fail = false, retry
+  const { header } = setup(async () => {
+    if (retry) return retry.promise
+    if (fail) throw { detail: '网络中断，请重试' }
+    return counts(4)
+  })
+  const manager = header()
+  await manager.loadUser()
+  await manager.loadAdminTodos()
+  assert.match(renderHeader(manager), /4 项待处理/)
+  fail = true
+  await manager.retryAdminTodos()
+  const failed = renderHeader(manager)
+  assert.match(failed, /上次记录：在校认证 4 份/)
+  assert.match(failed, /请刷新确认/)
+  assert.doesNotMatch(failed, /需要你审核|项待处理|class="menu-dot"|class="admin-task"/)
+
+  retry = deferred()
+  const work = manager.retryAdminTodos()
+  const loading = renderHeader(manager)
+  assert.match(loading, /正在重试/)
+  assert.match(loading, /上次记录：在校认证 4 份/)
+  assert.doesNotMatch(loading, /需要你审核|项待处理|class="menu-dot"|class="admin-task"/)
+  retry.resolve(counts(0))
+  await work
+  const clear = renderHeader(manager)
+  assert.equal(manager.data.adminTodoCount, 0)
+  assert.equal(manager.data.adminTodoItems.length, 0)
+  assert.equal(manager.data.adminTodoError, false)
+  assert.equal(manager.data.adminTodoBadge, '')
+  assert.doesNotMatch(clear, /class="admin-notice|class="menu-dot"|drawer-todo-badge|项待处理|未更新/)
+})
+
+test('locked registration records alone do not create a red actionable notice or drawer badge', async () => {
+  const { header } = setup(async () => ({
+    ...counts(0), blocked_registration_count: 2,
+    blocked_registration_matches: [{ match_id: 7, match_name: '已编排赛事', count: 2, roster_locked: true }]
+  }))
+  const manager = header()
+  await manager.loadUser()
+  await manager.loadAdminTodos()
+  assert.equal(manager.data.adminTodoItems.length, 0)
+  assert.doesNotMatch(renderHeader(manager), /class="admin-notice|class="menu-dot"|drawer-todo-badge|项待处理/)
 })
 
 test('detached headers unsubscribe and never render late todo counts', async () => {

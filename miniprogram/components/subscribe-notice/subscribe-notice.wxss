@@ -1,0 +1,5 @@
+.subscription { padding: 26rpx; margin: 24rpx; border: 1rpx solid #cce3e6; border-radius: 24rpx; background: #edf8f8; }
+.title { display: block; font-size: 28rpx; font-weight: 700; color: #12616c; }
+.copy { display: block; margin-top: 8rpx; font-size: 24rpx; color: #496c78; line-height: 1.7; }
+.subscribe-button { margin: 20rpx 0 0; padding: 16rpx 22rpx; font-size: 26rpx; line-height: 1.5; background: #087f8c; color: #fff; border-radius: 16rpx; }
+.subscribe-button::after { border: none; }

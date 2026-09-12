@@ -36,6 +36,8 @@ Page({
     rankApplications: []   // 我的段位申请
   },
 
+  goRecruitment() { wx.navigateTo({ url: '/pages/recruitment/recruitment' }) },
+
   onLoad(options) {
     if (options && options.tab !== undefined && ['mine', 'all', 'info'].indexOf(options.tab) >= 0) {
       this.setData({ tab: options.tab })
@@ -154,7 +156,7 @@ Page({
   async loadApplications(teamId) {
     try {
       const data = await api.getApplications(teamId)
-      this.setData({ applications: data || [] })
+      this.setData({ applications: (data || []).map(a => Object.assign({}, a, { displayRank: rankDisplay(a.rank), avatarFull: a.avatar ? (/^https?:\/\//.test(a.avatar) ? a.avatar : api.BASE + a.avatar) : '' })) })
     } catch (err) {
       this.setData({ applications: [] })
     }
@@ -474,14 +476,25 @@ Page({
   },
 
   async applyJoin(e) {
+    if (this._applying) return
     const teamId = e.currentTarget.dataset.id
-    const teamName = e.currentTarget.dataset.name
-    try {
-      await api.applyJoin(teamId, this.data.applyMessage)
-      wx.showToast({ title: `已向 ${teamName} 申请`, icon: 'success' })
-      this.setData({ applyMessage: '' })
-    } catch (err) {
-      wx.showToast({ title: err.detail || '申请失败', icon: 'error' })
-    }
+    const teamName = e.currentTarget.dataset.name || '该队伍'
+    wx.showModal({
+      title: '申请加入 ' + teamName,
+      editable: true,
+      placeholderText: '自我介绍（选填，最多 200 字）：位置、在线时段、组队期望',
+      confirmText: '提交申请',
+      success: async r => {
+        if (!r.confirm || this._applying) return
+        const message = (r.content || '').trim()
+        if (message.length > 200) { wx.showToast({ title: '自我介绍最多 200 字', icon: 'none' }); return }
+        this._applying = true
+        try {
+          await api.applyJoin(teamId, message)
+          wx.showToast({ title: '已提交申请，等待队长处理', icon: 'none' })
+        } catch (err) { wx.showToast({ title: err.detail || '申请失败', icon: 'none' }) }
+        finally { this._applying = false }
+      }
+    })
   }
 })

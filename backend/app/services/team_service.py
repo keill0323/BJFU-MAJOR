@@ -15,6 +15,8 @@ from sqlalchemy.exc import IntegrityError
 from app.models.team import Team, TeamMember, TeamStatus, MemberRole, TeamApplication, TeamInvitation, ApplicationStatus
 from app.models.user import User
 from app.models.match import Match, MatchStatus, Registration, RegistrationStatus, TeamProgress
+from app.services import wechat_service
+from app.services.team_request_service import actionable, invalidate_pending
 from app.services.locking import lock_row
 
 
@@ -41,31 +43,27 @@ def _team_transaction(db: Session, team_id: int):
 
 
 def create_team(db: Session, name: str, captain_id: int, description: Optional[str] = None) -> Team:
-    """创建队伍，创建者自动成为队长"""
-    team = Team(
-        name=name,
-        captain_id=captain_id,
-        description=description,
-        status=TeamStatus.PENDING
-    )
-    db.add(team)
-    db.flush()
-
-    member = TeamMember(
-        team_id=team.id,
-        user_id=captain_id,
-        role=MemberRole.CAPTAIN
-    )
-    db.add(member)
+    """创建队伍与旧申请失效、评分更新共用事务。"""
     try:
+        _lock_request_user(db, captain_id)
+        if db.query(TeamMember).filter_by(user_id=captain_id).with_for_update().first():
+            raise HTTPException(400, "你已在某支队伍中，不能重复创建")
+        team = Team(name=name, captain_id=captain_id, description=description, status=TeamStatus.PENDING)
+        db.add(team)
+        db.flush()
+        db.add(TeamMember(team_id=team.id, user_id=captain_id, role=MemberRole.CAPTAIN))
+        db.flush()
+        recalc_team_rating(db, team.id, commit=False)
+        invalidate_pending(db, captain_id)
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail="你已在某支队伍中，不能重复创建")
+        raise HTTPException(400, "队伍名称或成员记录发生冲突，请刷新后重试")
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(team)
-    recalc_team_rating(db, team.id)
     return team
-
 
 
 def get_team_by_id(db: Session, team_id: int) -> Optional[Team]:
@@ -119,8 +117,8 @@ def _ensure_can_join(db: Session, team_id: int, user_id: int) -> None:
         raise HTTPException(status_code=404, detail="用户不存在")
     if user.is_verified and user.rank:
         return
-    team_regs = db.query(Registration).filter(
-        Registration.team_id == team_id
+    team_regs = db.query(Registration).join(Match, Match.id == Registration.match_id).filter(
+        Registration.team_id == team_id, Match.status != MatchStatus.FINISHED
     ).with_for_update().first()
     if team_regs:
         # 队伍已报名赛事，入队成员必须学籍 + 段位都认证
@@ -130,12 +128,12 @@ def _ensure_can_join(db: Session, team_id: int, user_id: int) -> None:
 
 
 def _team_member_limit(db: Session, team_id: int) -> Optional[int]:
-    """队伍人数上限：取所有已报名赛事 team_size 的最小值；未报名任何赛事返回 None（不限制）"""
+    """人数上限只取尚未结束赛事；历史赛事不约束当前阵容。"""
     team_regs = db.query(Registration).filter(Registration.team_id == team_id).with_for_update().all()
     sizes = []
     for reg in team_regs:
         match = db.query(Match).filter(Match.id == reg.match_id).first()
-        if match and match.team_size:
+        if match and match.status != MatchStatus.FINISHED and match.team_size:
             sizes.append(match.team_size)
     return min(sizes) if sizes else None
 
@@ -154,8 +152,16 @@ def _ensure_member_limit(db: Session, team_id: int, user_name: str = "该用户"
             raise HTTPException(status_code=400, detail=f"队伍人数已达上限（{limit}人），无法继续加入")
 
 
-def _add_member(db: Session, team_id: int, user_id: int) -> TeamMember:
+def _lock_request_user(db, user_id):
+    user = lock_row(db, User, user_id)
+    if not user:
+        raise HTTPException(404, "用户不存在")
+    return user
+
+
+def _add_member(db: Session, team_id: int, user_id: int, *, keep_application=None, keep_invitation=None) -> TeamMember:
     """调用方已锁定队伍；成员、报名与评分只 flush，不独立提交。"""
+    _lock_request_user(db, user_id)
     already_in_team = db.query(TeamMember).filter(
         TeamMember.user_id == user_id
     ).with_for_update().first()
@@ -168,6 +174,7 @@ def _add_member(db: Session, team_id: int, user_id: int) -> TeamMember:
     db.flush()
     sync_member_registrations(db, team_id, user_id, commit=False)
     recalc_team_rating(db, team_id, commit=False)
+    invalidate_pending(db, user_id, keep_application=keep_application, keep_invitation=keep_invitation)
     return member
 
 
@@ -219,7 +226,9 @@ def sync_member_registrations(
     # 同一赛事多条队员记录只处理一次；先计算原队伍状态，再挂接个人记录。
     statuses = {}
     for match_id in sorted(set(match_ids)):
-        _lock_match(db, match_id)
+        match = _lock_match(db, match_id)
+        if match.status == MatchStatus.FINISHED:
+            continue  # 新队员不能写入历史赛事报名或改变原参赛名单。
         progress = db.query(TeamProgress).filter(
             TeamProgress.match_id == match_id, TeamProgress.team_id == team_id,
         ).populate_existing().with_for_update().first()
@@ -287,7 +296,7 @@ def get_users_without_team(db: Session, match_id: int) -> list:
     # 已报名但无队伍的
     free_ids = registered_ids - teamed_ids
     if free_ids:
-        return db.query(User).filter(User.id.in_(free_ids)).all()
+        return db.query(User).filter(User.id.in_(free_ids), User.is_hidden.is_(False)).all()
     return []
 
 
@@ -348,6 +357,7 @@ def _remove_member(db: Session, team_id: int, member: TeamMember) -> None:
         registration.team_id = None
         if target_status is not None:
             registration.status = target_status
+    invalidate_pending(db, member.user_id)
     db.delete(member)
     db.flush()
     recalc_team_rating(db, team_id, commit=False)
@@ -356,6 +366,7 @@ def _remove_member(db: Session, team_id: int, member: TeamMember) -> None:
 def leave_team(db: Session, team_id: int, user_id: int) -> None:
     """队员主动退队（队长不能退）"""
     with _team_transaction(db, team_id):
+        _lock_request_user(db, user_id)
         member = db.query(TeamMember).filter(
             TeamMember.team_id == team_id,
             TeamMember.user_id == user_id,
@@ -374,6 +385,7 @@ def kick_member(db: Session, team_id: int, captain_id: int, user_id: int) -> Non
             raise HTTPException(status_code=403, detail="只有队长才能踢人")
         if captain_id == user_id:
             raise HTTPException(status_code=400, detail="队长不能踢自己")
+        _lock_request_user(db, user_id)
         member = db.query(TeamMember).filter(
             TeamMember.team_id == team_id,
             TeamMember.user_id == user_id,
@@ -382,34 +394,40 @@ def kick_member(db: Session, team_id: int, captain_id: int, user_id: int) -> Non
             raise HTTPException(status_code=404, detail="该用户不在队伍中")
         _remove_member(db, team_id, member)
 
+def _invalidate_members_requests(db: Session, team_id: int) -> None:
+    """调用方持有队伍锁；先按 ID 锁定队员，再使其历史申请失效。"""
+    member_ids = db.query(TeamMember.user_id).filter(TeamMember.team_id == team_id)
+    users = db.query(User).filter(User.id.in_(member_ids)).order_by(User.id).with_for_update().all()
+    for user in users:
+        invalidate_pending(db, user.id)
+
+
 def disband_team(db: Session, team_id: int, captain_id: int) -> None:
     """队长解散队伍，删除队伍及所有成员记录"""
-    team = get_team_by_id(db, team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail="队伍不存在")
-    if team.captain_id != captain_id:
-        raise HTTPException(status_code=403, detail="只有队长才能解散队伍")
+    with _team_transaction(db, team_id) as team:
+        if team.captain_id != captain_id:
+            raise HTTPException(status_code=403, detail="只有队长才能解散队伍")
 
-    # 队伍已参与赛事对阵时禁止解散：对阵表外键引用该队，
-    # 直接删队会破坏对手战绩（SQLite 不强制外键所以此前无感，MySQL 下会外键错误）
-    from app.models.match import MatchRound
-    in_rounds = db.query(MatchRound).filter(
-        (MatchRound.team1_id == team_id)
-        | (MatchRound.team2_id == team_id)
-        | (MatchRound.winner_id == team_id)
-    ).first()
-    if in_rounds:
-        raise HTTPException(status_code=400, detail="该队伍已参与赛事对阵，无法解散，请联系管理员处理")
+        # 队伍已参与赛事对阵时禁止解散：对阵表外键引用该队，
+        # 直接删队会破坏对手战绩（SQLite 不强制外键所以此前无感，MySQL 下会外键错误）
+        from app.models.match import MatchRound
+        in_rounds = db.query(MatchRound).filter(
+            (MatchRound.team1_id == team_id)
+            | (MatchRound.team2_id == team_id)
+            | (MatchRound.winner_id == team_id)
+        ).first()
+        if in_rounds:
+            raise HTTPException(status_code=400, detail="该队伍已参与赛事对阵，无法解散，请联系管理员处理")
 
-    # 清理该队伍的赛事报名记录、队伍进度
-    db.query(Registration).filter(Registration.team_id == team_id).delete()
-    db.query(TeamProgress).filter(TeamProgress.team_id == team_id).delete()
-    # 清理入队申请和邀请记录（有外键引用，必须先删，否则删队伍会失败）
-    db.query(TeamApplication).filter(TeamApplication.team_id == team_id).delete()
-    db.query(TeamInvitation).filter(TeamInvitation.team_id == team_id).delete()
-    db.query(TeamMember).filter(TeamMember.team_id == team_id).delete()
-    db.delete(team)
-    db.commit()
+        _invalidate_members_requests(db, team_id)
+        # 清理该队伍的赛事报名记录、队伍进度
+        db.query(Registration).filter(Registration.team_id == team_id).delete()
+        db.query(TeamProgress).filter(TeamProgress.team_id == team_id).delete()
+        # 清理入队申请和邀请记录（有外键引用，必须先删，否则删队伍会失败）
+        db.query(TeamApplication).filter(TeamApplication.team_id == team_id).delete()
+        db.query(TeamInvitation).filter(TeamInvitation.team_id == team_id).delete()
+        db.query(TeamMember).filter(TeamMember.team_id == team_id).delete()
+        db.delete(team)
 
 
 def delete_team(db: Session, team_id: int) -> Optional[Team]:
@@ -418,22 +436,23 @@ def delete_team(db: Session, team_id: int) -> Optional[Team]:
     if not team:
         return None
 
-    # 清理该队参与的对阵（否则 MySQL 外键错误，且留下悬空对阵）
-    from app.models.match import MatchRound
-    db.query(MatchRound).filter(
-        (MatchRound.team1_id == team_id)
-        | (MatchRound.team2_id == team_id)
-        | (MatchRound.winner_id == team_id)
-    ).delete()
-    # 清理该队伍的赛事报名记录、队伍进度
-    db.query(Registration).filter(Registration.team_id == team_id).delete()
-    db.query(TeamProgress).filter(TeamProgress.team_id == team_id).delete()
-    # 清理入队申请和邀请记录（有外键引用，必须先删，否则删队伍会失败）
-    db.query(TeamApplication).filter(TeamApplication.team_id == team_id).delete()
-    db.query(TeamInvitation).filter(TeamInvitation.team_id == team_id).delete()
-    db.query(TeamMember).filter(TeamMember.team_id == team_id).delete()
-    db.delete(team)
-    db.commit()
+    with _team_transaction(db, team_id) as team:
+        _invalidate_members_requests(db, team_id)
+        # 清理该队参与的对阵（否则 MySQL 外键错误，且留下悬空对阵）
+        from app.models.match import MatchRound
+        db.query(MatchRound).filter(
+            (MatchRound.team1_id == team_id)
+            | (MatchRound.team2_id == team_id)
+            | (MatchRound.winner_id == team_id)
+        ).delete()
+        # 清理该队伍的赛事报名记录、队伍进度
+        db.query(Registration).filter(Registration.team_id == team_id).delete()
+        db.query(TeamProgress).filter(TeamProgress.team_id == team_id).delete()
+        # 清理入队申请和邀请记录（有外键引用，必须先删，否则删队伍会失败）
+        db.query(TeamApplication).filter(TeamApplication.team_id == team_id).delete()
+        db.query(TeamInvitation).filter(TeamInvitation.team_id == team_id).delete()
+        db.query(TeamMember).filter(TeamMember.team_id == team_id).delete()
+        db.delete(team)
     return team
 
 
@@ -445,7 +464,7 @@ def get_all_teams(db: Session, only_approved: bool = False) -> list:
     """
     query = db.query(Team)
     if only_approved:
-        query = query.filter(Team.status == TeamStatus.APPROVED)
+        query = query.filter(Team.status == TeamStatus.APPROVED, Team.is_hidden.is_(False))
     teams = query.order_by(Team.created_at.desc()).all()
     result = []
     for team in teams:
@@ -473,40 +492,73 @@ def get_all_teams(db: Session, only_approved: bool = False) -> list:
     return result
 
 
+def _ensure_request_allowed(db, team, user_id):
+    user = db.get(User, user_id)
+    if team.is_hidden or not user or user.is_hidden:
+        raise HTTPException(404, "队伍或用户不存在")
+    if team.status == TeamStatus.REJECTED:
+        raise HTTPException(400, "队伍审核未通过，暂不能招募")
+    _ensure_can_join(db, team.id, user_id)
+    _ensure_member_limit(db, team.id)
+    from app.services.match_service import _ensure_roster_open
+    for (match_id,) in db.query(Registration.match_id).filter(Registration.team_id == team.id).distinct():
+        match = db.get(Match, match_id)
+        if match and match.status != MatchStatus.FINISHED:
+            progress = db.query(TeamProgress).filter_by(match_id=match_id, team_id=team.id).with_for_update().first()
+            # 与实际入队的同步校验一致：锁定的是新增参赛队伍，既有队伍沿用原补员规则。
+            if not progress:
+                _ensure_roster_open(db, match_id)
+
+
 def apply_join_team(db: Session, team_id: int, user_id: int, message: Optional[str] = None) -> TeamApplication:
     """用户申请加入队伍"""
-    team = get_team_by_id(db, team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail="队伍不存在")
+    with _team_transaction(db, team_id) as team:
+        _lock_request_user(db, user_id)
+        _ensure_request_allowed(db, team, user_id)
 
-    # 一人只能在一支队伍
-    already = db.query(TeamMember).filter(TeamMember.user_id == user_id).first()
-    if already:
-        raise HTTPException(status_code=400, detail="你已在队伍中")
+        # 一人只能在一支队伍
+        already = db.query(TeamMember).filter(TeamMember.user_id == user_id).with_for_update().first()
+        if already:
+            raise HTTPException(status_code=400, detail="你已在队伍中")
 
-    # 不能申请自己的队伍
-    if team.captain_id == user_id:
-        raise HTTPException(status_code=400, detail="你是队长，无需申请")
+        # 不能申请自己的队伍
+        if team.captain_id == user_id:
+            raise HTTPException(status_code=400, detail="你是队长，无需申请")
 
-    # 不能重复申请（有 pending 的申请）
-    pending = db.query(TeamApplication).filter(
-        TeamApplication.team_id == team_id,
-        TeamApplication.user_id == user_id,
-        TeamApplication.status == ApplicationStatus.PENDING,
-    ).first()
-    if pending:
-        raise HTTPException(status_code=400, detail="已有待审核的申请")
+        # 不能重复申请（有 pending 的申请）
+        pending = db.query(TeamApplication).filter(
+            TeamApplication.team_id == team_id,
+            TeamApplication.user_id == user_id,
+            TeamApplication.status == ApplicationStatus.PENDING,
+            TeamApplication.invalidated_at.is_(None),
+        ).with_for_update().first()
+        if pending:
+            raise HTTPException(status_code=400, detail="已有待审核的申请")
 
-    application = TeamApplication(
-        team_id=team_id,
-        user_id=user_id,
-        message=message,
-        status=ApplicationStatus.PENDING,
-    )
-    db.add(application)
-    db.commit()
+        application = TeamApplication(
+            team_id=team_id,
+            user_id=user_id,
+            message=message,
+            status=ApplicationStatus.PENDING,
+        )
+        db.add(application)
+        db.flush()
+        wechat_service.enqueue(db, "team_application", application.id, team.captain_id, team, db.get(User, user_id))
     db.refresh(application)
     return application
+
+
+def application_info(application):
+    """队长可见的选手资料白名单：不返回学号、AI 候选、凭证或 OpenID。"""
+    from app.services.auth_service import effective_identity
+    user = application.user
+    return dict(id=application.id, team_id=application.team_id, user_id=application.user_id,
+                nickname=user.nickname if user else None, game_id=user.game_id if user else None,
+                avatar=user.avatar if user else None, rank=user.rank if user else None,
+                individual_rating=(user.individual_rating or 0) if user else 0,
+                identity=effective_identity(user) if user and user.is_verified else None,
+                is_verified=bool(user and user.is_verified), user_description=user.user_description if user else None,
+                message=application.message, status=application.status.value, created_at=application.created_at)
 
 
 def get_team_applications(db: Session, team_id: int, captain_id: int) -> list:
@@ -517,26 +569,14 @@ def get_team_applications(db: Session, team_id: int, captain_id: int) -> list:
     if team.captain_id != captain_id:
         raise HTTPException(status_code=403, detail="只有队长才能查看申请")
 
-    apps = db.query(TeamApplication).filter(
+    from sqlalchemy.orm import joinedload
+    apps = db.query(TeamApplication).join(User, User.id == TeamApplication.user_id).options(joinedload(TeamApplication.user)).filter(
+        User.is_hidden.is_(False),
         TeamApplication.team_id == team_id,
-        TeamApplication.status == ApplicationStatus.PENDING,
+        *actionable(db, TeamApplication),
     ).order_by(TeamApplication.created_at.asc()).all()
 
-    result = []
-    for app in apps:
-        nickname = app.user.nickname if app.user else None
-        game_id = app.user.game_id if app.user else None
-        result.append({
-            "id": app.id,
-            "team_id": app.team_id,
-            "user_id": app.user_id,
-            "nickname": nickname,
-            "game_id": game_id,
-            "message": app.message,
-            "status": app.status.value if hasattr(app.status, "value") else app.status,
-            "created_at": app.created_at,
-        })
-    return result
+    return [application_info(application) for application in apps]
 
 
 def approve_application(db: Session, application_id: int, captain_id: int) -> None:
@@ -546,14 +586,15 @@ def approve_application(db: Session, application_id: int, captain_id: int) -> No
         raise HTTPException(status_code=404, detail="申请不存在")
 
     with _team_transaction(db, app.team_id) as team:
+        _lock_request_user(db, app.user_id)
         app = lock_row(db, TeamApplication, application_id)
         if not app:
             raise HTTPException(status_code=404, detail="申请不存在")
         if team.captain_id != captain_id:
             raise HTTPException(status_code=403, detail="只有队长才能审核申请")
-        if app.status != ApplicationStatus.PENDING:
+        if app.status != ApplicationStatus.PENDING or app.invalidated_at is not None:
             raise HTTPException(status_code=400, detail="该申请已处理，请重新提交申请")
-        _add_member(db, app.team_id, app.user_id)
+        _add_member(db, app.team_id, app.user_id, keep_application=app.id)
         app.status = ApplicationStatus.APPROVED
 
 
@@ -564,59 +605,62 @@ def reject_application(db: Session, application_id: int, captain_id: int) -> Non
         raise HTTPException(status_code=404, detail="申请不存在")
 
     with _team_transaction(db, app.team_id) as team:
+        _lock_request_user(db, app.user_id)
         app = lock_row(db, TeamApplication, application_id)
         if not app:
             raise HTTPException(status_code=404, detail="申请不存在")
         if team.captain_id != captain_id:
             raise HTTPException(status_code=403, detail="只有队长才能审核申请")
-        if app.status != ApplicationStatus.PENDING:
+        if app.status != ApplicationStatus.PENDING or app.invalidated_at is not None:
             raise HTTPException(status_code=400, detail="该申请已处理")
         app.status = ApplicationStatus.REJECTED
 
 
 def invite_player(db: Session, team_id: int, captain_id: int, user_id: int, message: Optional[str] = None) -> TeamInvitation:
     """队长邀请玩家入队（被邀请人需同意）"""
-    team = get_team_by_id(db, team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail="队伍不存在")
-    if team.captain_id != captain_id:
-        raise HTTPException(status_code=403, detail="只有队长才能邀请")
+    with _team_transaction(db, team_id) as team:
+        if team.captain_id != captain_id:
+            raise HTTPException(status_code=403, detail="只有队长才能邀请")
+        _lock_request_user(db, user_id)
+        _ensure_request_allowed(db, team, user_id)
 
-    # 被邀请人已在队伍中
-    already = db.query(TeamMember).filter(TeamMember.user_id == user_id).first()
-    if already:
-        raise HTTPException(status_code=400, detail="该玩家已在队伍中")
+        # 被邀请人已在队伍中
+        already = db.query(TeamMember).filter(TeamMember.user_id == user_id).with_for_update().first()
+        if already:
+            raise HTTPException(status_code=400, detail="该玩家已在队伍中")
 
-    # 被邀请人是队长自己
-    if team.captain_id == user_id:
-        raise HTTPException(status_code=400, detail="不能邀请自己")
+        # 被邀请人是队长自己
+        if team.captain_id == user_id:
+            raise HTTPException(status_code=400, detail="不能邀请自己")
 
-    # 已有待处理的邀请
-    pending = db.query(TeamInvitation).filter(
-        TeamInvitation.team_id == team_id,
-        TeamInvitation.user_id == user_id,
-        TeamInvitation.status == ApplicationStatus.PENDING,
-    ).first()
-    if pending:
-        raise HTTPException(status_code=400, detail="已邀请过该玩家，等待对方回应")
+        # 已有待处理的邀请
+        pending = db.query(TeamInvitation).filter(
+            TeamInvitation.team_id == team_id,
+            TeamInvitation.user_id == user_id,
+            TeamInvitation.status == ApplicationStatus.PENDING,
+            TeamInvitation.invalidated_at.is_(None),
+        ).with_for_update().first()
+        if pending:
+            raise HTTPException(status_code=400, detail="已邀请过该玩家，等待对方回应")
 
-    invitation = TeamInvitation(
-        team_id=team_id,
-        user_id=user_id,
-        message=message,
-        status=ApplicationStatus.PENDING,
-    )
-    db.add(invitation)
-    db.commit()
+        invitation = TeamInvitation(
+            team_id=team_id,
+            user_id=user_id,
+            message=message,
+            status=ApplicationStatus.PENDING,
+        )
+        db.add(invitation)
+        db.flush()
+        wechat_service.enqueue(db, "team_invitation", invitation.id, user_id, team, db.get(User, captain_id))
     db.refresh(invitation)
     return invitation
 
 
 def get_my_invitations(db: Session, user_id: int) -> list:
     """查看我收到的待处理邀请"""
-    invites = db.query(TeamInvitation).filter(
+    invites = db.query(TeamInvitation).join(Team, Team.id == TeamInvitation.team_id).filter(
         TeamInvitation.user_id == user_id,
-        TeamInvitation.status == ApplicationStatus.PENDING,
+        Team.is_hidden.is_(False), *actionable(db, TeamInvitation),
     ).order_by(TeamInvitation.created_at.desc()).all()
 
     result = []
@@ -643,14 +687,15 @@ def accept_invitation(db: Session, invitation_id: int, user_id: int) -> None:
     if not inv:
         raise HTTPException(status_code=404, detail="邀请不存在")
     with _team_transaction(db, inv.team_id):
+        _lock_request_user(db, inv.user_id)
         inv = lock_row(db, TeamInvitation, invitation_id)
         if not inv:
             raise HTTPException(status_code=404, detail="邀请不存在")
         if inv.user_id != user_id:
             raise HTTPException(status_code=403, detail="这不是发给你的邀请")
-        if inv.status != ApplicationStatus.PENDING:
+        if inv.status != ApplicationStatus.PENDING or inv.invalidated_at is not None:
             raise HTTPException(status_code=400, detail="该邀请已处理，请让队长重新邀请")
-        _add_member(db, inv.team_id, user_id)
+        _add_member(db, inv.team_id, user_id, keep_invitation=inv.id)
         inv.status = ApplicationStatus.APPROVED
 
 
@@ -660,11 +705,12 @@ def reject_invitation(db: Session, invitation_id: int, user_id: int) -> None:
     if not inv:
         raise HTTPException(status_code=404, detail="邀请不存在")
     with _team_transaction(db, inv.team_id):
+        _lock_request_user(db, inv.user_id)
         inv = lock_row(db, TeamInvitation, invitation_id)
         if not inv:
             raise HTTPException(status_code=404, detail="邀请不存在")
         if inv.user_id != user_id:
             raise HTTPException(status_code=403, detail="这不是发给你的邀请")
-        if inv.status != ApplicationStatus.PENDING:
+        if inv.status != ApplicationStatus.PENDING or inv.invalidated_at is not None:
             raise HTTPException(status_code=400, detail="该邀请已处理")
         inv.status = ApplicationStatus.REJECTED

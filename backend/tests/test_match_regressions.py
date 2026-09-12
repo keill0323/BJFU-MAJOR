@@ -88,6 +88,24 @@ class MatchRegressionTests(DatabaseTestCase):
         self.assertEqual(self.db.query(TeamProgress).count(), 0)
         self.assertTrue(all(r.status == RegistrationStatus.PENDING for r in self.db.query(Registration)))
 
+    def test_non_nine_digit_member_needs_manual_identity_before_counting_as_freshman(self):
+        from app.services.auth_service import admin_update_user
+        captain = self.make_user(identity="new_student")
+        graduate = self.make_user(student_id="20260123456", identity=None)
+        members = [graduate, self.make_user(identity="new_student"),
+                   self.make_user(identity="senior"), self.make_user(identity="senior")]
+        team = self.make_team(captain=captain, members=members)
+        match = self.make_match(match_type="freshman")
+        self.db.commit()
+        with self.assertRaises(HTTPException) as error:
+            service.register_team(self.db, match.id, team.id)
+        self.assertIn("当前仅 2 名", error.exception.detail)
+        self.assertIn("联系管理员", error.exception.detail)
+        self.assertEqual(self.db.query(Registration).count(), 0)
+        admin_update_user(self.db, graduate.id, identity="new_student")
+        service.register_team(self.db, match.id, team.id)
+        self.assertEqual(self.db.query(Registration).count(), 5)
+
     def test_no_results_cannot_finish_groups(self):
         match, _, progresses = self.enrolled(6)
         for i, progress in enumerate(progresses):

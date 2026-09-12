@@ -1,0 +1,44 @@
+<nav-drawer title="招募大厅"></nav-drawer>
+<view class="recruitment-page">
+  <view class="hero"><text class="eyebrow">FIND YOUR FIVE</text><text class="headline">还差一个你。</text><text class="hero-copy">先找到队友，再一起报名。<text>无需报名赛事，也能申请入队。</text></text><view class="hero-rule"><text>TEAM UP</text><view></view><text>PLAY TOGETHER</text></view></view>
+  <view class="directory-tabs"><view class="directory-tab {{tab === 'players' ? 'selected' : ''}}" bindtap="switchTab" data-tab="players">全部选手</view><view class="directory-tab {{tab === 'posts' ? 'selected' : ''}}" bindtap="switchTab" data-tab="posts">队伍招募</view></view>
+  <view wx:if="{{tab === 'players'}}" class="player-search"><input value="{{keyword}}" bindinput="onKeyword" bindconfirm="searchPlayers" placeholder="搜索昵称或游戏 ID" maxlength="64" confirm-type="search"/><button class="secondary" bindtap="searchPlayers">搜索</button></view>
+  <view wx:if="{{loading}}" class="state">正在加载招募大厅…</view>
+  <block wx:elif="{{tab === 'players'}}">
+    <text class="directory-caption">未报名、已入队的选手也会展示。新老生身份以认证结果为准。</text>
+    <view wx:if="{{accountFailed}}" class="state compact" bindtap="load">队伍信息加载失败，重试后可邀请选手</view>
+    <view wx:if="{{playersFailed}}" class="state" bindtap="load">选手列表加载失败 · 点击重试</view>
+    <view wx:elif="{{players.length === 0}}" class="state">{{query ? '没有找到符合条件的选手' : '暂时没有可展示的选手'}}</view>
+    <block wx:else>
+      <view wx:for="{{players}}" wx:key="id" class="post">
+        <view class="post-head"><view class="emblem"><image wx:if="{{item.avatarFull}}" src="{{item.avatarFull}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view><view class="team-copy"><text class="team-name">{{item.displayName}}</text><text class="muted">游戏 ID：{{item.game_id || '未设置'}}</text></view></view>
+        <view class="player-labels"><text class="identity-label {{item.identity === 'new_student' ? 'new-student' : ''}}">{{item.identityText}}</text><text>{{item.displayRank}}</text><text>{{item.individual_rating}} 水平分</text></view>
+        <text wx:if="{{item.user_description}}" class="post-content">{{item.user_description}}</text>
+        <view class="post-foot"><text class="muted">{{item.has_team ? (item.team_name || '已入队') : '未加入队伍'}}</text><button wx:if="{{mine && !accountFailed && !item.has_team}}" class="apply" bindtap="invite" data-id="{{item.id}}" disabled="{{!!inviting}}" loading="{{inviting === item.id}}">邀请入队</button><text wx:elif="{{!item.has_team}}" class="muted">由队长发起邀请</text></view>
+      </view>
+      <view wx:if="{{playersMore}}" class="state compact" bindtap="loadMorePlayers">{{loadingMore ? '正在加载…' : '查看更多选手'}}</view>
+    </block>
+  </block>
+  <block wx:else>
+    <view wx:if="{{accountFailed}}" class="manage"><text>你的队伍信息加载失败，重试后即可操作。</text><button class="secondary" bindtap="load">重新加载</button></view>
+    <view wx:elif="{{mine}}" class="manage">
+      <view class="section-top"><text class="section-title">{{mine.team_name}}</text><text class="status">{{mine.is_active ? '正在招募' : '未发布招募'}}</text></view>
+      <text class="muted">{{mine.can_publish ? '写下所需位置、段位和在线时段，让合适的队友找到你。阵容齐了，记得关闭招募。' : '队伍审核通过后即可发布，无需先报名赛事。'}}</text>
+      <block wx:if="{{editing}}"><textarea class="editor" value="{{draft}}" bindinput="onDraft" maxlength="500" placeholder="例如：缺一名步枪手，B 段左右，平日晚上可训练。欢迎先组队磨合！" placeholder-class="placeholder"/><text class="counter">{{draft.length}} / 500</text><view class="actions"><button class="secondary" bindtap="cancelEdit" disabled="{{saving}}">取消</button><button class="primary" bindtap="save" loading="{{saving}}" disabled="{{saving}}">发布招募</button></view></block>
+      <view wx:elif="{{mine.can_publish}}" class="actions"><button wx:if="{{mine.is_active}}" class="secondary" bindtap="closePost" disabled="{{saving}}">关闭招募</button><button class="primary" bindtap="edit">{{mine.is_active ? '编辑招募' : '发布招募'}}</button></view>
+    </view>
+    <view wx:else class="join-banner" bindtap="goTeam"><view><text class="section-title">{{myTeam ? '查看我的队伍' : '想组建自己的队伍？'}}</text><text class="muted">{{myTeam ? '招募由队长发布和管理' : '创建队伍，审核通过后发布招募'}}</text></view><text class="arrow">›</text></view>
+    <view class="feed-heading"><text class="section-title">队伍招募</text><text class="muted">寻找并肩作战的人</text></view>
+    <view wx:if="{{failed}}" class="state" bindtap="load">招募加载失败 · 点击重试</view>
+    <view wx:elif="{{posts.length === 0}}" class="state">暂时没有招募，成为第一个发起者吧。</view>
+    <block wx:else>
+      <view wx:for="{{posts}}" wx:key="team_id" class="post">
+        <view class="post-head"><view class="emblem"><image wx:if="{{item.logoFull}}" src="{{item.logoFull}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view><view class="team-copy"><text class="team-name">{{item.team_name}}</text><text class="muted">{{item.member_count}} 名队员 · 水平分 {{item.rating || 0}}</text></view><text class="tag">招募中</text></view>
+        <text class="post-content" selectable>{{item.content}}</text>
+        <view class="post-foot"><text class="timestamp">更新于 {{item.timeText}}</text><button class="apply" bindtap="apply" data-id="{{item.team_id}}" disabled="{{!!myTeam || accountFailed || !!applying}}" loading="{{applying === item.team_id}}">{{myTeam ? (myTeam.id === item.team_id ? '我的队伍' : '已有队伍') : token ? '申请入队' : '登录申请'}}</button></view>
+      </view>
+      <view wx:if="{{more}}" class="state compact" bindtap="loadMore">{{loadingMore ? '正在加载…' : '查看更多招募'}}</view>
+    </block>
+  </block>
+</view>
+<subscribe-notice></subscribe-notice>

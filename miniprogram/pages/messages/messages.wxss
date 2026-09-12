@@ -111,6 +111,17 @@
 .msg-status.reject { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
 .msg-status.pending { background: rgba(217, 119, 6, 0.12); color: #b45309; }
 
+.schedule-notice { margin-top: 20rpx; padding: 22rpx; border: 1rpx solid #dce6ed; border-radius: 18rpx; }
+.notice-unread { border-color: #82c8bf; background: #f0faf8; }
+.notice-heading, .notice-footer { display: flex; align-items: center; justify-content: space-between; gap: 14rpx; }
+.notice-heading .msg-title { flex: 1; min-width: 0; }
+.unread-dot { width: 14rpx; height: 14rpx; border-radius: 50%; background: #d04a38; flex-shrink: 0; }
+.group-count.unread-count { background: #e3f3f1; color: #087f8c; }
+.notice-versus, .notice-time { display: block; font-size: 24rpx; line-height: 1.7; color: #304d64; word-break: break-all; margin-top: 8rpx; }
+.notice-footer { flex-wrap: wrap; margin-top: 16rpx; color: #62798c; font-size: 22rpx; }
+.notice-link { color: #087f8c; font-weight: 600; }
+.notice-more, .notice-error { padding: 22rpx 0 8rpx; color: #087f8c; font-size: 24rpx; line-height: 1.6; }
+
 /* 冰白消息中心 */
 .page { padding-bottom: calc(40rpx + env(safe-area-inset-bottom)); }.page-heading { font-size: 38rpx; }
 .page > .card { margin: 24rpx 28rpx; border-radius: 28rpx; padding: 28rpx; }
@@ -120,3 +131,9 @@
 .msg-actions { width: 100%; justify-content: flex-end; }.msg-btn { border-radius: 12rpx; min-width: 88rpx; text-align: center; padding: 14rpx 20rpx; }
 .msg-status { margin-left: auto; }.empty-ic { opacity: .65; width: 76rpx; height: 76rpx; }.empty-title { color: #304d64; }.empty-sub { color: #62798c; }
 .guest-card { text-align: center; }.guest-card .empty-sub { display: block; margin: 16rpx 0 28rpx; font-size: 24rpx; }.retry-card { display: flex; justify-content: space-between; font-size: 24rpx; color: #62798c; }.retry-card view { color: #087f8c; }
+
+.application-notice { padding: 24rpx 0; border-top: 1rpx solid #e2ebf0; }
+.application-message { white-space: pre-wrap; overflow-wrap: anywhere; }
+.application-actions { display: flex; justify-content: flex-end; gap: 18rpx; margin-top: 18rpx; }.application-actions button { margin: 0; line-height: 1.5; }.application-actions button::after { border: none; }
+
+.applicant-profile { display: flex; gap: 16rpx; align-items: center; margin: 18rpx 0; }.applicant-avatar { width: 72rpx; height: 72rpx; border-radius: 16rpx; flex-shrink: 0; }.applicant-copy { flex: 1; min-width: 0; }.applicant-game { display: block; color: #486579; font-size: 24rpx; overflow-wrap: anywhere; }.applicant-tags { display: flex; flex-wrap: wrap; gap: 10rpx; margin-top: 12rpx; }.applicant-tags text { color: #16616c; background: #eaf6f5; border-radius: 8rpx; padding: 4rpx 10rpx; font-size: 21rpx; }.applicant-description { display: block; font-size: 24rpx; color: #526e82; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 14rpx; }

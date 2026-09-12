@@ -1,0 +1,6 @@
+<view wx:if="{{loggedIn}}" class="subscription">
+  <text class="title">微信提醒</text>
+  <text class="copy">{{configured ? '订阅' + label + '，离开小程序也能收到提醒。一次授权对应一次通知，可再次订阅。' : failed ? '通知设置加载失败，请重试。' : ready ? '微信提醒准备中；邀请和申请仍可在小程序内查看。' : '正在加载通知设置…'}}</text>
+  <button wx:if="{{configured}}" class="subscribe-button" bindtap="subscribe" disabled="{{busy}}" loading="{{busy}}">订阅微信提醒</button>
+  <button wx:elif="{{failed}}" class="subscribe-button" bindtap="loadConfig">重新加载</button>
+</view>

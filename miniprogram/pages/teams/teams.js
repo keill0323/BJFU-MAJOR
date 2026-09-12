@@ -136,20 +136,24 @@ Page({
 
   // 申请加入（弹确认，二次确认防误触）
   async applyJoin(e) {
+    if (this._applying) return
     const teamId = e.currentTarget.dataset.id
     const teamName = e.currentTarget.dataset.name || '该队伍'
     wx.showModal({
-      title: '申请加入',
-      content: `确定申请加入「${teamName}」吗？`,
-      confirmText: '申请',
-      success: async (r) => {
-        if (!r.confirm) return
+      title: '申请加入 ' + teamName,
+      editable: true,
+      placeholderText: '自我介绍（选填，最多 200 字）：位置、在线时段、组队期望',
+      confirmText: '提交申请',
+      success: async r => {
+        if (!r.confirm || this._applying) return
+        const message = (r.content || '').trim()
+        if (message.length > 200) { wx.showToast({ title: '自我介绍最多 200 字', icon: 'none' }); return }
+        this._applying = true
         try {
-          await api.applyJoin(teamId, '')
-          wx.showToast({ title: `已向 ${teamName} 申请`, icon: 'success' })
-        } catch (err) {
-          wx.showToast({ title: err.detail || '申请失败', icon: 'error' })
-        }
+          await api.applyJoin(teamId, message)
+          wx.showToast({ title: '已提交申请，等待队长处理', icon: 'none' })
+        } catch (err) { wx.showToast({ title: err.detail || '申请失败', icon: 'none' }) }
+        finally { this._applying = false }
       }
     })
   }

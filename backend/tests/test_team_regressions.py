@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 
-from app.models.team import Team, TeamMember, TeamInvitation, ApplicationStatus
+from app.models.team import TeamApplication, TeamInvitation, Team, TeamMember, ApplicationStatus
 from app.models.match import MatchStatus, Registration, RegistrationStatus, TeamProgress
 from app.services import team_service
 
@@ -114,10 +114,15 @@ class TeamRegressionTests(DatabaseTestCase):
                 self.db.commit()
                 request = None
                 if action == "application":
-                    request = team_service.apply_join_team(self.db, team.id, user.id)
+                    # 已有申请可能在队伍满员前创建；模拟历史待处理申请。
+                    request = TeamApplication(team_id=team.id, user_id=user.id, status=ApplicationStatus.PENDING)
+                    self.db.add(request)
+                    self.db.commit()
                     attempt = lambda: team_service.approve_application(self.db, request.id, users[0].id)
                 elif action == "invitation":
-                    request = team_service.invite_player(self.db, team.id, users[0].id, user.id)
+                    request = TeamInvitation(team_id=team.id, user_id=user.id, status=ApplicationStatus.PENDING)
+                    self.db.add(request)
+                    self.db.commit()
                     attempt = lambda: team_service.accept_invitation(self.db, request.id, user.id)
                 else:
                     attempt = lambda: team_service.join_team(self.db, team.id, user.id)

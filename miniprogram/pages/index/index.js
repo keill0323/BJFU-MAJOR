@@ -4,9 +4,11 @@ Page({
   data: {
     matches: [], keyword: '', groups: [], total: 0, registeringCount: 0, inProgressCount: 0,
     activeFilter: 'all', loading: true, loadError: false, user: null,
+    personalNotice: null, personalNoticeError: false, personalNoticeLoading: false,
     filters: [{ value: 'all', label: '全部' }, { value: 'registering', label: '报名中' }, { value: 'in_progress', label: '进行中' }, { value: 'finished', label: '已结束' }],
     shortcuts: [
       { title: '我的队伍', icon: 'team', url: '/pages/team/team' },
+      { title: '招募大厅', icon: 'team', url: '/pages/recruitment/recruitment' },
       { title: '所有队伍', icon: 'grid', url: '/pages/teams/teams' },
       { title: '名人堂', icon: 'honor', url: '/pages/hall/hall' },
       { title: '消息', icon: 'mail', url: '/pages/messages/messages' },
@@ -15,14 +17,31 @@ Page({
   },
   onLoad() { this.loadMatches() },
   onShow() {
+    this.loadPersonalNotices()
     // 导航栏提供同一份用户信息，首页不额外请求 /me。
     const nav = this.selectComponent('#main-nav')
     if (nav) nav.loadUser()
   },
   onUserChange(e) { this.setData({ user: e.detail.user || null }) },
+  onUnload() { this._noticeRequest = (this._noticeRequest || 0) + 1 },
+  async loadPersonalNotices() {
+    const id = this._noticeRequest = (this._noticeRequest || 0) + 1
+    const token = wx.getStorageSync('token') || ''
+    this.setData({ personalNotice: null, personalNoticeError: false, personalNoticeLoading: !!token })
+    if (!token) return
+    try {
+      const summary = await api.getPersonalNoticeSummary()
+      if (id === this._noticeRequest && token === wx.getStorageSync('token')) this.setData({ personalNotice: summary })
+    } catch (err) {
+      if (id === this._noticeRequest && token === wx.getStorageSync('token')) this.setData({ personalNoticeError: true })
+    } finally {
+      if (id === this._noticeRequest) this.setData({ personalNoticeLoading: false })
+    }
+  },
+  goNotice(e) { wx.navigateTo({ url: '/pages/messages/messages?section=' + (e.currentTarget.dataset.section || '') }) },
   async onPullDownRefresh() {
     const nav = this.selectComponent('#main-nav')
-    await Promise.all([this.loadMatches(), nav ? nav.loadUser() : Promise.resolve()])
+    await Promise.all([this.loadMatches(), this.loadPersonalNotices(), nav ? nav.loadUser() : Promise.resolve()])
     wx.stopPullDownRefresh()
   },
   async loadMatches() {

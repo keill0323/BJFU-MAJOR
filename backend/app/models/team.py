@@ -7,7 +7,7 @@ Since: 2026-07-21
 from datetime import datetime
 import enum
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum as SAEnum
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -36,6 +36,8 @@ class Team(Base):
         rating: 队伍水平分
     """
     __tablename__ = "teams"
+
+    is_hidden = Column(Boolean, nullable=False, default=False, server_default="0", comment="隐藏测试队伍的公开展示，保留赛程记录")
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="队伍ID")
     name = Column(String(64), unique=True, nullable=False, comment="队伍名（唯一）")
@@ -99,6 +101,15 @@ class TeamMember(Base):
     def rank(self):
         return self.user.rank if self.user else None
 
+    @property
+    def is_verified(self):
+        return bool(self.user and self.user.is_verified)
+
+    @property
+    def identity(self):
+        from app.services.auth_service import effective_identity
+        return effective_identity(self.user) if self.is_verified else None
+
 
 class ApplicationStatus(str, enum.Enum):
     """申请状态"""
@@ -130,6 +141,7 @@ class TeamApplication(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, comment="申请人ID")
     message = Column(String(200), nullable=True, comment="申请留言（可选）")
     status = Column(SAEnum(ApplicationStatus), default=ApplicationStatus.PENDING, index=True, comment="申请状态 pending/approved/rejected")
+    invalidated_at = Column(DateTime, nullable=True, comment="申请人入队后自动失效，不代表队长拒绝")
     created_at = Column(DateTime, default=datetime.now, index=True, comment="申请时间")
     team = relationship("Team")
     user = relationship("User")
@@ -158,6 +170,7 @@ class TeamInvitation(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, comment="被邀请人ID")
     message = Column(String(200), nullable=True, comment="邀请留言（可选）")
     status = Column(SAEnum(ApplicationStatus), default=ApplicationStatus.PENDING, index=True, comment="邀请状态 pending/approved/rejected")
+    invalidated_at = Column(DateTime, nullable=True, comment="被邀请人入队后自动失效")
     created_at = Column(DateTime, default=datetime.now, index=True, comment="邀请时间")
     team = relationship("Team")
     user = relationship("User")

@@ -11,6 +11,7 @@ from app.models.match import Match, MatchRound, MatchStatus, RoundStatus
 from app.models.team import Team, TeamMember
 from app.models.user import User
 from app.services.locking import lock_row
+from app.services.visibility_service import public_champions
 
 
 RANK_ORDER = {name: value for value, name in enumerate(
@@ -31,20 +32,24 @@ def list_players(db: Session, *, offset=0, limit=50) -> dict:
         User.id.label("user_id"), User.nickname, User.avatar, User.rank,
         User.individual_rating,
         func.rank().over(order_by=score.desc()).label("position"),
-    ).filter(User.rank.in_(tuple(RANK_ORDER))).subquery()
+    ).filter(User.rank.in_(tuple(RANK_ORDER)), User.is_hidden.is_(False)).subquery()
     total = db.query(func.count()).select_from(ranked).scalar()
     rows = db.query(ranked).order_by(ranked.c.position, ranked.c.user_id).offset(offset).limit(limit).all()
     return _page([dict(row._mapping) for row in rows], total, offset, limit)
 
 
 def list_champions(db: Session, *, offset=0, limit=20) -> dict:
-    query = db.query(ChampionSnapshot).filter(ChampionSnapshot.is_valid.is_(True))
+    query = db.query(ChampionSnapshot).filter(
+        ChampionSnapshot.is_valid.is_(True),
+        ~db.query(Team.id).filter(Team.id == ChampionSnapshot.champion_team_id, Team.is_hidden.is_(True)).exists(),
+    )
     total = query.count()
     rows = query.order_by(ChampionSnapshot.event_date.desc(), ChampionSnapshot.match_id.desc()).offset(offset).limit(limit).all()
     available = {row[0] for row in db.query(Match.id).filter(
         Match.id.in_([snapshot.match_id for snapshot in rows]),
     ).all()} if rows else set()
-    return _page([_champion_info(row, match_available=row.match_id in available) for row in rows], total, offset, limit)
+    items = public_champions(db, [_champion_info(row, match_available=row.match_id in available) for row in rows])
+    return _page(items, total, offset, limit)
 
 
 def _champion_info(row, *, match_available=True):

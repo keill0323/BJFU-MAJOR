@@ -13,7 +13,8 @@
     "pages/messages/messages",
     "pages/verify/verify",
     "pages/settings/settings",
-    "pages/teams/teams"
+    "pages/teams/teams",
+    "pages/recruitment/recruitment"
   ],
   "window": {
     "navigationBarBackgroundColor": "#ffffff",

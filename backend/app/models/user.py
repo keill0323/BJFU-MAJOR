@@ -31,6 +31,7 @@ class User(Base):
         nickname: 用户昵称
         game_id: 游戏ID
         student_id: 学号（需上传截图人工审核）
+        ai_student_id: AI 候选学号，未确认，不占用正式学号
         verify_image: 学信网/教务系统截图URL
         is_verified: 管理员是否审核通过
         role: user/admin/reviewer/commentator
@@ -43,11 +44,14 @@ class User(Base):
 
     __tablename__ = "users"
 
+    is_hidden = Column(Boolean, nullable=False, default=False, server_default="0", comment="隐藏测试账号的公开展示，保留后台记录")
+
     id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="主键，自增")
     wx_openid = Column(String(64), unique=True, index=True, nullable=True, comment="微信小程序唯一标识")
     nickname = Column(String(64), nullable=True, comment="用户昵称")
     game_id = Column(String(64), nullable=True, comment="游戏ID")
     student_id = Column(String(64), unique=True, nullable=True, comment="学号（需上传截图人工审核）")
+    ai_student_id = Column(String(64), nullable=True, comment="AI识别的候选学号，未确认，不占用正式学号")
     verify_image = Column(String(256), nullable=True, comment="学信网/教务系统截图URL")
     verify_reject_reason = Column(String(200), nullable=True, comment="认证驳回原因（用户可见）")
     is_verified = Column(Boolean, default=False, index=True, comment="管理员是否审核通过")

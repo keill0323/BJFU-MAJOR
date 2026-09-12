@@ -68,8 +68,9 @@ test('custom Chinese groups and groups beyond F retain all rounds and eliminated
   assert.deepEqual(Object.keys(page.data.challengerSwiper[0].groups), groupNames)
   assert.equal(page.data.challengerSwiper[0].groups['松林'].length, 2)
   assert.equal(page.data.challengerSwiper[0].count, 4)
-  assert.deepEqual(page.data.teamsSwiper[0].teams.map(t => t.team_id), [1, 2, 3])
-  assert.equal(page.data.teamsSwiper[0].teams.every(t => t.stage_status === '已淘汰'), true)
+  assert.deepEqual(page.data.rankingTeams.filter(t => t.rank_weight === 7).map(t => t.team_id), [1, 2, 3])
+  assert.equal(page.data.rankingTeams.every(t => t.progress_text.startsWith('已淘汰')), true)
+  assert.equal(page.data.rankingTeams.every(t => t.rank_badge === '待定'), true)
 })
 
 test('reserved stage names stay in playoffs, legend sections and knockout sections', () => {
@@ -81,9 +82,9 @@ test('reserved stage names stay in playoffs, legend sections and knockout sectio
   assert.equal(page.data.challengerSwiper.some(item => item.type === 'playoff'), false)
   assert.deepEqual(page.data.legendSwiper.map(g => g.rounds.map(r => r.group_name)), [['上区'], ['下区']])
   assert.deepEqual(page.data.knockoutGroups[0].rounds.map(r => r.group_name), ['淘汰赛'])
-  assert.deepEqual(page.data.teamsSwiper[0].teams.map(t => t.team_id), [1, 2])
-  assert.deepEqual(page.data.teamsSwiper[1].teams.map(t => t.team_id), [3, 4, 5])
-  assert.deepEqual(page.data.teamsSwiper[2].teams.map(t => t.team_id), [5])
+  assert.deepEqual(page.data.rankingTeams.filter(t => t.rank_weight >= 6).map(t => t.team_id).sort(), [1, 2])
+  assert.deepEqual(page.data.rankingTeams.filter(t => t.rank_weight <= 5).map(t => t.team_id).sort(), [3, 4, 5])
+  assert.deepEqual(page.data.rankingTeams.filter(t => t.rank_weight === 4).map(t => t.team_id), [5])
 })
 
 test('ungrouped records do not become named groups and prototype-like names remain safe', () => {

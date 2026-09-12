@@ -201,7 +201,7 @@ test('admin schedule renders custom challenger groups while separating the later
   assert.deepEqual(Object.keys(page.data.challengerSwiper[0].groups), ['松林组', 'G', 'constructor', '__proto__'])
   assert.equal(page.data.challengerSwiper.length, 1, 'four ordinary groups must not render an extra stage')
   assert.equal(page.data.allRounds.some(r => r.group_name === '附加赛'), true, 'historical rounds remain available')
-  assert.equal(page.data.teamsSwiper[0].teams[0].team_id, 1)
+  assert.equal(page.data.rankingTeams[0].team_id, 1)
   assert.equal(calls.modals.length, 0)
 })
 

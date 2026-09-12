@@ -4,7 +4,7 @@
  * 入口：管理后台 → 赛事 → 点击赛事卡片
  */
 const api = require('../../../utils/api.js')
-const { isWaitingForGroup, isRosterLocked } = require('../../../utils/tournament.js')
+const { isWaitingForGroup, isRosterLocked, buildTeamRanking, buildTeamHistory } = require('../../../utils/tournament.js')
 
 Page({
   data: {
@@ -20,8 +20,6 @@ Page({
     challengerTeams: [],    // 挑战者组（小组赛阶段）
     playoffTeams: [],       // 淘汰赛（6强）
     eliminatedTeams: [],    // 已淘汰队伍
-    teamsSwiper: [],        // 队伍状态分 tab（挑战者组/传奇组/淘汰赛，含该阶段淘汰队伍）
-    teamsStage: 0,          // 队伍状态 swiper 当前 tab
     rankingTeams: [],       // 队伍排名列表
     // 对阵（按阶段）
     challengerRounds: [],
@@ -42,6 +40,7 @@ Page({
     showHistory: false,
     historyTeam: null,
     historyRounds: [],
+    historySections: [],
     // 比分输入面板
     showScoreInput: false,
     scoreRoundId: null,
@@ -97,14 +96,6 @@ Page({
   onLegendSwiper(e) {
     this.setData({ legendStage: e.detail.current })
   },
-  // 赛事队伍分阶段区块切换
-  switchTeamsStage(e) {
-    this.setData({ teamsStage: Number(e.currentTarget.dataset.idx) })
-  },
-  onTeamsSwiper(e) {
-    this.setData({ teamsStage: e.detail.current })
-  },
-
   challengerFormat(teams, rounds) {
     const isGroup = name => !!name && ['附加赛', '上区', '下区', '淘汰赛'].indexOf(name) < 0
     // 保存的窗口仅用于回显，不能改变真实分组对应的赛制。
@@ -202,97 +193,7 @@ Page({
       const playoffTeams = teams.filter(t => t.stage === 'playoff')
       const eliminatedTeams = teams.filter(t => t.stage === 'eliminated')
 
-      // 淘汰赛名次：决赛冠军/亚军，半决赛负者四强，其余六强
-      const koFinal = koSorted.length >= 5 ? koSorted[4] : null
-      const koSemi = koSorted.slice(2, 4)
-      const koRankOf = (teamId) => {
-        if (koFinal && koFinal.status === 'finished' && koFinal.winner_id != null && (koFinal.team1_id == teamId || koFinal.team2_id == teamId)) {
-          return koFinal.winner_id == teamId ? '冠军' : '亚军'
-        }
-        for (const r of koSemi) {
-          if ((r.team1_id == teamId || r.team2_id == teamId) && r.status === 'finished' && r.winner_id != teamId) {
-            return '四强'
-          }
-        }
-        // 只有真正参加过淘汰赛的队伍才标六强
-        const played = koSorted.some(r => r.team1_id == teamId || r.team2_id == teamId)
-        return played ? '六强' : ''
-      }
-
-      // 阶段状态判定（基于当前赛制：前4直升 seed 1-4，其余从挑战者组打起）
-      const challengerStatusOf = (t) => {
-        if (t.stage === 'legend' || t.stage === 'playoff') return '已晋级'
-        if (t.stage === 'challenger') return '进行中'
-        // eliminated：曾在传奇/淘汰赛阶段（说明已晋级出挑战者组）-> 已晋级；否则挑战者阶段被淘汰
-        if (t.group_name === '上区' || t.group_name === '下区' || t.group_name === '淘汰赛') return '已晋级'
-        return '已淘汰'
-      }
-      const legendStatusOf = (t) => {
-        if (t.stage === 'playoff') return '已晋级'
-        if (t.stage === 'legend') return '进行中'
-        if (t.group_name === '淘汰赛') return '已晋级'   // 晋级淘汰赛后淘汰
-        return '已淘汰'                                  // 传奇组第4
-      }
-
-      // 挑战者组 tab：所有参加过挑战者组比赛的队伍
-      const challengerTab = teams.filter(t => {
-        if (isWaitingForGroup(t) || t.registration_status === 'pending' || t.registration_status === 'rejected') return false
-        if (t.stage === 'challenger') return true
-        if (isChallengerGroup(t.group_name) || t.group_name === '附加赛') return true
-        return t.seed > 4   // 从挑战者组晋级上来的（直升的前4 seed 1-4）
-      }).map(t => Object.assign({}, t, { stage_status: challengerStatusOf(t) }))
-      // 传奇组 tab：所有参加过传奇组比赛的队伍（直升 + 晋级 + 传奇组及以后淘汰）
-      const legendTab = teams.filter(t =>
-        t.stage === 'legend' || t.stage === 'playoff' ||
-        (t.stage === 'eliminated' && ['上区', '下区', '淘汰赛'].indexOf(t.group_name) >= 0)
-      )
-        .map(t => Object.assign({}, t, { stage_status: legendStatusOf(t) }))
-      // 淘汰赛 tab：所有参加过淘汰赛的队伍（6强 + 淘汰赛被淘汰的）
-      const playoffTab = teams.filter(t => t.stage === 'playoff' ||
-        (t.stage === 'eliminated' && t.group_name === '淘汰赛'))
-        .map(t => Object.assign({}, t, { ko_rank: koRankOf(t.team_id) }))
-
-      // 队伍状态分 tab：挑战者组 / 传奇组 / 淘汰赛
-      const teamsSwiper = [
-        { title: '挑战者组', type: 'challenger', teams: challengerTab },
-        { title: '传奇组', type: 'legend', teams: legendTab },
-        { title: '🎯 淘汰赛', type: 'playoff', teams: playoffTab }
-      ]
-
-      // 队伍排名：按比赛结果 —— 名次(冠军>亚军>四强>六强>传奇>挑战者>已淘汰) → 胜场 → 净胜分 → rating
-      const stageWeightOf = (t) => {
-        if (isWaitingForGroup(t)) return 7
-        if (t.registration_status === 'pending' || t.registration_status === 'rejected') return 8
-        if (t.ko_rank === '冠军') return 0
-        if (t.ko_rank === '亚军') return 1
-        if (t.ko_rank === '四强') return 2
-        if (t.ko_rank === '六强') return 3
-        if (t.stage === 'legend') return 4
-        if (t.stage === 'challenger') return 5
-        return 6
-      }
-      const rankingTeams = teams.slice()
-        .map(t => {
-          const ko_rank = koRankOf(t.team_id)
-          // 排名状态：淘汰赛名次 > 阶段状态 > 待分组
-          let stage_text = '待分组'
-          if (t.registration_status === 'pending') stage_text = '报名待审核'
-          else if (t.registration_status === 'rejected') stage_text = '报名已驳回'
-          else if (isWaitingForGroup(t)) stage_text = '待分组'
-          else if (ko_rank) stage_text = ko_rank
-          else if (t.stage === 'legend') stage_text = '传奇组'
-          else if (t.stage === 'challenger') stage_text = '挑战者'
-          else if (t.stage === 'playoff') stage_text = '已晋级'
-          else if (t.stage === 'eliminated') stage_text = '已淘汰'
-          return Object.assign({}, t, { ko_rank, stage_text })
-        })
-        .sort((a, b) => {
-          const w = stageWeightOf(a) - stageWeightOf(b)
-          if (w !== 0) return w
-          if (b.wins !== a.wins) return b.wins - a.wins
-          if ((b.diff || 0) !== (a.diff || 0)) return (b.diff || 0) - (a.diff || 0)
-          return (b.rating || 0) - (a.rating || 0)
-        })
+      const rankingTeams = buildTeamRanking(teams, rounds)
       this.setData({
         match: Object.assign({}, detail.match, { statusText: this.statusText(detail.match.status) }),
         registrationSummary: this.describeRegistration(detail.match),
@@ -303,7 +204,7 @@ Page({
         challengerTeams,
         playoffTeams,
         eliminatedTeams,
-        teamsSwiper,
+
         rankingTeams,
         challengerRounds,
         legendRounds,
@@ -475,16 +376,17 @@ Page({
   showTeam(e) {
     const tid = e.currentTarget.dataset.id
     if (!tid) return
-    const allRounds = []
-      .concat(this.data.challengerRounds)
-      .concat(this.data.legendRounds)
-      .concat(this.data.knockoutRounds)
+    const allRounds = this.data.allRounds
     const historyRounds = allRounds.filter(r => r.team1_id == tid || r.team2_id == tid)
-    const historyTeam = this.data.teams.find(t => t.team_id == tid)
-    this.setData({ showHistory: true, historyTeam, historyRounds })
+    const source = historyRounds[0]
+    const historyTeam = this.data.rankingTeams.find(t => t.team_id == tid) || {
+      team_id: tid, team_name: source ? (source.team1_id == tid ? source.team1_name : source.team2_name) : '队伍'
+    }
+    this.setData({ showHistory: true, historyTeam, historyRounds,
+      historySections: buildTeamHistory(tid, allRounds) })
   },
   closeHistory() {
-    this.setData({ showHistory: false, historyTeam: null, historyRounds: [] })
+    this.setData({ showHistory: false, historyTeam: null, historyRounds: [], historySections: [] })
   },
 
   // ===== 数据导出（CSV） =====

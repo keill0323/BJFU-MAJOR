@@ -20,6 +20,7 @@ class UserInfo(BaseModel):
     nickname: Optional[str] = None
     game_id: Optional[str] = None
     student_id: Optional[str] = None
+    ai_student_id: Optional[str] = None
     is_verified: bool = False
     rank: Optional[str] = None
     individual_rating: int = 0
@@ -53,6 +54,20 @@ class AdminUpdateUserRequest(BaseModel):
     identity: Optional[str] = None       # new_student新生/senior老登（研1/博1由管理员认证）
     verify_image: Optional[str] = None   # 传空字符串表示清除截图
     verify_reject_reason: Optional[str] = None   # 认证驳回原因（传空字符串表示清除）
+    expected_verify_image: Optional[str] = None   # 人工审核时校验仍为当前查看的凭证
+
+
+class RecognizeStudentIdRequest(BaseModel):
+    """识别管理员当前查看的认证凭证，防止旧图片结果覆盖新提交。"""
+    expected_verify_image: str
+
+
+class RecognizeStudentIdResponse(BaseModel):
+    """候选学号仅供审核参考，不代表学籍认证已通过。"""
+    student_id: Optional[str] = None
+    confidence: float
+    reason: str
+    verify_image: str
 
 
 class UpdateRoleRequest(BaseModel):
@@ -73,6 +88,7 @@ class VerifyListItem(BaseModel):
     nickname: Optional[str] = None
     game_id: Optional[str] = None
     student_id: Optional[str] = None
+    ai_student_id: Optional[str] = None
     verify_image: Optional[str] = None
     is_verified: bool = False
     created_at: Optional[datetime] = None
@@ -102,4 +118,3 @@ class RankApplicationInfo(BaseModel):
 
     class Config:
         from_attributes = True
-    

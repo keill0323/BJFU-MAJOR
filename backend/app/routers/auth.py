@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.config import settings
-from app.schemas.user import UserLoginRequest, UserInfo, TokenResponse, UserUpdateRequest, AdminUpdateUserRequest, UpdateRoleRequest, VerifyListItem, RankApplicationInfo
+from app.schemas.user import UserLoginRequest, UserInfo, TokenResponse, UserUpdateRequest, AdminUpdateUserRequest, UpdateRoleRequest, VerifyListItem, RankApplicationInfo, RecognizeStudentIdRequest, RecognizeStudentIdResponse
 from app.services import auth_service, ai_review_service, upload_service
 from app.services.auth_service import get_current_user, require_admin, require_admin_only
 
@@ -99,10 +99,22 @@ def admin_update_user(
         identity=request.identity,
         verify_image=request.verify_image,
         verify_reject_reason=request.verify_reject_reason,
+        expected_verify_image=request.expected_verify_image,
     )
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     return user
+
+
+@router.post("/admin/users/{user_id}/recognize-student-id", response_model=RecognizeStudentIdResponse)
+def recognize_student_id(
+    user_id: int,
+    request: RecognizeStudentIdRequest,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin),
+):
+    """重新识别当前凭证中的学号，人工确认前不改实际学号或认证状态。"""
+    return auth_service.recognize_student_id(db, user_id, request.expected_verify_image)
 
 
 @router.put("/admin/users/{user_id}/role")
@@ -235,5 +247,5 @@ def admin_verify_list(
     db: Session = Depends(get_db),
     admin = Depends(require_admin),
 ):
-    """管理员/审核员查看待认证用户（已上传截图、未通过）"""
+    """管理员/审核员查看待认证用户（有效截图、尚待人工审核）"""
     return auth_service.get_unverified_users(db)

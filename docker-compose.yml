@@ -38,6 +38,9 @@ services:
       WX_APPID: ${WX_APPID:-}
       WX_SECRET: ${WX_SECRET:-}
       WX_MOCK_LOGIN: ${WX_MOCK_LOGIN:-false}
+      WX_SUBSCRIBE_ENABLED: ${WX_SUBSCRIBE_ENABLED:-false}
+      WX_SUBSCRIBE_TEMPLATES: ${WX_SUBSCRIBE_TEMPLATES:-}
+      WX_SUBSCRIBE_ENV: ${WX_SUBSCRIBE_ENV:-formal}
       AI_REVIEW_ENABLED: ${AI_REVIEW_ENABLED:-false}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_BASE_URL: ${AI_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}

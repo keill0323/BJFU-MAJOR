@@ -2,6 +2,7 @@
   "navigationStyle": "custom",
   "enablePullDownRefresh": true,
   "usingComponents": {
-    "nav-drawer": "/components/nav-drawer/nav-drawer"
+    "nav-drawer": "/components/nav-drawer/nav-drawer",
+    "subscribe-notice": "/components/subscribe-notice/subscribe-notice"
   }
 }

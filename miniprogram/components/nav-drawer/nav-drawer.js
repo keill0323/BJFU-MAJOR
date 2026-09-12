@@ -11,9 +11,11 @@ Component({
     open: false, statusBarHeight: 20, navHeight: 44, capsuleSpace: 100,
     user: null, isManager: false, currentRoute: '',
     adminTodoCount: null, adminTodoBadge: '', adminTodoSummary: '', adminTodoError: false,
+    adminTodoItems: [], adminTodoLoading: false, adminTodoErrorText: '',
     navigation: [
       { title: '赛事中心', icon: 'grid', url: '/pages/index/index' },
       { title: '我的队伍', icon: 'team', url: '/pages/team/team' },
+      { title: '招募大厅', icon: 'team', url: '/pages/recruitment/recruitment' },
       { title: '所有队伍', icon: 'team', url: '/pages/teams/teams' },
       { title: '名人堂', icon: 'honor', url: '/pages/hall/hall' },
       { title: '个人资料', icon: 'shield', url: '/pages/profile/profile' }
@@ -80,7 +82,7 @@ Component({
       this._userLoading = request
       return request
     },
-    loadAdminTodos() {
+    loadAdminTodos(force = false) {
       if (!this.data.isManager || this._detached) return Promise.resolve()
       const todos = require('../../utils/admin-todos.js')
       if (!this._todoUnsubscribe) {
@@ -88,27 +90,39 @@ Component({
           if (this._detached || !this.data.isManager) return
           const counts = state.data
           const count = counts ? Number(counts.total) || 0 : null
+          const items = todos.getTodoItems(counts)
           this.setData({
             adminTodoCount: count,
             adminTodoBadge: count > 99 ? '99+' : count > 0 ? String(count) : '',
             adminTodoError: !!state.error,
-            adminTodoSummary: state.error ? '待办更新失败，进入管理页重试' : counts
-              ? '认证 ' + counts.verification_count + ' · 段位 ' + counts.rank_application_count + ' · 队伍 ' + counts.team_count + ' · 报名 ' + counts.registration_count : ''
+            adminTodoItems: items,
+            adminTodoLoading: !!state.loading,
+            adminTodoErrorText: state.error || '',
+            adminTodoSummary: items.map(item => item.title + ' ' + item.count + ' ' + item.unit).join(' · ')
           })
         })
       }
-      return todos.refresh().catch(() => {})
+      return todos.refresh(force).catch(() => {})
     },
     stopAdminTodos() {
       if (this._todoUnsubscribe) this._todoUnsubscribe()
       this._todoUnsubscribe = null
-      this.setData({ adminTodoCount: null, adminTodoBadge: '', adminTodoSummary: '', adminTodoError: false })
+      this.setData({ adminTodoCount: null, adminTodoBadge: '', adminTodoSummary: '', adminTodoError: false,
+        adminTodoItems: [], adminTodoLoading: false, adminTodoErrorText: '' })
     },
     goAdmin() {
       if (!this.data.isManager) return
       this.setData({ open: false })
       wx.navigateTo({ url: '/pages/admin/admin' })
     },
+    goAdminTodo(e) {
+      if (!this.data.isManager) return
+      const tab = e.currentTarget.dataset.tab
+      if (!['verify', 'rankapps', 'teams', 'matches'].includes(tab)) return
+      this.setData({ open: false })
+      wx.navigateTo({ url: '/pages/admin/admin?tab=' + tab })
+    },
+    retryAdminTodos() { return this.loadAdminTodos(true) },
     openDrawer() {
       this.setData({ open: true })
       if (this.data.isManager) this.loadAdminTodos()

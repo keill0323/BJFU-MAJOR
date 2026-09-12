@@ -63,7 +63,7 @@ WX_SECRET=你的AppSecret
 WX_MOCK_LOGIN=false          # 关键：切真实微信登录
 ```
 
-> 首次启动 MySQL 会自动建库 `cs2_competition`，后端启动时自动建表，**无需手动建表**。
+> 首次启动 MySQL 会自动建库 `cs2_competition`，后端启动时自动建表。**已有数据库更新版本时，`create_all` 不会补字段，必须执行下方升级流程。**
 
 ---
 
@@ -80,30 +80,38 @@ docker compose logs -f backend
 
 验证：`curl http://127.0.0.1:8000/api/matches` 应返回 JSON。
 
----
+### 已有服务器更新代码与数据库
 
-### 已有冠军表升级
-
-已有环境必须先备份数据库并停止 API 写入，再用新镜像执行冠军补录迁移。`create_all()` 只创建缺失表，不为已有表补列。下面的命令适用于仓库已有的冠军补录版本；后续新增迁移需随对应功能代码同步。
+先将当前代码同步到服务器既有项目目录，保留服务器 `.env` 和数据卷，再在该目录执行以下命令。冠军补录需要升级 `champion_snapshots`，认证学号识别需要增加 `users.ai_student_id`；两项迁移均可重复执行。仅重建/重启容器不会给旧表补列，可能导致淘汰赛录分、冠军列表或登录接口报错。
 
 ```bash
 (
 set -eu
-umask 077
 docker compose build backend
 docker compose stop backend
-upgrade_backup="before-manual-champions-$(date +%Y%m%d-%H%M%S).sql"
+
+# 停止 API 写入后备份；任何一步失败都会终止本次流程。
+upgrade_backup="before-schema-upgrade-$(date +%Y%m%d-%H%M%S).sql"
 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines --triggers cs2_competition' > "$upgrade_backup"
-test -s "$upgrade_backup"
-# 备份与迁移任一步失败时终止，不继续启动。
+
 docker compose run --rm --no-deps backend python -m app.migrations.manual_champions
-# 仅在迁移成功后恢复服务。
+docker compose run --rm --no-deps backend python -m app.migrations.verification_student_id
+docker compose run --rm --no-deps backend python -m app.migrations.test_data_visibility
+docker compose run --rm --no-deps backend python -m app.migrations.schedule_notifications
+docker compose run --rm --no-deps backend python -m app.migrations.recruitment_notifications
+docker compose run --rm --no-deps backend python -m app.migrations.team_request_invalidation
 docker compose up -d --no-deps backend
 docker compose restart nginx
+docker compose ps backend
+docker compose logs --tail=80 backend
 )
 ```
 
-迁移可以重跑，保留已有冠军数据；MySQL DDL 不能整段事务回滚。非 Docker 环境在 `backend` 目录执行 `python -m app.migrations.manual_champions`，成功后重启后端。
+MySQL 结构变更不能整段回滚；迁移失败时先查看具体错误，不要继续启动新后端。完成后确认冠军列表正常，并在管理后台重新提交之前失败的 BO3 比分。非 Docker 环境在实际服务虚拟环境的 `backend` 目录执行上面的各项 `python -m` 命令，再重启服务。
+
+约赛消息功能新增 `schedule_notifications` 表，对应迁移显式创建该表；现有启动建表流程也会创建不存在的新表。该功能还需上传对应小程序，详见[约赛消息通知](项目总结与踩坑记录.md)。申请和邀请还需执行 `team_request_invalidation` 补充失效标记，详见下方升级说明。
+
+---
 
 ## 六、配置 HTTPS（Let's Encrypt 免费证书）
 
@@ -150,6 +158,7 @@ docker compose restart nginx
 | 小程序请求报"不在合法域名列表" | 后台服务器域名没配 / 域名没备案 / 不是 HTTPS |
 | 登录失败 | 检查 WX_APPID/WX_SECRET、`WX_MOCK_LOGIN`、域名已备案 |
 | 后端 502 | `docker compose logs backend` 看报错，一般是数据库连接或 .env 问题 |
+| 淘汰赛 BO3 录分 500、冠军列表也失败；或提示“冠军档案数据库尚未升级” | 核对日志是否有 `champion_snapshots` 缺列/缺表，按上方流程执行 `python -m app.migrations.manual_champions`；仅重启不能补列。详见[BO3 录分排查](项目总结与踩坑记录.md) |
 | 中文乱码 | MySQL 连接串必须带 `?charset=utf8mb4` |
 | 数据备份 | `docker compose exec mysql mysqldump -ucs2_user -p cs2_competition > backup.sql` |
 
@@ -161,3 +170,70 @@ docker compose restart nginx
 # 每天凌晨备份（crontab）
 0 3 * * * docker compose -f /opt/cs2/docker-compose.yml exec -T mysql mysqldump -ucs2_user -p你的密码 cs2_competition > /opt/cs2/backup/$(date +\%F).sql
 ```
+
+
+## 十一、招募大厅、主页消息与微信订阅配置
+
+招募大厅默认展示“全部选手”：所有非隐藏用户均可查看，包含未报名、已入队和待认证用户；支持昵称/游戏 ID 搜索及分页，队长可邀请无队伍的选手。新生、老生直接显示，尚未认证或身份不明的显示待确认；列表不返回或搜索学号。“队伍招募”保留为独立页签。招募大厅不要求先报名赛事。队伍审核通过后，队长可发布、编辑或关闭一条招募；阵容齐备后由队长关闭。普通选手浏览招募后可提交入队申请，选填最多 200 字自我介绍。尚未结束的赛事继续按人数上限和认证条件补员；分组锁定后不能新增参赛队伍，已有参赛队伍沿用原补员规则。已结束赛事不再约束当前阵容，新成员也不会被补进历史报名。主页显示当前账号收到的待处理邀请、队长待处理申请及未读约赛通知；返回首页或下拉刷新重新获取数量。
+
+申请卡片和入队后的队员资料均显示新生/老生/身份待确认。队长在消息页和队伍页看到申请人的头像、昵称、游戏 ID、段位、水平分、学籍认证状态、新老生身份、个人介绍和本次入队自我介绍。接口采用字段白名单，**不返回学号、AI 候选学号、认证截图或微信 OpenID**；本人和具备权限的管理审核入口继续按既有规则查看资料，按学号精确查找保留。
+
+### 后端升级
+
+同步对应源码与新版 compose 文件后，在服务器应用目录执行（先构建新镜像，再执行迁移）：
+
+```bash
+docker compose build backend
+docker compose stop backend
+docker compose run --rm --no-deps -T backend python -m app.migrations.schedule_notifications
+docker compose run --rm --no-deps -T backend python -m app.migrations.recruitment_notifications
+docker compose run --rm --no-deps -T backend python -m app.migrations.team_request_invalidation
+docker compose up -d --no-deps --force-recreate backend
+docker compose exec -T nginx nginx -s reload
+```
+
+升级前备份数据库和原镜像；停止旧后端后执行迁移，避免清理期间旧代码继续产生失效申请。迁移添加 `recruitment_posts`、`wechat_subscriptions`、`wechat_outbox` 等新表，并给申请、邀请表补充可空的 `invalidated_at`，可重复执行。申请迁移仅将当前已入队用户的待处理记录标为失效，不删除历史、不将其改成队长拒绝、不修改成员或赛事。
+
+加入或创建队伍后，其余待处理申请和邀请自动失效；退队、踢出或解散后旧请求不会恢复，需要重新申请。队伍申请列表、消息页、主页计数及微信发送共用有效性判断。只有本次申请失效修复时，升级后端并刷新页面即可；招募大厅等新界面仍需重新上传、审核并发布小程序。后端升级不会自动发布小程序。
+
+### 微信公众平台需选用的模板
+
+在小程序后台「订阅消息」中选用与你的小程序服务类目匹配的模板，拿到实际模板 ID 和字段列表。优先覆盖：
+
+| 事件配置键 | 收到提醒的人 | 建议模板内容 | 点击后打开 |
+|---|---|---|---|
+| `team_invitation` | 被邀请的选手 | 队伍名称、邀请人、入队邀请、时间 | 消息页 |
+| `team_application` | 队长 | 队伍名称、申请人、入队申请、时间 | 我的队伍 |
+
+若平台允许同一个模板表达两种业务，两个事件可配置相同 ID；前端会去重后发起订阅。字段必须与实际所选模板完全一致，以下键仅是配置结构示例，不是平台提供的固定字段或真实 ID。
+
+### 配置项
+
+Docker Compose 部署时修改 `/home/ubuntu/app/.env`（与 compose 同目录）；直接运行后端时修改 `backend/.env`：
+
+| 配置项 | 值/含义 |
+|---|---|
+| `WX_APPID` / `WX_SECRET` | 当前小程序 AppID 与 AppSecret，沿用真实登录配置，仅服务端保存 |
+| `WX_MOCK_LOGIN` | `false`，模拟登录不发送微信消息 |
+| `WX_SUBSCRIBE_ENABLED` | 默认 `false`；模板和字段配置完毕后改为 `true` |
+| `WX_SUBSCRIBE_TEMPLATES` | 单行 JSON，按事件填写模板 ID 与字段映射 |
+| `WX_SUBSCRIBE_ENV` | 正式版 `formal`，体验版 `trial`，开发版 `developer` |
+
+```dotenv
+WX_SUBSCRIBE_ENABLED=true
+WX_SUBSCRIBE_ENV=formal
+WX_SUBSCRIBE_TEMPLATES='{"team_invitation":{"template_id":"替换为实际邀请模板ID","fields":{"thing1":"team_name","name2":"actor_name","phrase3":"event","time4":"time"}},"team_application":{"template_id":"替换为实际申请模板ID","fields":{"thing1":"team_name","name2":"actor_name","phrase3":"event","time4":"time"}}}'
+```
+
+映射值支持 `team_name`（队伍名称）、`actor_name`（邀请人或申请人昵称）、`event`（入队邀请/入队申请）、`time`（事件时间）。支持 `thingN`、`nameN`、`phraseN`、`timeN` 类型键；`timeN` 必须映射 `time`，其他类型不能映射时间。姓名、短语、事项会按微信长度限制裁剪。**实际模板如使用其他字段类型，需先扩展映射实现，不能随意套用示例。**
+
+配置完成后执行 `docker compose up -d --no-deps --force-recreate backend`，再 reload nginx。若微信接口提示 IP 不在白名单，在微信公众平台的开发设置中加入后端实际出口 IP。无需把 `api.weixin.qq.com` 加到小程序 request 域名，发送由后端完成。
+
+### 授权、验收和发送状态
+
+- 队长/选手在「我的队伍」「招募大厅」「消息」页主动点击「订阅微信提醒」，同意相应模板。一次性订阅不是永久授权，每个模板一次同意对应一次可用通知，使用后可再次订阅。前端回调记录仅代表用户选择，实际次数始终由微信校验。
+- 没配模板时显示“微信提醒准备中”，仍可使用站内邀请、申请和约赛消息。不会补发配置前的旧事件。本次微信配置只覆盖入队邀请和入队申请，约赛继续使用站内消息。
+- 在两个自愿测试账号上完成授权，再分别发起真实申请/邀请并验收；不能以接口 200 或站内消息出现替代微信送达验证。此次自动测试全部模拟微信网络调用，没有向真实用户发测试通知。
+- 出站队列随申请/邀请事务保存，进程每 10 秒读取待发送事件，原子领取防重复。网络推送发生在业务提交后；超时或微信拒绝不会回滚邀请/申请。已处理、隐藏或超过一天的队列消息不会继续发送。
+- `wechat_outbox.status` 为 `pending` / `sending` / `sent` / `failed` / `unknown` / `expired` / `skipped`；`error_code=43101` 通常表示无可用订阅授权。发送超时或进程中断记为 `unknown`，不自动重发，避免重复消耗订阅次数。仅明确的 access_token 失效错误允许刷新令牌后重试一次。服务异常日志不写 token 或包含 token 的 URL。
+- 只读检查：`GET /api/recruitment`、`GET /api/notifications/wechat/config`；`/api/notifications/summary`、`/api/notifications/team-applications`、`/api/notifications/schedules` 均需当前用户登录。公开配置接口仅返回启用的模板 ID/事件名称，不返回 AppSecret。

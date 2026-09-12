@@ -155,6 +155,16 @@ function uploadFile(path, filePath, raw = true) {
  * 每个方法对应后端一个路由，字段名与后端 Pydantic schema 保持一致
  */
 module.exports = {
+  getRecruitmentPlayers: (beforeId, keyword) => request('/api/recruitment/players?keyword=' + encodeURIComponent(keyword || '') + (beforeId ? '&before_id=' + encodeURIComponent(beforeId) : '')),
+  getPersonalNoticeSummary: () => request('/api/notifications/summary'),
+  getMyTeamApplications: () => request('/api/notifications/team-applications'),
+  getRecruitmentPosts: (beforeId) => request('/api/recruitment' + (beforeId ? '?before_id=' + encodeURIComponent(beforeId) : '')),
+  getMyRecruitment: () => request('/api/recruitment/my'),
+  saveRecruitment: (teamId, content) => request('/api/recruitment/' + teamId, 'PUT', { content }),
+  closeRecruitment: (teamId) => request('/api/recruitment/' + teamId, 'DELETE'),
+  getWechatConfig: () => request('/api/notifications/wechat/config'),
+  saveWechatSubscriptions: (choices) => request('/api/notifications/wechat/subscriptions', 'POST', { choices }),
+
   BASE: BASE,   // 后端地址（拼接上传图片完整 URL 用）
 
   // 名人堂公开榜单，分页按服务端顺序展示。
@@ -233,6 +243,8 @@ module.exports = {
   approveRankApplication: (appId, rank) => request('/api/auth/admin/rank-applications/' + appId + '/approve' + (rank ? '?rank=' + encodeURIComponent(rank) : ''), 'POST'),  // 通过段位更新申请（可指定段位）
   rejectRankApplication: (appId, reason) => request('/api/auth/admin/rank-applications/' + appId + '/reject' + (reason ? '?reject_reason=' + encodeURIComponent(reason) : ''), 'POST'),  // 驳回段位更新申请（可填原因）
   adminUpdateUser: (userId, data) => request('/api/auth/admin/users/' + userId, 'PUT', data),  // 改学号/段位/评分/认证
+  adminRecognizeStudentId: (userId, expectedVerifyImage) => request('/api/auth/admin/users/' + userId + '/recognize-student-id', 'POST', { expected_verify_image: expectedVerifyImage })
+    .catch(err => backendVersionError(err, '学号识别')),
   adminUpdateRole: (userId, role) => request('/api/auth/admin/users/' + userId + '/role', 'PUT', { role: role }),  // 改角色
   createMatch: (data) => request('/api/matches', 'POST', data),  // 创建赛事
   updateRegistrationWindow: (matchId, data) => request('/api/matches/' + matchId + '/registration-window', 'PUT', data)
@@ -292,6 +304,9 @@ module.exports = {
   }),
 
   // ===== 阶段时间窗口 + 对阵时间协商 =====
+  getScheduleNotifications: (beforeId) => request('/api/notifications/schedules' + (beforeId ? '?before_id=' + encodeURIComponent(beforeId) : ''))
+    .catch(err => backendVersionError(err, '约赛通知')),
+  readScheduleNotification: (id) => request('/api/notifications/schedules/' + id + '/read', 'PUT'),
   // 管理员：设置某阶段（group_name）的限定时段
   setStageWindow: (matchId, groupName, data) => request('/api/matches/' + matchId + '/stage-windows/' + encodeURIComponent(groupName), 'PUT', data),
   // 管理员：查某赛事所有阶段窗口

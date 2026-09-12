@@ -54,7 +54,7 @@ test('public hall shares the homepage shortcuts and drawer, preserving every exi
   const wx = { navigateTo: value => calls.push(value) }
   vm.runInNewContext(fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.js'), 'utf8'), { Page: value => { home = value }, require: () => ({}), wx })
   assert.deepEqual(Array.from(home.data.shortcuts, item => item.url), [
-    '/pages/team/team', '/pages/teams/teams', '/pages/hall/hall', '/pages/messages/messages', '/pages/verify/verify'
+    '/pages/team/team', '/pages/recruitment/recruitment', '/pages/teams/teams', '/pages/hall/hall', '/pages/messages/messages', '/pages/verify/verify'
   ])
   const shortcut = home.data.shortcuts.find(item => item.title === '名人堂')
   home.goShortcut(event({ url: shortcut.url }))
@@ -69,7 +69,7 @@ test('public hall shares the homepage shortcuts and drawer, preserving every exi
   homeTree.scope = home.data
   const html = createRenderer({})(homeTree)
   assert.match(html, /名人堂/)
-  assert.equal((html.match(/class="shortcut"/g) || []).length, 5)
+  assert.equal((html.match(/class="shortcut"/g) || []).length, 6)
   assert.doesNotMatch(html, /hall-entry/)
 })
 

@@ -15,6 +15,7 @@ Page({
       { id: 'matches', label: '赛事管理', countKey: 'registration_count' }, { id: 'users', label: '用户管理' }
     ],
     todos: null,
+    todoItems: [],
     todoCards: [
       { tab: 'verify', key: 'verification_count', title: '在校认证', subtitle: '审核在校证明', icon: 'shield' },
       { tab: 'rankapps', key: 'rank_application_count', title: '段位审核', subtitle: '确认选手段位', icon: 'honor' },
@@ -23,6 +24,7 @@ Page({
     ],
     todoLoading: false,
     todoError: false,
+    todoErrorText: '',
     listLoading: {},
     listErrors: {},
     listReady: {},
@@ -33,6 +35,8 @@ Page({
     userKeyword: '',
     // 认证审核
     verifyUsers: [],
+    // 学号候选与人工输入按用户及原始凭证 URL 隔离，不等同于已认证学号。
+    studentIdDrafts: {},
     // 段位更新申请
     rankApplications: [],
     // 队伍管理
@@ -106,6 +110,14 @@ Page({
     if (this.data.user) return this.loadActiveTab()
   },
 
+  openTodo(e) {
+    const tab = e.currentTarget.dataset.tab
+    if (!this.data.user || !this.data.todoCards.some(item => item.tab === tab)) return
+    this.setData({ tab })
+    if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 200 })
+    return this.refreshDashboard()
+  },
+
   // 页面恢复和下拉刷新只更新计数及当前列表，避免首页下载全部用户与截图。
   refreshDashboard() {
     return Promise.all([this.loadTodos(true), this.loadActiveTab(true)])
@@ -125,10 +137,12 @@ Page({
     this.setData({ todoLoading: true })
     const request = Promise.resolve().then(() => require('../../utils/admin-todos.js').refresh(force))
       .then(todos => {
-        if (todos && !this._unloaded && version === (this._todoVersion || 0)) this.setData({ todos, todoError: false })
-      }).catch(() => {
+        if (todos && !this._unloaded && version === (this._todoVersion || 0)) this.setData({
+          todos, todoItems: require('../../utils/admin-todos.js').getTodoItems(todos), todoError: false, todoErrorText: ''
+        })
+      }).catch(err => {
         // Keep the last successful numbers visible, but explicitly mark them as stale.
-        if (!this._unloaded && version === (this._todoVersion || 0)) this.setData({ todoError: true })
+        if (!this._unloaded && version === (this._todoVersion || 0)) this.setData({ todoError: true, todoErrorText: (err && err.detail) || '暂时无法确认待办数量，请稍后重试。' })
       }).finally(() => {
         if (this._todoRequest === request) {
           this._todoRequest = null
@@ -224,8 +238,13 @@ Page({
   },
 
   loadUsers(keyword) {
-    return this.loadList('users', () => api.adminListUsers(keyword), 'users', data =>
-      data.map(u => Object.assign({}, u, { display_rank: rankDisplay(u.rank) })), keyword || '')
+    return this.loadList('users', () => api.adminListUsers(keyword), 'users', data => {
+      this.syncStudentIdDrafts(data)
+      return data.map(u => Object.assign({}, u, {
+        display_rank: rankDisplay(u.rank),
+        verify_image_full: this.fullVerifyImage(u.verify_image)
+      }))
+    }, keyword || '')
   },
 
   // 点击用户卡片看详情
@@ -234,9 +253,7 @@ Page({
     const user = this.data.users.find(u => u.id == id)
     if (!user) return
     const u = Object.assign({}, user)
-    if (u.verify_image && !u.verify_image.startsWith('http')) {
-      u.verify_image_full = api.BASE + u.verify_image
-    }
+    u.verify_image_full = this.fullVerifyImage(u.verify_image)
     if (u.avatar && !u.avatar.startsWith('http')) {
       u.avatar_full = api.BASE + u.avatar
     }
@@ -383,8 +400,174 @@ Page({
   },
 
   // ===== 认证审核 =====
+  fullVerifyImage(image) {
+    return image ? (/^https?:\/\//.test(image) ? image : api.BASE + image) : ''
+  },
+
+  syncStudentIdDrafts(users) {
+    const drafts = Object.assign({}, this.data.studentIdDrafts)
+    users.forEach(user => {
+      const image = user.verify_image || ''
+      const savedStudentId = user.student_id || ''
+      const serverCandidate = String(user.ai_student_id || '')
+      const previous = drafts[user.id]
+      if (previous && previous.image === image && previous.savedStudentId === savedStudentId) {
+        if (previous.serverCandidate !== serverCandidate && !previous.edited && !previous.recognizing && !previous.saving) {
+          drafts[user.id] = Object.assign({}, previous, {
+            serverCandidate, value: String(savedStudentId || serverCandidate),
+            hint: savedStudentId ? '已记录学号，请对照图片核对。'
+              : serverCandidate ? '识别学号，请对照图片确认。' : '请识别学号，或对照图片手动填写。'
+          })
+        }
+        return
+      }
+      drafts[user.id] = {
+        value: String(savedStudentId || serverCandidate), image, savedStudentId, serverCandidate,
+        revision: previous ? previous.revision + 1 : 0, edited: false,
+        recognizing: false, saving: false, error: '', open: false,
+        hint: savedStudentId ? '已记录学号，请对照图片核对。'
+          : user.ai_student_id ? '识别学号，请对照图片确认。' : '请识别学号，或对照图片手动填写。'
+      }
+    })
+    this.setData({ studentIdDrafts: drafts })
+  },
+
+  updateStudentIdDraft(id, values) {
+    const draft = this.data.studentIdDrafts[id]
+    if (!draft) return
+    this.setData({ studentIdDrafts: Object.assign({}, this.data.studentIdDrafts, {
+      [id]: Object.assign({}, draft, values)
+    }) })
+  },
+
+  studentIdUser(id, source) {
+    return (source === 'users' ? this.data.users : this.data.verifyUsers).find(user => user.id == id)
+  },
+
+  onStudentIdInput(e) {
+    const { id, source } = e.currentTarget.dataset
+    const user = this.studentIdUser(id, source)
+    if (!user) return
+    this.syncStudentIdDrafts([user])
+    const draft = this.data.studentIdDrafts[id]
+    if (draft.saving) return
+    this.updateStudentIdDraft(id, { value: e.detail.value, revision: draft.revision + 1, edited: true, error: '' })
+  },
+
+  beginStudentIdRequest(id, source, kind) {
+    const user = this.studentIdUser(id, source)
+    if (!user) return null
+    this.syncStudentIdDrafts([user])
+    const draft = this.data.studentIdDrafts[id]
+    if (draft.recognizing || draft.saving) return null
+    if (!draft.image) {
+      this.updateStudentIdDraft(id, { open: true, error: '该用户暂无认证图片，请先上传凭证。' })
+      return null
+    }
+    const context = { id, source, kind, image: draft.image, savedStudentId: draft.savedStudentId, revision: draft.revision }
+    this._studentIdRequests = this._studentIdRequests || {}
+    this._studentIdRequests[id] = context
+    this.updateStudentIdDraft(id, { [kind]: true, open: true, error: '' })
+    return context
+  },
+
+  currentStudentIdRequest(context) {
+    if (this._unloaded || !this._studentIdRequests || this._studentIdRequests[context.id] !== context) return null
+    const user = this.studentIdUser(context.id, context.source)
+    const draft = this.data.studentIdDrafts[context.id]
+    if (!user || !draft || (user.verify_image || '') !== context.image || draft.image !== context.image
+      || (user.student_id || '') !== context.savedStudentId || draft.savedStudentId !== context.savedStudentId) return null
+    return draft
+  },
+
+  finishStudentIdRequest(context) {
+    if (!this._studentIdRequests || this._studentIdRequests[context.id] !== context) return
+    delete this._studentIdRequests[context.id]
+    if (this._unloaded) return
+    const draft = this.data.studentIdDrafts[context.id]
+    if (draft && draft.image === context.image && draft.savedStudentId === context.savedStudentId) {
+      this.updateStudentIdDraft(context.id, { [context.kind]: false })
+    }
+  },
+
+  async recognizeStudentId(e) {
+    const { id } = e.currentTarget.dataset
+    const source = e.currentTarget.dataset.source || (this.data.tab === 'users' ? 'users' : 'verify')
+    const context = this.beginStudentIdRequest(id, source, 'recognizing')
+    if (!context) return
+    try {
+      const result = await api.adminRecognizeStudentId(id, context.image)
+      const draft = this.currentStudentIdRequest(context)
+      if (!draft) return
+      if (!result || result.verify_image !== context.image) {
+        this.updateStudentIdDraft(id, { error: '认证图片已变化，请刷新列表后重新核对。' })
+        return
+      }
+      const candidate = /^\d{6,20}$/.test(String(result.student_id || '')) ? String(result.student_id) : ''
+      const confidence = typeof result.confidence === 'number' && Number.isFinite(result.confidence)
+        ? '（置信度 ' + Math.round(Math.max(0, Math.min(1, result.confidence)) * 100) + '%）' : ''
+      const reason = result.reason ? ' ' + result.reason : ''
+      const preserveManual = !!draft.savedStudentId || draft.edited || draft.revision !== context.revision
+      const values = { serverCandidate: candidate, hint: candidate
+        ? '识别学号：' + candidate + confidence + '。' + (preserveManual ? '已保留当前填写内容，请对照图片确认。' : '请对照图片确认。') + reason
+        : '本次未识别到有效学号，请对照图片手动填写。' + reason }
+      if (candidate && !preserveManual) values.value = candidate
+      // Keep the loaded row in sync, so a later save cannot restore its older AI candidate.
+      const updateCandidate = user => user.id == id && (user.verify_image || '') === context.image
+        ? Object.assign({}, user, { ai_student_id: candidate || null }) : user
+      this.setData({ users: this.data.users.map(updateCandidate), verifyUsers: this.data.verifyUsers.map(updateCandidate) })
+      this.updateStudentIdDraft(id, values)
+    } catch (err) {
+      if (this.currentStudentIdRequest(context)) this.updateStudentIdDraft(id, {
+        error: (err && err.detail) || '学号识别失败，可重试或手动填写。'
+      })
+    } finally {
+      this.finishStudentIdRequest(context)
+    }
+  },
+
+  saveStudentId(e) { return this.saveStudentIdForUser(e, false) },
+
+  async saveStudentIdForUser(e, approve) {
+    const { id } = e.currentTarget.dataset
+    const source = approve ? 'verify' : 'users'
+    const user = this.studentIdUser(id, source)
+    if (!user) return
+    this.syncStudentIdDrafts([user])
+    const draft = this.data.studentIdDrafts[id]
+    if (draft.recognizing || draft.saving) return
+    const studentId = String(draft.value || '').trim()
+    if (!/^\d{6,20}$/.test(studentId)) {
+      this.updateStudentIdDraft(id, { open: true, error: '请填写 6～20 位数字学号，再' + (approve ? '确认通过。' : '保存。') })
+      return
+    }
+    const context = this.beginStudentIdRequest(id, source, 'saving')
+    if (!context) return
+    try {
+      const payload = { student_id: studentId, expected_verify_image: context.image }
+      if (approve) payload.is_verified = true
+      const result = await api.adminUpdateUser(id, payload)
+      if (!this.currentStudentIdRequest(context)) return
+      const changes = Object.assign({}, result || {}, { student_id: studentId })
+      if (approve) changes.is_verified = true
+      this.setData({
+        users: this.data.users.map(item => item.id == id ? Object.assign({}, item, changes) : item),
+        verifyUsers: approve ? this.data.verifyUsers.filter(item => item.id != id)
+          : this.data.verifyUsers.map(item => item.id == id ? Object.assign({}, item, changes) : item)
+      })
+      this.updateStudentIdDraft(id, { value: studentId, savedStudentId: studentId, edited: false, saving: false, open: false, error: '' })
+      wx.showToast({ title: approve ? '已确认并认证通过' : '学号已保存', icon: 'success' })
+      await this.refreshAfterReview()
+    } catch (err) {
+      if (this.currentStudentIdRequest(context)) this.updateStudentIdDraft(id, { error: (err && err.detail) || '保存失败，请重试。' })
+    } finally {
+      this.finishStudentIdRequest(context)
+    }
+  },
+
   loadVerifyList() {
     return this.loadList('verify', () => api.getVerifyList(), 'verifyUsers', data => {
+      this.syncStudentIdDrafts(data)
       const AI_MAP = {
         auto_pass: { text: '自动通过', cls: 'ai-pass' },
         auto_reject: { text: '自动驳回', cls: 'ai-reject' },
@@ -393,9 +576,7 @@ Page({
       const list = (data || []).map(u => {
         const st = AI_MAP[u.ai_review_status] || { text: '', cls: '' }
         return Object.assign({}, u, {
-          verify_image_full: u.verify_image
-            ? (u.verify_image.startsWith('http') ? u.verify_image : api.BASE + u.verify_image)
-            : '',
+          verify_image_full: this.fullVerifyImage(u.verify_image),
           ai_review_text: st.text,
           ai_review_class: st.cls,
           ai_review_conf_text: (u.ai_review_confidence != null)
@@ -413,35 +594,41 @@ Page({
   },
 
   // 认证通过
-  async verifyPass(e) {
-    const id = e.currentTarget.dataset.id
-    try {
-      await api.adminUpdateUser(id, { is_verified: true })
-      wx.showToast({ title: '已认证通过', icon: 'success' })
-      await this.refreshAfterReview()
-    } catch (err) {
-      this.showErr(err, '操作失败')
-    }
-  },
+  verifyPass(e) { return this.saveStudentIdForUser(e, true) },
 
   // 认证驳回：填写原因（用户可见），清除截图并保持未认证
   async verifyReject(e) {
     const id = e.currentTarget.dataset.id
+    const context = this.beginStudentIdRequest(id, 'verify', 'saving')
+    if (!context) return
     wx.showModal({
       title: '驳回认证',
       editable: true,
       placeholderText: '填写驳回原因（用户可见，可选）',
       success: async (res) => {
-        if (!res.confirm) return
+        if (!res.confirm || !this.currentStudentIdRequest(context)) {
+          this.finishStudentIdRequest(context)
+          return
+        }
         const reason = (res.content || '').trim()
         try {
-          await api.adminUpdateUser(id, { is_verified: false, verify_image: '', verify_reject_reason: reason || '' })
+          await api.adminUpdateUser(id, { is_verified: false, verify_image: '', verify_reject_reason: reason || '', expected_verify_image: context.image })
+          if (!this.currentStudentIdRequest(context)) return
+          this.setData({
+            verifyUsers: this.data.verifyUsers.filter(user => user.id != id),
+            users: this.data.users.map(user => user.id == id
+              ? Object.assign({}, user, { is_verified: false, verify_image: '', verify_image_full: '', verify_reject_reason: reason }) : user)
+          })
+          this.updateStudentIdDraft(id, { saving: false, open: false, error: '' })
           wx.showToast({ title: '已驳回', icon: 'none' })
           await this.refreshAfterReview()
         } catch (err) {
-          this.showErr(err, '操作失败')
+          if (this.currentStudentIdRequest(context)) this.updateStudentIdDraft(id, { error: (err && err.detail) || '驳回失败，请重试。' })
+        } finally {
+          this.finishStudentIdRequest(context)
         }
-      }
+      },
+      fail: () => this.finishStudentIdRequest(context)
     })
   },
 

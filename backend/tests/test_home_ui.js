@@ -114,15 +114,18 @@ test('navigation ignores a profile response from a logged-out session', async ()
 
 test('message guest view makes no authenticated requests and partial failures remain visible', async () => {
   let calls = 0
-  const { page } = load('pages/messages/messages.js', {
+  const { page, storage } = load('pages/messages/messages.js', {
+    getMyTeamApplications: async () => { calls++; return [] },
     getMyInvitations: async () => { calls++; return [{ id: 2 }] },
-    getMyRankApplications: async () => { calls++; throw Error('offline') }
+    getMyRankApplications: async () => { calls++; throw Error('offline') },
+    getScheduleNotifications: async () => { calls++; return { items: [], unread_count: 0, next_cursor: null, has_more: false } }
   })
   await page.loadMessages()
   assert.equal(calls, 0)
   page.data.token = 'local-token'
+  storage.token = 'local-token'
   await page.loadMessages()
-  assert.equal(calls, 2)
+  assert.equal(calls, 4)
   assert.equal(page.data.loadError, true)
   assert.equal(page.data.loading, false)
   assert.equal(page.data.invitations[0].id, 2)

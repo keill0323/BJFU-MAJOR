@@ -24,6 +24,8 @@ class TeamMemberInfo(BaseModel):
     avatar: Optional[str] = None
     rating: Optional[int] = None
     rank: Optional[str] = None
+    identity: Optional[str] = None
+    is_verified: bool = False
     role: str
 
     class Config:
@@ -96,7 +98,7 @@ class UpdateMarketDescription(BaseModel):
 class ApplyJoinRequest(BaseModel):
     """申请加入队伍请求"""
     team_id: int
-    message: Optional[str] = None
+    message: Optional[str] = Field(None, max_length=200)
 
 
 class RecruitByStudentRequest(BaseModel):
@@ -112,6 +114,12 @@ class TeamApplicationInfo(BaseModel):
     user_id: int
     nickname: Optional[str] = None
     game_id: Optional[str] = None
+    avatar: Optional[str] = None
+    rank: Optional[str] = None
+    individual_rating: int = 0
+    identity: Optional[str] = None
+    is_verified: bool = False
+    user_description: Optional[str] = None
     message: Optional[str] = None
     status: str
     created_at: datetime
@@ -123,7 +131,7 @@ class TeamApplicationInfo(BaseModel):
 class InviteRequest(BaseModel):
     """队长邀请入队请求"""
     user_id: int
-    message: Optional[str] = None
+    message: Optional[str] = Field(None, max_length=200)
 
 
 class InvitationInfo(BaseModel):
