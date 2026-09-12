@@ -647,6 +647,15 @@ def _check_match_registerable(db: Session, match: Optional[Match]) -> None:
             raise HTTPException(status_code=400, detail=f"报名队伍已满（{match.max_teams}/{match.max_teams}），无法报名")
 
 
+def _registration_member_label(user: Optional[User], user_id: int) -> str:
+    """资料不完整也要能定位待认证队员，不在提示中暴露学号。"""
+    if user:
+        for value in (user.nickname, user.game_id):
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return f"用户{user_id}"
+
+
 def _validate_team_registration(db: Session, match: Match, team_id: int) -> list:
     """报名和审批共用当前阵容资格检查；调用方须先锁定赛事和队伍。"""
     from app.models.team import TeamMember, TeamStatus
@@ -667,7 +676,7 @@ def _validate_team_registration(db: Session, match: Match, team_id: int) -> list
     for member in members:
         user = users.get(member.user_id)
         if not user or not user.is_verified:
-            name = (user.nickname or user.game_id) if user else f"用户{member.user_id}"
+            name = _registration_member_label(user, member.user_id)
             unverified.append(name)
     if unverified:
         manual_hint = next((student_id_review_hint(user) for user in users.values()
@@ -680,7 +689,7 @@ def _validate_team_registration(db: Session, match: Match, team_id: int) -> list
     for member in members:
         user = users.get(member.user_id)
         if not user or not user.rank:
-            name = (user.nickname or user.game_id) if user else f"用户{member.user_id}"
+            name = _registration_member_label(user, member.user_id)
             no_rank.append(name)
     if no_rank:
         raise HTTPException(
