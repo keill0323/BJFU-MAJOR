@@ -110,7 +110,7 @@ Page({
       const team = await api.getTeam(id)
       if (!isCurrent()) return
       if (!team || Number(team.id) !== Number(id)) throw new Error('Invalid team response')
-      this._detailToken = token
+      delete team.captain_qq // 旧后端返回的联系资料不进入页面。
       // TeamInfo 不含总评分和队长名，从本次返回的成员数据派生。
       const rating = (team.members || []).map(m => Number(m.rating) || 0).sort((a, b) => b - a).slice(0, 5).reduce((sum, value) => sum + value, 0)
       const captain = (team.members || []).find(m => m.user_id === team.captain_id)
@@ -124,7 +124,6 @@ Page({
         showTeamDetail: true,
         detailLoggedIn: !!token,
         detailTeam: Object.assign({}, team, {
-          captain_qq: token && typeof team.captain_qq === 'string' && /^[1-9][0-9]{4,11}$/.test(team.captain_qq.trim()) ? team.captain_qq.trim() : '',
           rating,
           captainLabel: captain ? (captain.nickname || captain.game_id || '玩家' + captain.user_id) : '玩家' + team.captain_id,
           statusText: { approved: '已通过审核', pending: '待审核', rejected: '审核未通过' }[String(team.status || '').toLowerCase()] || '待确认',
@@ -144,16 +143,7 @@ Page({
 
   closeTeamDetail() {
     this._detailGeneration = (this._detailGeneration || 0) + 1
-    this._detailToken = ''
     this.setData({ showTeamDetail: false, detailLoggedIn: false, detailTeam: null, detailMembers: [] })
-  },
-
-  copyCaptainQq() {
-    const token = wx.getStorageSync('token')
-    const team = this.data.detailTeam
-    if (!token || token !== this._detailToken) { this.closeTeamDetail(); return }
-    if (!this.data.showTeamDetail || !team || !/^[1-9][0-9]{4,11}$/.test(team.captain_qq || '')) return
-    wx.setClipboardData({ data: team.captain_qq })
   },
 
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }) },

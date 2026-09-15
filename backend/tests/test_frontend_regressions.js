@@ -33,6 +33,7 @@ function loadPage(relativePath, apiMethods, options = {}) {
     Page: definition => { page = definition },
     require(modulePath) {
       if (modulePath.endsWith('/api.js')) return api
+      if (modulePath.endsWith('/image-upload.js')) return { showImageError() { throw new Error('Unexpected image selection failure') } }
       if (modulePath.endsWith('/rank.js')) return require(path.join(root, 'miniprogram/utils/rank.js'))
       if (modulePath.endsWith('/tournament.js')) return require(path.join(root, 'miniprogram/utils/tournament.js'))
       throw new Error('Unexpected module: ' + modulePath)

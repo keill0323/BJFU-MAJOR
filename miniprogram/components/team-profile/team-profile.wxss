@@ -15,12 +15,6 @@
 .team-name { display: block; font-size: 36rpx; line-height: 1.4; font-weight: 700; word-break: break-all; }
 .captain-copy { display: block; margin-top: 10rpx; font-size: 25rpx; color: #506f81; word-break: break-all; }
 .team-description { display: block; margin: 26rpx 0; color: #536f81; font-size: 26rpx; line-height: 1.75; white-space: pre-wrap; word-break: break-all; }
-.captain-contact { display: flex; align-items: center; gap: 18rpx; padding: 20rpx; margin-bottom: 26rpx; border-radius: 16rpx; background: #edf7f5; }
-.contact-copy { flex: 1; min-width: 0; }
-.contact-label { display: block; color: #526f81; font-size: 23rpx; }
-.contact-value { display: block; color: #163f52; font-size: 29rpx; font-weight: 600; margin-top: 6rpx; word-break: break-all; }
-.contact-button { flex-shrink: 0; margin: 0; padding: 14rpx 22rpx; color: #086b74; background: #fff; border: 1rpx solid #cce5e1; border-radius: 12rpx; font-size: 25rpx; line-height: 1.5; }
-.contact-button::after { border: none; }
 .team-stats { display: flex; border-top: 1rpx solid #e6eef2; padding-top: 24rpx; }
 .team-stat { flex: 1; min-width: 0; border-left: 1rpx solid #e6eef2; padding-left: 18rpx; }
 .team-stat:first-child { border-left: 0; padding-left: 0; flex: 1.15; }

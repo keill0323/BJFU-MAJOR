@@ -1,4 +1,4 @@
-"""添加队长联系 QQ 字段；历史队伍保留空值，由队长补录。可重复执行。"""
+"""历史结构兼容迁移；只补充可空旧列，不再支持联系资料收集。可重复执行。"""
 from sqlalchemy import inspect
 
 from app.database import engine

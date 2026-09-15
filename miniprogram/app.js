@@ -12,22 +12,20 @@ App({
     this._registerPrivacy()
   },
 
-  // 注册隐私授权监听：收集微信信息、学号、学信网截图等敏感信息前，必须弹窗征得用户同意
+  // 原隐私接口会等待 resolve；必须由页面上的微信隐私授权按钮完成同意。
   _registerPrivacy() {
     if (wx.onNeedPrivacyAuthorization) {
       wx.onNeedPrivacyAuthorization((resolve) => {
-        wx.showModal({
-          title: '隐私保护提示',
-          content: '本小程序将收集你的微信信息、学号及学信网/校园卡截图，仅用于赛事报名与身份认证。请阅读并同意《用户隐私保护指引》后再使用。',
-          confirmText: '同意',
-          cancelText: '拒绝',
-          success: (res) => {
-            if (res.confirm) {
-              // 用户同意后，通知微信继续执行原本要调用的隐私接口
-              resolve({ event: 'agree' })
-            }
-          }
-        })
+        const pages = getCurrentPages()
+        const page = pages[pages.length - 1]
+        const dialog = page && page.selectComponent && page.selectComponent('#privacy-dialog')
+        if (dialog && typeof dialog.requestAuthorization === 'function') {
+          dialog.requestAuthorization(resolve)
+        } else {
+          // 未挂载/已离开的页面不能将选图接口一直留在等待状态。
+          resolve({ event: 'disagree' })
+          wx.showToast({ title: '隐私授权页面未就绪，请重试', icon: 'none' })
+        }
       })
     }
   }

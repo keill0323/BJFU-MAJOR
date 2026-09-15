@@ -1,0 +1,15 @@
+<view wx:if="{{visible}}" class="privacy-mask" catchtouchmove="stopMove">
+  <view class="privacy-card" role="dialog" aria-label="隐私保护提示">
+    <text class="privacy-eyebrow">图片上传</text>
+    <text class="privacy-title">先了解你的信息如何使用</text>
+    <text class="privacy-copy">上传图片需要使用相册或相机。你选择的图片将用于当前操作，例如学籍认证、段位认证、个人头像或队伍头像。</text>
+    <text class="privacy-copy">请阅读隐私保护指引。同意后将继续选图，暂不同意则取消本次操作。</text>
+    <button class="privacy-contract" bindtap="openContract">查看{{contractName}}</button>
+    <text wx:if="{{loading}}" class="privacy-status">正在加载隐私指引…</text>
+    <view wx:elif="{{error}}" class="privacy-error"><text>{{error}}</text><button class="privacy-retry" bindtap="loadContract">重新加载</button></view>
+    <view class="privacy-actions">
+      <button class="privacy-decline" bindtap="disagree">暂不同意</button>
+      <button id="agree-privacy-images" class="privacy-agree" open-type="agreePrivacyAuthorization" bindagreeprivacyauthorization="agree" disabled="{{!ready || loading}}">同意并继续</button>
+    </view>
+  </view>
+</view>

@@ -1,5 +1,6 @@
 const api = require('../../utils/api.js')
 const { rankDisplay, rankBadge } = require('../../utils/rank.js')
+const { showImageError } = require('../../utils/image-upload.js')
 
 Page({
   data: {
@@ -69,7 +70,8 @@ Page({
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
       success: (res) => {
-        const filePath = res.tempFiles[0].tempFilePath
+        const filePath = res && res.tempFiles && res.tempFiles[0] && res.tempFiles[0].tempFilePath
+        if (!filePath) { showImageError(); return }
         wx.compressImage({
           src: filePath,
           quality: 80,
@@ -77,9 +79,10 @@ Page({
             const compressedPath = (cr && cr.tempFilePath) || filePath
             this.uploadWithPath(compressedPath)
           },
-          fail: (err) => this.uploadWithPath(filePath)
+          fail: () => this.uploadWithPath(filePath)
         })
-      }
+      },
+      fail: showImageError
     })
   },
   uploadWithPath(filePath) {
@@ -101,7 +104,8 @@ Page({
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
       success: (res) => {
-        const filePath = res.tempFiles[0].tempFilePath
+        const filePath = res && res.tempFiles && res.tempFiles[0] && res.tempFiles[0].tempFilePath
+        if (!filePath) { showImageError(); return }
         wx.compressImage({
           src: filePath,
           quality: 80,
@@ -111,7 +115,8 @@ Page({
           },
           fail: () => this.uploadRankWithPath(filePath)
         })
-      }
+      },
+      fail: showImageError
     })
   },
   uploadRankWithPath(filePath) {

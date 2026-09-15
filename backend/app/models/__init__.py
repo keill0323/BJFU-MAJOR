@@ -11,4 +11,5 @@ from app.models.team import Team, TeamMember, TeamApplication, TeamInvitation
 from app.models.match import Match, MatchRound, TeamProgress, Registration, StageWindow
 from app.models.hall import ChampionSnapshot
 from app.models.notification import ScheduleNotification
+from app.models.admin_notice import AdminNoticeBatch, AdminNotice
 from app.models.recruitment import RecruitmentPost, WechatSubscription, WechatOutbox

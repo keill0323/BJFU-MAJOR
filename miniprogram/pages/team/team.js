@@ -5,15 +5,8 @@
  *   - 有队伍：查看成员、队长踢人、队长审核申请、退队/解散
  */
 const api = require('../../utils/api.js')
+const { showImageError } = require('../../utils/image-upload.js')
 const { rankDisplay } = require('../../utils/rank.js')
-const CAPTAIN_QQ_PATTERN = /^[1-9][0-9]{4,11}$/
-
-function captainQqError(value) {
-  if (!value) return '请输入队长本人常用 QQ 号'
-  if (!CAPTAIN_QQ_PATTERN.test(value)) return 'QQ 号须为 5–12 位数字，且不能以 0 开头'
-  return ''
-}
-
 Page({
   data: {
   loading: true,
@@ -22,13 +15,8 @@ Page({
     rankedMemberCount: 0,
     myTeam: null,       // 我的队伍（null=没队伍）
     teamName: '',       // 创建队伍输入
-    teamCaptainQq: '',
     creatingTeam: false,
     createTeamError: '',
-    showContactEditor: false,
-    captainQqDraft: '',
-    contactSaving: false,
-    contactError: '',
     isCaptain: false,   // 我是不是队长
     members: [],        // 我的队伍成员
     applications: [],   // 待审核的入队申请（队长可见）
@@ -51,6 +39,7 @@ Page({
   },
 
   goRecruitment() { wx.navigateTo({ url: '/pages/recruitment/recruitment' }) },
+  goMessages() { wx.navigateTo({ url: '/pages/messages/messages' }) },
 
   onLoad(options) {
     this._unloaded = false
@@ -59,13 +48,8 @@ Page({
     }
   },
 
-  onHide() {
-    if (this.data.showContactEditor) this.closeContactEditor()
-  },
-
   onUnload() {
     this._unloaded = true
-    this._contactEpoch = (this._contactEpoch || 0) + 1
     this._myTeamLoadSeq = (this._myTeamLoadSeq || 0) + 1
     this._refreshSeq = (this._refreshSeq || 0) + 1
   },
@@ -88,13 +72,11 @@ Page({
     const refreshSeq = this._refreshSeq = (this._refreshSeq || 0) + 1
     const isCurrent = () => !this._unloaded && this._refreshSeq === refreshSeq && wx.getStorageSync('token') === token
     if (this._sessionToken !== undefined && this._sessionToken !== token) {
-      this.closeContactEditor()
-      this.setData({ teamName: '', teamCaptainQq: '', createTeamError: '', creatingTeam: false })
+      this.setData({ teamName: '', createTeamError: '', creatingTeam: false })
     }
     this._sessionToken = token
     this.setData({ loggedIn: !!token, loading: true, loadFailed: false })
     if (!token) {
-      this.closeContactEditor()
       this.setData({ myTeam: null, members: [], isCaptain: false, rankedMemberCount: 0, applications: [], loading: false })
       return
     }
@@ -128,7 +110,6 @@ Page({
   async loadMyTeam() {
     const token = wx.getStorageSync('token')
     const loadSeq = this._myTeamLoadSeq = (this._myTeamLoadSeq || 0) + 1
-    const contactVersion = this._contactVersion || 0
     const isCurrent = () => !this._unloaded && this._myTeamLoadSeq === loadSeq && wx.getStorageSync('token') === token
     try {
       const team = await api.getMyTeam()
@@ -137,16 +118,8 @@ Page({
       if (!isCurrent()) return
       const userId = me ? me.id : null
       const isCaptain = !!team && team.captain_id === userId
-      const previous = this.data.myTeam
-      if (!team || !previous || previous.id !== team.id || previous.captain_id !== team.captain_id || this._teamDataToken !== token || !isCaptain) {
-        this.closeContactEditor()
-      }
-      this._teamDataToken = token
       if (team) {
-        // 保存联系人完成前发起的刷新，不能把已保存的新 QQ 覆盖回旧值。
-        if (previous && previous.id === team.id && contactVersion !== (this._contactVersion || 0)) {
-          team.captain_qq = previous.captain_qq
-        }
+        delete team.captain_qq // 忽略旧后端的停用联系字段。
         // 队伍 logo 完整地址 + 首字徽章（无 logo 时用）
         if (team.logo && team.logo.indexOf('http') !== 0) {
           team.logo_full = api.BASE + team.logo
@@ -189,7 +162,6 @@ Page({
       }
     } catch (err) {
       if (!isCurrent()) return
-      this.closeContactEditor()
       this.setData({ myTeam: null, members: [], isCaptain: false, rankedMemberCount: 0, applications: [], loadFailed: true })
     }
   },
@@ -346,23 +318,13 @@ Page({
     this.setData({ teamName: e.detail.value, createTeamError: '' })
   },
 
-  onCaptainQqInput(e) {
-    this.setData({ teamCaptainQq: e.detail.value, createTeamError: '' })
-  },
-
   async createTeam() {
     if (this._createPending || this.data.creatingTeam || this.data.myTeam) return
     const token = wx.getStorageSync('token')
     if (!token) { this.goLogin(); return }
     const name = this.data.teamName.trim()
-    const captainQq = String(this.data.teamCaptainQq || '').trim()
     if (!name) {
       this.setData({ createTeamError: '请输入队伍名称' })
-      return
-    }
-    const error = captainQqError(captainQq)
-    if (error) {
-      this.setData({ createTeamError: error })
       return
     }
     const pending = {}
@@ -370,9 +332,10 @@ Page({
     const isCurrent = () => !this._unloaded && this._createPending === pending && wx.getStorageSync('token') === token && !this.data.myTeam
     this.setData({ creatingTeam: true, createTeamError: '' })
     try {
-      const team = await api.createTeam(name, captainQq)
+      const team = await api.createTeam(name)
       if (!isCurrent()) return
-      this.setData({ myTeam: team, teamName: '', teamCaptainQq: '', creatingTeam: false })
+      if (team) delete team.captain_qq
+      this.setData({ myTeam: team, teamName: '', creatingTeam: false })
       wx.showToast({ title: '创建成功', icon: 'success' })
       await this.refreshAll()
     } catch (err) {
@@ -385,79 +348,6 @@ Page({
     }
   },
 
-  openContactEditor() {
-    if (!this.data.myTeam || !this.data.isCaptain || !wx.getStorageSync('token')) return
-    this._contactEpoch = (this._contactEpoch || 0) + 1
-    this.setData({
-      showContactEditor: true,
-      captainQqDraft: this.data.myTeam.captain_qq || '',
-      contactSaving: !!this._contactPending,
-      contactError: ''
-    })
-  },
-
-  closeContactEditor() {
-    this._contactEpoch = (this._contactEpoch || 0) + 1
-    this.setData({ showContactEditor: false, captainQqDraft: '', contactSaving: false, contactError: '' })
-  },
-
-  onContactQqInput(e) {
-    if (this.data.contactSaving) return
-    this.setData({ captainQqDraft: e.detail.value, contactError: '' })
-  },
-
-  async saveTeamContact() {
-    const team = this.data.myTeam
-    const token = wx.getStorageSync('token')
-    if (this._contactPending || this.data.contactSaving || !team || !this.data.isCaptain || !token || !this.data.showContactEditor) return
-    const captainQq = String(this.data.captainQqDraft || '').trim()
-    const error = captainQqError(captainQq)
-    if (error) { this.setData({ contactError: error }); return }
-    const teamId = team.id
-    const captainId = team.captain_id
-    const epoch = this._contactEpoch || 0
-    const pending = {}
-    const sameTeam = () => !this._unloaded && wx.getStorageSync('token') === token && this.data.isCaptain && this.data.myTeam && this.data.myTeam.id === teamId && this.data.myTeam.captain_id === captainId
-    const isCurrent = () => sameTeam() && this.data.showContactEditor && (this._contactEpoch || 0) === epoch
-    this._contactPending = pending
-    this.setData({ contactSaving: true, contactError: '' })
-    try {
-      const updated = await api.updateTeamContact(teamId, captainQq)
-      if (!isCurrent()) return
-      if (!updated || updated.id !== teamId || updated.captain_id !== captainId || !CAPTAIN_QQ_PATTERN.test(updated.captain_qq || '')) {
-        this.setData({ contactError: '保存结果异常，请重新加载队伍后确认' })
-        return
-      }
-      this._contactVersion = (this._contactVersion || 0) + 1
-      // 联系方式接口不会覆盖当前阵容、徽章和评分等队伍详情。
-      this.setData({ 'myTeam.captain_qq': updated.captain_qq })
-      this.closeContactEditor()
-      wx.showToast({ title: '队长 QQ 已保存', icon: 'success' })
-    } catch (err) {
-      if (isCurrent()) this.setData({ contactError: (err && err.detail) || '保存失败，请稍后重试' })
-    } finally {
-      if (this._contactPending === pending) {
-        this._contactPending = null
-        if (sameTeam() && this.data.showContactEditor) this.setData({ contactSaving: false })
-      }
-    }
-  },
-
-  copyCaptainQq() {
-    const team = this.data.myTeam
-    const token = wx.getStorageSync('token')
-    const captainQq = team && String(team.captain_qq || '').trim()
-    if (!token || !CAPTAIN_QQ_PATTERN.test(captainQq || '')) return
-    wx.setClipboardData({
-      data: captainQq,
-      fail: () => {
-        if (!this._unloaded && wx.getStorageSync('token') === token && this.data.myTeam && this.data.myTeam.id === team.id) {
-          wx.showToast({ title: '复制失败，请重试', icon: 'none' })
-        }
-      }
-    })
-  },
-
   // === 队长上传/更换队伍Logo ===
   uploadLogo() {
     const team = this.data.myTeam
@@ -467,7 +357,8 @@ Page({
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
       success: (res) => {
-        const filePath = res.tempFiles[0].tempFilePath
+        const filePath = res && res.tempFiles && res.tempFiles[0] && res.tempFiles[0].tempFilePath
+        if (!filePath) { showImageError(); return }
         wx.compressImage({
           src: filePath,
           quality: 80,
@@ -477,7 +368,8 @@ Page({
           },
           fail: () => this.uploadLogoPath(filePath)
         })
-      }
+      },
+      fail: showImageError
     })
   },
   async uploadLogoPath(filePath) {

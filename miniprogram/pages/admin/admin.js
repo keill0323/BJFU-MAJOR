@@ -7,6 +7,9 @@ const api = require('../../utils/api.js')
 const { rankDisplay } = require('../../utils/rank.js')
 
 Page({
+  openNotices() {
+    if (this.data.user && this.data.user.role === 'admin') wx.navigateTo({ url: '/pages/admin/notices/notices' })
+  },
   data: {
     tab: 'overview',
     tabs: [

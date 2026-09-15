@@ -57,3 +57,8 @@
 .list-notice, .list-loading { padding: 50rpx 20rpx; text-align: center; font-size: 26rpx; color: #62798c; }.list-notice view { padding: 18rpx; color: #087f8c; }
 .home-footer { display: flex; align-items: center; gap: 18rpx; margin: 40rpx 24rpx 12rpx; font-size: 19rpx; letter-spacing: 1rpx; color: #8193a3; }.home-footer view { flex: 1; height: 1rpx; background: #dce7ed; }
 @media (max-width: 350px) { .home-content { padding-left: 22rpx; padding-right: 22rpx; }.mc-foot { gap: 16rpx; }.mc-size { display: block; margin-left: 0; }.hero-note { display: none; }.hero-title { font-size: 46rpx; } }
+
+.admin-inbox-task { background: #fff5df; border-radius: 14rpx; padding: 20rpx; margin-top: 18rpx; color: #865d19; gap: 16rpx; }
+.admin-inbox-task > view { flex: 1; min-width: 0; }
+.admin-inbox-task .personal-link { flex-shrink: 0; }
+.admin-notice-preview { display: block; font-size: 24rpx; font-weight: 400; margin-top: 10rpx; color: #957638; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

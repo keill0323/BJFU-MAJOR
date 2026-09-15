@@ -160,6 +160,14 @@ module.exports = {
     + (filters.rank ? '&rank=' + encodeURIComponent(filters.rank) : '')
     + (filters.identity ? '&identity=' + encodeURIComponent(filters.identity) : '')),
   getPersonalNoticeSummary: () => request('/api/notifications/summary'),
+  getAdminNoticeRecipients: (keyword = '', beforeId) => request('/api/notifications/admin/recipients?keyword=' + encodeURIComponent(keyword) + (beforeId ? '&before_id=' + encodeURIComponent(beforeId) : ''))
+    .catch(err => backendVersionError(err, '定向通知')),
+  sendAdminNotice: (body) => request('/api/notifications/admin/send', 'POST', body)
+    .catch(err => backendVersionError(err, '定向通知')),
+  getAdminNoticeHistory: () => request('/api/notifications/admin/sent').catch(err => backendVersionError(err, '定向通知')),
+  getAdminNotices: (beforeId) => request('/api/notifications/admin/inbox' + (beforeId ? '?before_id=' + encodeURIComponent(beforeId) : ''))
+    .catch(err => backendVersionError(err, '定向通知')),
+  readAdminNotice: (id) => request('/api/notifications/admin/inbox/' + id + '/read', 'PUT'),
   getMyTeamApplications: () => request('/api/notifications/team-applications'),
   getRecruitmentPosts: (beforeId) => request('/api/recruitment' + (beforeId ? '?before_id=' + encodeURIComponent(beforeId) : '')),
   getMyRecruitment: () => request('/api/recruitment/my'),
@@ -197,9 +205,7 @@ module.exports = {
   uploadAvatar: (filePath) => uploadFile('/api/auth/upload-avatar', filePath, false),
 
   // ===== 队伍 =====
-  createTeam: (name, captainQq) => request('/api/teams', 'POST', { name, captain_qq: captainQq }), // 创建队伍
-  updateTeamContact: (teamId, captainQq) => request('/api/teams/' + teamId + '/contact', 'PUT', { captain_qq: captainQq })
-    .catch(err => backendVersionError(err, '队长 QQ 设置')),
+  createTeam: (name) => request('/api/teams', 'POST', { name }), // 创建队伍
   getTeams: () => request('/api/teams'),                                  // 队伍列表
   getAdminTeams: () => request('/api/teams/admin'),                        // 全部队伍（需管理权限）
   getTeam: (id) => request('/api/teams/' + id),                           // 查某支队伍详情

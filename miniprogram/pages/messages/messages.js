@@ -18,12 +18,14 @@ Page({
   data: {
     token: '', loading: false, loadError: false,
     invitations: [], teamApplications: [],
+    adminNotices: [], adminUnread: 0, adminError: '', adminLoading: false, adminLoadingMore: false,
+    adminCursor: null, adminHasMore: false, readingAdminId: null,
     rankApplications: [],
     scheduleNotices: [], unreadSchedules: 0, noticeCursor: null,
     hasMoreNotices: false, loadingMore: false, noticeError: '', openingNotice: null
   },
 
-  onLoad(options) { this._section = options && ['invitations', 'applications', 'schedules'].includes(options.section) ? options.section : '' },
+  onLoad(options) { this._section = options && ['admin', 'invitations', 'applications', 'schedules'].includes(options.section) ? options.section : '' },
 
   onShow() {
     const token = wx.getStorageSync('token') || ''
@@ -32,13 +34,14 @@ Page({
         noticeCursor: null, hasMoreNotices: false, openingNotice: null })
     }
     this.setData({ token })
+    this.loadAdminNotices()
     this.loadMessages()
   },
 
-  onUnload() { this._requestId = (this._requestId || 0) + 1 },
+  onUnload() { this._requestId = (this._requestId || 0) + 1; this._adminGeneration = (this._adminGeneration || 0) + 1 },
 
   onPullDownRefresh() {
-    this.loadMessages().finally(() => wx.stopPullDownRefresh())
+    Promise.all([this.loadMessages(), this.loadAdminNotices()]).finally(() => wx.stopPullDownRefresh())
   },
 
   async loadMessages() {
@@ -74,7 +77,7 @@ Page({
       noticeCursor: results[2].next_cursor, hasMoreNotices: results[2].has_more
     })
     this.setData(updates, () => {
-      if (this._section && this.isCurrent(requestId, token)) {
+      if (this._section && this._section !== 'admin' && this.isCurrent(requestId, token)) {
         wx.pageScrollTo({ selector: '#notice-' + this._section, duration: 250, offsetTop: -100 })
         this._section = ''
       }
@@ -83,6 +86,63 @@ Page({
 
   isCurrent(requestId, token) {
     return requestId === this._requestId && token === this.data.token && token === wx.getStorageSync('token')
+  },
+
+  adminCurrent(generation, token) {
+    return generation === this._adminGeneration && token === this.data.token && token === wx.getStorageSync('token')
+  },
+  async loadAdminNotices() { return this.fetchAdminNotices(false) },
+  async loadMoreAdminNotices() {
+    if (!this.data.adminLoading && !this.data.adminLoadingMore && this.data.adminHasMore) return this.fetchAdminNotices(true)
+  },
+  async fetchAdminNotices(more) {
+    const token = this.data.token
+    if (this._adminToken !== token || !token) {
+      this.setData({ adminNotices: [], adminUnread: 0, adminCursor: null, adminHasMore: false, readingAdminId: null })
+    }
+    this._adminToken = token
+    if (this.data.readingAdminId) return
+    const generation = this._adminGeneration = (this._adminGeneration || 0) + 1
+    if (!token) { this.setData({ adminLoading: false, adminLoadingMore: false, adminError: '' }); return }
+    this.setData({ adminLoading: !more, adminLoadingMore: more, adminError: '' })
+    try {
+      const result = await api.getAdminNotices(more ? this.data.adminCursor : null)
+      if (!this.adminCurrent(generation, token)) return
+      const rows = result.items.map(n => Object.assign({}, n, { createdText: String(n.created_at || '').replace('T', ' ').slice(0, 16) }))
+      this.setData({ adminNotices: more ? this.data.adminNotices.concat(rows.filter(n => !this.data.adminNotices.some(old => old.id === n.id))) : rows,
+        adminUnread: result.unread_count, adminCursor: result.next_cursor, adminHasMore: result.has_more,
+        adminLoading: false, adminLoadingMore: false }, () => {
+        if (this._section === 'admin' && this.adminCurrent(generation, token)) {
+          wx.pageScrollTo({ selector: '#notice-admin', duration: 250, offsetTop: -100 }); this._section = ''
+        }
+      })
+    } catch (err) {
+      if (this.adminCurrent(generation, token)) this.setData({ adminError: err.detail || '管理员通知加载失败，请重试' })
+    } finally {
+      if (this.adminCurrent(generation, token)) this.setData({ adminLoading: false, adminLoadingMore: false })
+    }
+  },
+  async openAdminNotice(e) {
+    if (this.data.readingAdminId || this.data.adminLoading || this.data.adminLoadingMore) return
+    if (!this.adminCurrent(this._adminGeneration, this.data.token)) return
+    const notice = this.data.adminNotices.find(n => n.id === Number(e.currentTarget.dataset.id))
+    if (!notice) return
+    const generation = this._adminGeneration, token = this.data.token
+    this.setData({ readingAdminId: notice.id })
+    try {
+      const confirmed = await new Promise(resolve => wx.showModal({ title: notice.title, content: notice.content,
+        showCancel: false, confirmText: '我知道了', success: res => resolve(!!res.confirm), fail: () => resolve(false) }))
+      if (!confirmed || !this.adminCurrent(generation, token) || notice.is_read) return
+      await api.readAdminNotice(notice.id)
+      if (this.adminCurrent(generation, token)) this.setData({
+        adminNotices: this.data.adminNotices.map(n => n.id === notice.id ? Object.assign({}, n, { is_read: true }) : n),
+        adminUnread: Math.max(0, this.data.adminUnread - 1)
+      })
+    } catch (err) {
+      if (this.adminCurrent(generation, token)) wx.showToast({ title: err.detail || '已读状态保存失败，请重试', icon: 'none' })
+    } finally {
+      if (this.adminCurrent(generation, token)) this.setData({ readingAdminId: null })
+    }
   },
 
   onReachBottom() { this.loadMoreNotices() },

@@ -44,6 +44,7 @@
     <view wx:if="{{tab === 'overview'}}">
       <view class="section-heading"><text class="section-title">常用管理</text></view>
       <view class="card management-links">
+        <view wx:if="{{user.role === 'admin'}}" class="management-link" bindtap="openNotices"><view><text class="link-title">定向通知</text><text class="link-caption">选择人员发送通知、查看已读人数</text></view><text>›</text></view>
         <view class="management-link" bindtap="switchTab" data-tab="matches"><view><text class="link-title">赛事管理</text><text class="link-caption">报名、赛程与赛事设置</text></view><text>›</text></view>
         <view wx:if="{{user.role === 'admin'}}" class="management-link" bindtap="openHonors"><view><text class="link-title">冠军补录</text><text class="link-caption">为已结束赛事补录冠军荣誉</text></view><text>›</text></view>
         <view class="management-link" bindtap="switchTab" data-tab="users"><view><text class="link-title">用户管理</text><text class="link-caption">查找选手、调整资料</text></view><text>›</text></view>

@@ -46,7 +46,7 @@
         <view class="info-row"><text class="info-label">账户角色</text><text class="info-value">{{user.role === 'admin' ? '管理员' : user.role === 'reviewer' ? '审核员' : '普通用户'}}</text></view>
       </block>
       <view wx:else class="edit-form">
-        <button class="avatar-button" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" disabled="{{avatarUploading || saving}}"><image src="{{user.avatar_full || '/images/icons/gamepad.svg'}}" mode="aspectFill"/><text>{{avatarUploading ? '头像上传中…' : '更换头像'}}</text><text class="avatar-button-arrow">↗</text></button>
+        <button class="avatar-button" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" binderror="onAvatarError" disabled="{{avatarUploading || saving}}"><image src="{{user.avatar_full || '/images/icons/gamepad.svg'}}" mode="aspectFill"/><text>{{avatarUploading ? '头像上传中…' : '更换头像'}}</text><text class="avatar-button-arrow">↗</text></button>
         <text class="field-label">昵称</text>
         <input class="input" placeholder="填写你的昵称" value="{{nickname}}" bindinput="onNickInput" disabled="{{saving}}"/>
         <text class="field-label">游戏 ID</text>
@@ -62,3 +62,4 @@
     <text class="page-footer">BJFU MAJOR · 为热爱，上场</text>
   </block>
 </view>
+<privacy-dialog id="privacy-dialog"></privacy-dialog>

@@ -9,6 +9,7 @@
     "pages/rules/rules",
     "pages/admin/admin",
     "pages/admin/champion/champion",
+    "pages/admin/notices/notices",
     "pages/admin/mdetail/mdetail",
     "pages/messages/messages",
     "pages/verify/verify",
@@ -22,5 +23,8 @@
     "navigationBarTextStyle": "black"
   },
   "style": "v2",
+  "usingComponents": {
+    "privacy-dialog": "/components/privacy-dialog/privacy-dialog"
+  },
   "sitemapLocation": "sitemap.json"
 }

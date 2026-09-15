@@ -17,10 +17,6 @@
         <view class="identity-copy"><text class="team-name">{{team.name}}</text><text class="captain-copy">队长 · {{team.captain_name}}</text></view>
       </view>
       <text class="team-description">{{team.description}}</text>
-      <view class="captain-contact">
-        <view class="contact-copy"><text class="contact-label">队长联系 QQ</text><text class="contact-value">{{!loggedIn ? '登录后可查看' : team.captain_qq || '队长暂未补充'}}</text></view>
-        <button wx:if="{{loggedIn && team.captain_qq}}" class="contact-button" bindtap="copyCaptainQq">复制</button>
-      </view>
       <view class="team-stats">
         <view class="team-stat"><text class="stat-value accent">{{team.display_rating}}</text><text class="stat-caption">队伍水平分</text></view>
         <view class="team-stat"><text class="stat-value">{{team.member_count}}</text><text class="stat-caption">当前队员</text></view>

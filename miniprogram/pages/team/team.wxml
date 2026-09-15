@@ -25,19 +25,6 @@
         <view class="identity-copy"><text class="team-name">{{myTeam.name}}</text><text class="status-pill status-{{myTeam.status_class}}"><text class="status-dot"></text>{{myTeam.status_text}}</text></view>
       </view>
       <text class="team-description">{{myTeam.description || '并肩作战，让每一回合都有默契。'}}</text>
-      <view class="captain-contact">
-        <view class="contact-heading">
-          <view class="contact-copy"><text class="contact-label">队长 QQ</text><text class="contact-value {{myTeam.captain_qq ? '' : 'contact-missing'}}">{{myTeam.captain_qq || '暂未填写'}}</text></view>
-          <view class="contact-actions"><view wx:if="{{myTeam.captain_qq}}" class="contact-link" bindtap="copyCaptainQq">复制</view><view wx:if="{{isCaptain && !showContactEditor}}" class="contact-link" bindtap="openContactEditor">{{myTeam.captain_qq ? '修改' : '补充 QQ'}}</view></view>
-        </view>
-        <text wx:if="{{isCaptain && !myTeam.captain_qq && !showContactEditor}}" class="contact-reminder">请补充本人常用 QQ，方便队友和对手联系。</text>
-        <view wx:if="{{showContactEditor && isCaptain}}" class="contact-editor">
-          <input class="team-input contact-input" type="number" maxlength="12" placeholder="请输入队长本人常用 QQ 号" placeholder-class="input-placeholder" value="{{captainQqDraft}}" bindinput="onContactQqInput" disabled="{{contactSaving}}"/>
-          <text class="contact-hint">登录用户可在队伍详情查看，用于组队和约赛联系</text>
-          <text wx:if="{{contactError}}" class="form-error">{{contactError}}</text>
-          <view class="contact-form-actions"><button class="action secondary small contact-button" bindtap="closeContactEditor">收起</button><button class="action primary small contact-button" bindtap="saveTeamContact" loading="{{contactSaving}}" disabled="{{contactSaving}}">{{contactSaving ? '保存中' : '保存 QQ'}}</button></view>
-        </view>
-      </view>
       <view class="team-stats">
         <view class="team-stat"><view class="stat-value-line"><text class="stat-value accent">{{myTeam.display_rating}}</text><text class="level-label">{{myTeam.rating_tier}}</text></view><text class="stat-caption">队伍水平分</text></view>
         <view class="team-stat"><text class="stat-value">{{members.length}}</text><text class="stat-caption">当前队员</text></view>
@@ -76,6 +63,7 @@
       <view class="section-heading"><text class="section-title">队伍协作</text></view>
       <view wx:if="{{isCaptain}}" class="recruit-actions"><view class="action primary" bindtap="goRecruitment">全部选手</view><view class="action secondary" bindtap="openRecruit">按学号招募</view></view>
       <view class="action secondary" bindtap="goRecruitment">招募大厅 · 发布 / 查看招募</view>
+      <view class="action secondary" bindtap="goMessages">消息中心 · 入队申请 / 邀请 / 约赛通知</view>
       <button class="action share-action" open-type="share">分享队伍</button>
       <view class="team-footer"><text>{{isCaptain ? '队长负责招募与队伍报名' : '报名由队长统一安排'}}</text><view wx:if="{{isCaptain}}" class="danger-link" bindtap="disbandTeam">解散队伍</view><view wx:else class="danger-link" bindtap="leaveTeam">退出队伍</view></view>
     </view>
@@ -86,9 +74,6 @@
       <block wx:if="{{loggedIn}}">
         <view class="field-heading"><text>队伍名称</text><text class="field-count">{{teamName.length}} / 20</text></view>
         <input class="team-input" placeholder="给队伍起一个名字" placeholder-class="input-placeholder" value="{{teamName}}" bindinput="onNameInput" maxlength="20" disabled="{{creatingTeam}}"/>
-        <view class="field-heading"><text>队长 QQ</text><text class="field-required">必填</text></view>
-        <input class="team-input contact-input" type="number" maxlength="12" placeholder="请输入本人常用 QQ 号" placeholder-class="input-placeholder" value="{{teamCaptainQq}}" bindinput="onCaptainQqInput" disabled="{{creatingTeam}}"/>
-        <text class="contact-hint create-contact-hint">登录用户可在队伍详情查看，用于组队和约赛联系</text>
         <text wx:if="{{createTeamError}}" class="form-error">{{createTeamError}}</text>
         <button class="action primary create-button" bindtap="createTeam" loading="{{creatingTeam}}" disabled="{{creatingTeam}}">{{creatingTeam ? '创建中' : '创建队伍'}}</button>
         <text class="create-note">创建后需等待管理员审核</text>
@@ -130,3 +115,4 @@
 </view>
 
 <subscribe-notice></subscribe-notice>
+<privacy-dialog id="privacy-dialog"></privacy-dialog>

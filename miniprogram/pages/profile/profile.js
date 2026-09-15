@@ -4,6 +4,7 @@
  */
 const api = require('../../utils/api.js')
 const { rankDisplay, rankBadge } = require('../../utils/rank.js')
+const { showImageError } = require('../../utils/image-upload.js')
 
 Page({
   data: {
@@ -58,10 +59,11 @@ Page({
 
   onChooseAvatar(e) {
     if (this.data.avatarUploading || this.data.saving) return
-    const avatarUrl = e.detail.avatarUrl
+    const avatarUrl = e && e.detail && e.detail.avatarUrl
     if (!avatarUrl) return
     this.uploadAvatar(avatarUrl)
   },
+  onAvatarError: showImageError,
 
   async uploadAvatar(filePath) {
     this.setData({ avatarUploading: true })

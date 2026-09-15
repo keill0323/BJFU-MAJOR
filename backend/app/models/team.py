@@ -28,7 +28,7 @@ class Team(Base):
         id: 队伍ID
         name: 队伍名，唯一
         captain_id: 队长用户ID，外键关联 users 表
-        captain_qq: 队长联系QQ，仅登录用户可在队伍详情中查看
+        captain_qq: 停用的历史字段，不再收集或通过接口返回
         captain: 队长的 User 对象（通过 relationship 关联）
         description: 队伍简介
         status: 审核状态（pending/approved/rejected）
@@ -43,7 +43,7 @@ class Team(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="队伍ID")
     name = Column(String(64), unique=True, nullable=False, comment="队伍名（唯一）")
     captain_id = Column(Integer, ForeignKey("users.id"), nullable=False, comment="队长用户ID")
-    captain_qq = Column(String(12), nullable=True, comment="队长联系QQ；历史队伍可由队长补录")
+    captain_qq = Column(String(12), nullable=True, comment="停用的历史字段；不再收集或返回")
     captain = relationship("User", foreign_keys=[captain_id])
     description = Column(String(256), nullable=True, comment="队伍简介")
     status = Column(SAEnum(TeamStatus), default=TeamStatus.PENDING, index=True, comment="审核状态 pending/approved/rejected")

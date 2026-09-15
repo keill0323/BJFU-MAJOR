@@ -5,6 +5,7 @@ from app.models.match import Match, MatchRound
 from app.models.team import Team, TeamApplication, TeamInvitation, ApplicationStatus
 from app.models.user import User
 from app.models.notification import ScheduleNotification
+from app.models.admin_notice import AdminNotice, AdminNoticeBatch
 from app.services.team_request_service import actionable
 
 
@@ -28,8 +29,13 @@ def personal_summary(db, user_id):
                            Team.is_hidden.is_(False)).count())
     applications = _applications(db, user_id).count()
     schedules = db.query(ScheduleNotification).filter(ScheduleNotification.user_id == user_id, ScheduleNotification.read_at.is_(None)).count()
+    admin_query = db.query(AdminNotice).filter_by(user_id=user_id, read_at=None)
+    admin_count = admin_query.count()
+    latest = (db.query(AdminNoticeBatch.title).join(AdminNotice).filter(AdminNotice.user_id == user_id,
+              AdminNotice.read_at.is_(None)).order_by(AdminNotice.id.desc()).first()) if admin_count else None
     return dict(invitation_count=invitations, application_count=applications, schedule_count=schedules,
-                total=invitations + applications + schedules)
+                admin_notice_count=admin_count, admin_notice_title=latest[0] if latest else '',
+                total=invitations + applications + schedules + admin_count)
 
 
 def now():

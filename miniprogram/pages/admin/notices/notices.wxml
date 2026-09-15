@@ -1,0 +1,32 @@
+<nav-drawer title="定向通知"></nav-drawer>
+<view class="notice-page">
+  <text class="eyebrow">MANAGEMENT · INBOX</text><text class="page-title">把消息送到需要的人手中</text>
+  <text class="page-copy">选择收件人，发送站内通知。对方会在赛事主页看到未读提示。</text>
+  <view wx:if="{{checking}}" class="notice-card">正在确认权限…</view>
+  <view wx:elif="{{error}}" class="notice-card error-text">{{error}}<button class="minor-button" bindtap="initialize">重新检查</button></view>
+  <block wx:elif="{{allowed}}">
+    <view wx:if="{{sentMessage}}" class="sent-banner">{{sentMessage}}</view>
+    <view class="notice-card">
+      <view class="section-head"><text class="section-title">01 / 选择收件人</text><text class="count">已选 {{selectedCount}} / 100</text></view>
+      <view class="search-row"><input class="text-input search-input" placeholder="昵称 / 游戏 ID / 用户 ID" maxlength="50" value="{{keyword}}" bindinput="onKeyword" bindconfirm="search" disabled="{{sending}}"/><button class="minor-button search-button" bindtap="search" disabled="{{sending}}">搜索</button></view>
+      <view wx:if="{{selectedCount}}" class="selected-list"><view wx:for="{{selected}}" wx:key="id" class="selected-chip" bindtap="toggleRecipient" data-id="{{item.id}}">{{item.nickname}} · ID {{item.id}} ×</view></view>
+      <view wx:if="{{searchError}}" class="error-text" bindtap="search">{{searchError}} · 点击重试</view>
+      <scroll-view wx:if="{{users.length}}" scroll-y class="recipient-list">
+      <view wx:for="{{users}}" wx:key="id" class="recipient-row {{item.selected ? 'recipient-selected' : ''}}" bindtap="toggleRecipient" data-id="{{item.id}}"><view class="selection-box">{{item.selected ? '✓' : ''}}</view><view class="recipient-copy"><text class="recipient-name">{{item.nickname}}</text><text class="recipient-meta">ID {{item.id}} · {{item.game_id || '未设置游戏 ID'}} · {{item.is_verified ? '学籍已认证' : '学籍待认证'}}</text></view></view>
+      </scroll-view>
+      <text wx:if="{{searching}}" class="hint">正在查找…</text><text wx:elif="{{!users.length && !searchError}}" class="hint">没有匹配的用户，请调整关键词。</text>
+      <button wx:if="{{hasMore && !searching}}" class="minor-button" bindtap="loadMore" disabled="{{sending}}">加载更多人员</button>
+    </view>
+    <view class="notice-card">
+      <text class="section-title">02 / 填写通知</text>
+      <view class="field-head"><text>标题</text><text>{{title.length}} / 40</text></view><input class="text-input" placeholder="例如：请确认本轮比赛时间" maxlength="40" value="{{title}}" bindinput="onTitle" disabled="{{sending}}"/>
+      <view class="field-head"><text>正文</text><text>{{content.length}} / 500</text></view><textarea class="body-input" placeholder="写清需要对方了解或处理的事项、时间和操作位置。" maxlength="500" value="{{content}}" bindinput="onContent" disabled="{{sending}}"/>
+      <text wx:if="{{sendError}}" class="error-text">{{sendError}}</text><button class="send-button" bindtap="sendNotice" loading="{{sending}}" disabled="{{sending}}">{{sending ? '正在处理…' : '预览并发送 · ' + selectedCount + ' 人'}}</button>
+    </view>
+    <view class="notice-card"><view class="section-head"><text class="section-title">最近发送</text><text class="refresh-link" bindtap="loadHistory">刷新</text></view>
+      <text class="hint">显示最近 20 批通知；已读人数表示收件人已打开并确认。</text><view wx:if="{{historyError}}" class="error-text" bindtap="loadHistory">{{historyError}}</view>
+      <view wx:for="{{history}}" wx:key="id" class="history-row"><text class="recipient-name">{{item.title}}</text><text class="history-body">{{item.content}}</text><text class="recipient-meta">{{item.timeText}} · {{item.recipient_count}} 人收到 · {{item.read_count}} 人已读</text></view>
+      <text wx:if="{{!history.length && !historyError}}" class="hint">暂未发送通知。</text>
+    </view>
+  </block>
+</view>

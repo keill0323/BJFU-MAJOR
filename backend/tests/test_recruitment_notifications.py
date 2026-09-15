@@ -15,7 +15,7 @@ from app.services import notification_service as notices
 from app.models.notification import ScheduleNotification
 
 TEMPLATE = "template-for-unit-tests-only"
-CONFIG = {kind: {"template_id": TEMPLATE, "fields": {"thing1": "team_name", "name2": "actor_name", "phrase3": "event", "time4": "time"}} for kind in wx.KINDS}
+CONFIG = {kind: {"template_id": TEMPLATE, "fields": {"thing1": "team_name", "name2": "actor_name", "phrase3": "event", "time4": "time"}} for kind in ("team_invitation", "team_application")}
 
 
 class RecruitmentTests(DatabaseTestCase):

@@ -76,3 +76,4 @@
     <view class="support-row" bindtap="goRules"><text>认证说明与隐私政策</text><image src="/images/icons/chevron-right.svg"/></view>
   </block>
 </view>
+<privacy-dialog id="privacy-dialog"></privacy-dialog>

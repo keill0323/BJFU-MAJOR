@@ -59,19 +59,31 @@ def configuration():
 
 
 def record_choice(db, user_id, choices):
-    allowed = {item["template_id"] for item in templates().values()}
+    configured = templates()
+    allowed = {item["template_id"] for item in configured.values()}
     if not choices or any(tid not in allowed or choice not in ("accept", "reject", "ban") for tid, choice in choices.items()):
         raise HTTPException(422, "订阅配置已变化，请刷新后重试")
     # 锁用户，串行处理同一用户的授权回调；重复回调不会虚增发送次数。
-    db.query(User).filter(User.id == user_id).with_for_update().one()
-    for tid, choice in choices.items():
-        row = db.get(WechatSubscription, (user_id, tid))
-        if row is None:
-            row = WechatSubscription(user_id=user_id, template_id=tid)
-            db.add(row)
-        row.enabled, row.updated_at = choice == "accept", datetime.now()
-    db.commit()
+    try:
+        user = db.query(User).filter(User.id == user_id).with_for_update().one()
+        for tid, choice in choices.items():
+            row = db.get(WechatSubscription, (user_id, tid))
+            if row is None:
+                row = WechatSubscription(user_id=user_id, template_id=tid)
+                db.add(row)
+            row.enabled, row.updated_at = choice == "accept", datetime.now()
+        # SessionLocal 关闭了 autoflush；入队前必须能查到本次新建的订阅记录。
+        db.flush()
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return {"message": "订阅选择已记录；实际发送以微信授权为准"}
+
+
+def _can_receive(user):
+    return bool(user and not user.is_hidden and user.wx_openid and
+                not user.wx_openid.startswith(("bot:", "mock_", "test-")))
 
 
 def enqueue(db, kind, source_id, recipient_id, team, actor):
@@ -79,7 +91,7 @@ def enqueue(db, kind, source_id, recipient_id, team, actor):
     if not spec:
         return
     recipient = db.get(User, recipient_id)
-    if not recipient or recipient.is_hidden or not recipient.wx_openid or recipient.wx_openid.startswith(("bot:", "mock_", "test-")):
+    if not _can_receive(recipient):
         return
     subscription = db.get(WechatSubscription, (recipient_id, spec["template_id"]))
     if not subscription or not subscription.enabled:
@@ -147,13 +159,17 @@ def deliver_pending(session_factory=SessionLocal, sender=send):
             row = db.get(WechatOutbox, notice_id)
             recipient = db.get(User, row.user_id)
             subscription = db.get(WechatSubscription, (row.user_id, row.template_id))
-            source_model = TeamInvitation if row.kind == "team_invitation" else TeamApplication
-            source = db.query(source_model).filter(source_model.id == row.source_id, *actionable(db, source_model)).first()
-            team = db.get(Team, source.team_id) if source else None
+            if row.kind in ("team_invitation", "team_application"):
+                source_model = TeamInvitation if row.kind == "team_invitation" else TeamApplication
+                source = db.query(source_model).filter(source_model.id == row.source_id, *actionable(db, source_model)).first()
+                team = db.get(Team, source.team_id) if source else None
+                source_valid = bool(source and source.status == ApplicationStatus.PENDING and team and
+                                    (row.kind != "team_application" or team.captain_id == row.user_id))
+            else:
+                team, source_valid = None, False
             spec = templates().get(row.kind)
-            if (not recipient or recipient.is_hidden or not subscription or not subscription.enabled or
-                    not source or source.status != ApplicationStatus.PENDING or not team or team.is_hidden or
-                    (row.kind == "team_application" and team.captain_id != row.user_id) or
+            if (not _can_receive(recipient) or not subscription or not subscription.enabled or
+                    not source_valid or not team or team.is_hidden or
                     not spec or spec["template_id"] != row.template_id):
                 row.status = "skipped"
                 db.commit()
