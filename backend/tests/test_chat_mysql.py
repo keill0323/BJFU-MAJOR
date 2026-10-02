@@ -15,15 +15,15 @@ from unittest.mock import patch
 
 from tests import support  # noqa: F401 — 提前启用不读取项目 .env 的隔离配置。
 from fastapi import HTTPException
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import Base
 from app.models.user import User, UserRole
-from app.models.chat import ChatConversation, ChatEvent, ChatMessage
-from app.schemas.chat import OpenConversation, SendMessage
+from app.models.chat import ChatConversation, ChatEvent, ChatMessage, ChatMember, ChatBlock, ChatReport, ChatSanction
+from app.schemas.chat import OpenConversation, SendMessage, ReportMessage, SanctionUser
 from app.services import chat_service as chat
 
 
@@ -82,6 +82,104 @@ class MySQLConcurrencyTests(unittest.TestCase):
             # 模拟真实 HTTP 认证先 SELECT 用户并建立 RR 快照。
             db.query(User).filter_by(id=user_id).first()
             return chat.send_message(db, user_id, self.cid, packet)
+
+    def extra_users(self, count, admins=False):
+        with Session(self.engine, autoflush=False) as db:
+            users = [User(wx_openid="test-mysql-extra-" + str(index), nickname="独立并发" + str(index),
+                          role=UserRole.ADMIN if admins and index % 2 == 0 else UserRole.USER,
+                          is_hidden=False, is_verified=True) for index in range(count)]
+            db.add_all(users)
+            db.flush()
+            ids = [user.id for user in users]
+            db.commit()
+            return ids
+
+    def concurrently(self, items, operation, insert_table=None):
+        start = threading.Barrier(len(items))
+        inserts = threading.Barrier(len(items)) if insert_table else None
+        def before_insert(connection, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith("INSERT INTO " + insert_table.upper()):
+                # 无关事务均已完成缺失行检查，再同时插入，稳定复现 RR 间隙锁冲突。
+                inserts.wait(timeout=10)
+        def execute(item):
+            with Session(self.engine, autoflush=False) as db:
+                db.query(User).filter_by(id=item[0]).first()  # 模拟鉴权已建立旧快照。
+                start.wait(timeout=10)
+                return operation(db, item)
+        if insert_table:
+            event.listen(self.engine, "before_cursor_execute", before_insert)
+        try:
+            with ThreadPoolExecutor(max_workers=len(items)) as pool:
+                futures = [pool.submit(execute, item) for item in items]
+                return [future.result(timeout=30) for future in futures]
+        finally:
+            if insert_table:
+                event.remove(self.engine, "before_cursor_execute", before_insert)
+
+    def test_distinct_pairs_can_create_simultaneously_without_gap_deadlock(self):
+        ids = self.extra_users(16)
+        pairs = list(zip(ids[::2], ids[1::2]))
+        rooms = self.concurrently(pairs, lambda db, pair: chat.open_conversation(db, pair[0], OpenConversation(target_id=pair[1])),
+                                  insert_table="chat_conversations")
+        self.assertEqual(len({room["id"] for room in rooms}), 8)
+        with Session(self.engine) as db:
+            self.assertEqual(db.query(ChatConversation).count(), 9)
+            self.assertEqual(db.query(ChatMember).count(), 18)
+
+    def test_simultaneous_same_pair_creates_one_conversation(self):
+        a, b = self.extra_users(2)
+        pairs = [(a, b), (b, a)] * 4
+        rooms = self.concurrently(pairs, lambda db, pair: chat.open_conversation(db, pair[0], OpenConversation(target_id=pair[1])))
+        self.assertEqual(len({room["id"] for room in rooms}), 1)
+        with Session(self.engine) as db:
+            self.assertEqual(db.query(ChatConversation).filter_by(user_low=a, user_high=b).count(), 1)
+            self.assertEqual(db.query(ChatMember).filter_by(conversation_id=rooms[0]["id"]).count(), 2)
+
+    def test_simultaneous_last_daily_slot_admits_only_one_new_room(self):
+        actor, *targets = self.extra_users(12)
+        with Session(self.engine, autoflush=False) as db:
+            for target in targets[:9]:
+                chat.open_conversation(db, actor, OpenConversation(target_id=target))
+        def open_last(db, pair):
+            try:
+                return chat.open_conversation(db, pair[0], OpenConversation(target_id=pair[1]))
+            except HTTPException as error:
+                return error.status_code
+        results = self.concurrently([(actor, target) for target in targets[9:]], open_last)
+        self.assertEqual(sum(isinstance(result, dict) for result in results), 1)
+        self.assertEqual(results.count(429), 1)
+        with Session(self.engine) as db:
+            self.assertEqual(db.query(ChatConversation).filter_by(initiator_id=actor).count(), 10)
+
+    def test_distinct_pairs_can_block_without_existing_rooms_or_gap_deadlock(self):
+        ids = self.extra_users(16)
+        pairs = list(zip(ids[::2], ids[1::2]))
+        self.concurrently(pairs, lambda db, pair: chat.set_block(db, pair[0], pair[1], True), insert_table="chat_blocks")
+        with Session(self.engine) as db:
+            self.assertEqual(db.query(ChatBlock).count(), 8)
+            for actor, target in pairs:
+                self.assertTrue(chat.blocked(db, actor, target))
+
+    def test_distinct_conversations_can_report_without_gap_deadlock(self):
+        ids = self.extra_users(16)
+        reports = []
+        with Session(self.engine, autoflush=False) as db, patch.object(chat, "check_content", return_value=None):
+            for index, (a, b) in enumerate(zip(ids[::2], ids[1::2])):
+                cid = chat.open_conversation(db, a, OpenConversation(target_id=b))["id"]
+                message = chat.send_message(db, a, cid, self.packet("report-" + str(index)))["message"]
+                reports.append((b, int(message["id"])))
+        self.concurrently(reports, lambda db, item: chat.report(db, item[0], ReportMessage(message_id=item[1], reason="并发举报测试")),
+                          insert_table="chat_reports")
+        with Session(self.engine) as db:
+            self.assertEqual(db.query(ChatReport).count(), 8)
+
+    def test_distinct_admin_target_pairs_can_sanction_without_gap_deadlock(self):
+        ids = self.extra_users(16, admins=True)
+        pairs = list(zip(ids[::2], ids[1::2]))
+        self.concurrently(pairs, lambda db, pair: chat.sanction(db, pair[0], SanctionUser(user_id=pair[1], hours=1, reason="并发禁言测试")),
+                          insert_table="chat_sanctions")
+        with Session(self.engine) as db:
+            self.assertEqual(db.query(ChatSanction).count(), 8)
 
     def test_simultaneous_bidirectional_messages_have_unique_order(self):
         barrier = threading.Barrier(2)

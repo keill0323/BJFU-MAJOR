@@ -69,9 +69,9 @@ def peer_id(room, user_id):
     return room.user_high if user_id == room.user_low else room.user_low
 
 
-def blocked(db, a, b, lock=False):
+def blocked(db, a, b):
     query = db.query(Block).filter(or_(and_(Block.user_id == a, Block.target_id == b), and_(Block.user_id == b, Block.target_id == a))).populate_existing()
-    return (query.with_for_update() if lock else query).first() is not None
+    return query.first() is not None
 
 
 def audit(db, actor, action, target, reason=""):
@@ -134,18 +134,20 @@ def open_conversation(db, user_id, body):
             teams = [db.query(Team).filter_by(id=tid).populate_existing().first() for tid in (r.team1_id, r.team2_id)] if r else []
             if len(teams) != 2 or any(not t or t.is_hidden for t in teams) or {t.captain_id for t in teams} != {user_id, target}:
                 raise HTTPException(409, "对阵队长已更新，请重新打开对阵")
-        # 上述来源查询建立的快照只用于来源；其余关键记录全部使用当前读。
-        room = db.query(Conversation).filter_by(user_low=low, user_high=high).populate_existing().with_for_update().first()
+        # 此事务的快照在双方用户锁之后建立。建会话/拉黑都先锁用户，
+        # 因此普通读也包含此前提交的会话和限额；缺失行无需再锁范围。
+        # MySQL RR 的缺失会话/限额 FOR UPDATE 会让无关用户互持间隙锁，插入时死锁。
+        room = db.query(Conversation).filter_by(user_low=low, user_high=high).populate_existing().first()
         if room:
             db.commit()
             return {"id": room.id}
         sender, receiver = users[user_id], users[target]
-        if blocked(db, user_id, target, lock=True):
+        if blocked(db, user_id, target):
             raise HTTPException(403, "当前无法建立私聊")
         if not sender.is_verified and sender.role != UserRole.ADMIN and receiver.role != UserRole.ADMIN:
             raise HTTPException(403, "完成在校认证后可发起私聊；认证问题可以联系管理员")
         day_start = (now() + timedelta(hours=8)).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=8)
-        count = len(db.query(Conversation.id).filter(Conversation.initiator_id == user_id, Conversation.created_at >= day_start).with_for_update().all())
+        count = db.query(Conversation).filter(Conversation.initiator_id == user_id, Conversation.created_at >= day_start).count()
         if count >= 10:
             raise HTTPException(429, "今天新建私聊较多，请明天再试")
         room = Conversation(user_low=low, user_high=high, initiator_id=user_id, last_seq=0, event_floor=0, created_at=now(), updated_at=now())
@@ -380,9 +382,9 @@ def send_message(db, user_id, cid, body):
             result = {"message": message_data(old), "replayed": True}
             db.commit()
             return result
-        if not enabled(other_id) or blocked(db, user_id, other_id, lock=True):
+        if not enabled(other_id) or blocked(db, user_id, other_id):
             raise HTTPException(403, "当前无法向对方发送消息")
-        sanction = db.query(Sanction).filter_by(user_id=user_id).populate_existing().with_for_update().first()
+        sanction = db.query(Sanction).filter_by(user_id=user_id).populate_existing().first()
         if sanction and sanction.until > now():
             raise HTTPException(403, "当前账号暂时不能发送聊天消息")
         minute = db.query(Message).filter(Message.sender_id == user_id, Message.created_at >= now() - timedelta(minutes=1))
@@ -467,14 +469,17 @@ def set_block(db, user_id, target_id, value):
         raise HTTPException(400, "不能拉黑自己")
     for uid in sorted((user_id, target_id)):
         active_user(db, uid, lock=True)
-    row = db.query(Block).filter_by(user_id=user_id, target_id=target_id).populate_existing().with_for_update().first()
+    # 双方用户锁已串行化同一拉黑关系；快照在加锁后建立，缺失行不加间隙锁。
+    row = db.query(Block).filter_by(user_id=user_id, target_id=target_id).populate_existing().first()
     if value and not row:
         db.add(Block(user_id=user_id, target_id=target_id, created_at=now()))
     elif not value and row:
         db.delete(row)
     low, high = sorted((user_id, target_id))
-    room = db.query(Conversation).filter_by(user_low=low, user_high=high).with_for_update().first()
+    room = db.query(Conversation).filter_by(user_low=low, user_high=high).first()
     if room:
+        # 已存在的会话仍需当前读锁，和清理/举报隐藏共同保护事件序号。
+        room = db.query(Conversation).filter_by(id=room.id).populate_existing().with_for_update().one()
         append_event(db, room, "permissions")
     db.commit()
     return {"message": "设置已保存"}
@@ -494,7 +499,8 @@ def report(db, user_id, body):
         raise HTTPException(404, "消息不存在")
     if msg.sender_id == user_id or msg.state != "active":
         raise HTTPException(400, "这条消息暂不可举报")
-    existing = db.query(Report).filter_by(reporter_id=user_id, message_id=msg.id).populate_existing().with_for_update().first()
+    # 同会话举报由已持有的会话锁串行化；首次举报无需锁不存在的唯一键范围。
+    existing = db.query(Report).filter_by(reporter_id=user_id, message_id=msg.id).populate_existing().first()
     if not existing:
         reason = body.reason.strip()
         if not reason:
@@ -557,7 +563,8 @@ def sanction(db, actor_id, body):
     target = users[body.user_id]
     if target.role == UserRole.ADMIN:
         raise HTTPException(400, "管理员账号不能在此禁言")
-    row = db.query(Sanction).filter_by(user_id=body.user_id).populate_existing().with_for_update().first()
+    # 禁言的所有写入均先锁目标用户；加锁后的快照保证读取最新已提交状态。
+    row = db.query(Sanction).filter_by(user_id=body.user_id).populate_existing().first()
     if row is None:
         row = Sanction(user_id=body.user_id)
         db.add(row)
