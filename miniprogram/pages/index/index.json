@@ -2,6 +2,7 @@
   "navigationStyle": "custom",
   "enablePullDownRefresh": true,
   "usingComponents": {
-    "nav-drawer": "/components/nav-drawer/nav-drawer"
+    "nav-drawer": "/components/nav-drawer/nav-drawer",
+    "chat-entry": "/components/chat-entry/chat-entry"
   }
 }

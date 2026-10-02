@@ -23,6 +23,7 @@
         <view class="post-head"><view class="emblem"><image wx:if="{{item.avatarFull}}" src="{{item.avatarFull}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view><view class="team-copy"><text class="team-name">{{item.displayName}}</text><text class="muted">游戏 ID：{{item.game_id || '未设置'}}</text></view></view>
         <view class="player-labels"><text class="identity-label {{item.identity === 'new_student' ? 'new-student' : ''}}">{{item.identityText}}</text><text>{{item.displayRank}}</text><text>{{item.individual_rating}} 水平分</text></view>
         <text wx:if="{{item.user_description}}" class="post-content">{{item.user_description}}</text>
+        <view class="contact-row"><button class="secondary" bindtap="contactPlayer" data-id="{{item.id}}">联系选手</button></view>
         <view class="post-foot"><text class="muted">{{item.has_team ? (item.team_name || '已入队') : '未加入队伍'}}</text><button wx:if="{{mine && !accountFailed && !item.has_team}}" class="apply" bindtap="invite" data-id="{{item.id}}" disabled="{{!!inviting}}" loading="{{inviting === item.id}}">邀请入队</button><text wx:elif="{{!item.has_team}}" class="muted">由队长发起邀请</text></view>
       </view>
       <view wx:if="{{playersMore}}" class="state compact" bindtap="loadMorePlayers">{{playersLoadingMore ? '正在加载…' : '查看更多选手'}}</view>
@@ -44,6 +45,7 @@
       <view wx:for="{{posts}}" wx:key="team_id" class="post">
         <view class="post-head"><view class="emblem"><image wx:if="{{item.logoFull}}" src="{{item.logoFull}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view><view class="team-copy"><text class="team-name">{{item.team_name}}</text><text class="muted">{{item.member_count}} 名队员 · 水平分 {{item.rating || 0}}</text></view><text class="tag">招募中</text></view>
         <text class="post-content" selectable>{{item.content}}</text>
+        <view class="contact-row"><button class="secondary" bindtap="contactTeam" data-id="{{item.team_id}}">联系队长</button></view>
         <view class="post-foot"><text class="timestamp">更新于 {{item.timeText}}</text><button class="apply" bindtap="apply" data-id="{{item.team_id}}" disabled="{{!!myTeam || accountFailed || !!applying}}" loading="{{applying === item.team_id}}">{{myTeam ? (myTeam.id === item.team_id ? '我的队伍' : '已有队伍') : token ? '申请入队' : '登录申请'}}</button></view>
       </view>
       <view wx:if="{{more}}" class="state compact" bindtap="loadMore">{{loadingMore ? '正在加载…' : '查看更多招募'}}</view>

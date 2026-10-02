@@ -1,0 +1,26 @@
+<event-return/>
+<view class="chat-shell" style="height: {{windowHeight - keyboardHeight - returnHeight}}px">
+  <view class="room-head"><view class="room-title"><text class="room-name">{{room.peer.nickname || '私聊'}}</text><text class="room-menu" bindtap="menu">···</text></view><text class="room-meta">{{status === 'online' ? '实时连接已建立' : status === 'connecting' ? '正在连接…' : '连接中断，正在重试'}}{{room.unread ? ' · ' + room.unread + ' 条未读' : ''}}</text><text class="room-rule">发送满 24 小时且双方已读后自动清理</text></view>
+  <view wx:if="{{error}}" class="chat-error" bindtap="load">{{error}} · 点击重试</view>
+  <view wx:if="{{room.blocked}}" class="chat-error">当前私聊已受限</view>
+  <view wx:elif="{{room.muted_until}}" class="chat-error">账号暂时无法发送消息</view>
+  <scroll-view id="thread" class="thread" scroll-y scroll-into-view="{{anchor}}" bindscroll="scroll" upper-threshold="60">
+    <view wx:if="{{more}}" class="history-more" bindtap="older">{{loadingMore ? '正在加载…' : '查看更早消息'}}</view>
+    <view wx:if="{{loading}}" class="chat-state">正在加载聊天…</view>
+    <view wx:elif="{{!rows.length}}" class="chat-state">从一句你好开始。<text>已读的过期消息会自动清理。</text></view>
+    <view wx:for="{{rows}}" wx:key="id" id="{{item.elementId}}" class="message {{item.mine ? 'mine' : 'theirs'}} {{!item.mine && !item.read_at && item.state === 'active' ? 'incoming-unread' : ''}}" data-message-id="{{item.id}}">
+      <text class="message-time">{{item.timeText}}</text>
+      <view wx:if="{{item.state !== 'active'}}" class="removed">{{item.state === 'recalled' ? '消息已撤回' : '消息已被移除'}}</view>
+      <view wx:else class="bubble {{item.failed ? 'failed' : ''}}" bindlongpress="actions" data-id="{{item.id}}">
+        <text wx:if="{{item.kind === 'text'}}" selectable>{{item.content}}</text>
+        <view wx:elif="{{item.card}}" class="business-card" bindtap="openCard" data-id="{{item.id}}"><text class="card-kicker">{{item.kind === 'round' ? '赛事对阵' : '队伍资料'}}</text><text class="card-title">{{item.card.title}}</text><text wx:if="{{item.card.subtitle}}" class="card-sub">{{item.card.subtitle}}</text><text class="card-link">查看详情 ›</text></view>
+        <text wx:else>正在发送卡片…</text>
+      </view>
+      <text wx:if="{{item.mine && item.state === 'active'}}" class="message-status {{item.failed ? 'retry' : ''}}" bindtap="retry" data-id="{{item.id}}">{{item.statusText}}</text>
+    </view>
+    <view class="thread-end"></view>
+  </scroll-view>
+  <view wx:if="{{newMessages}}" class="new-message" bindtap="bottom">有新消息 · 回到底部 ↓</view>
+  <view wx:if="{{cardOffer}}" class="card-offer" bindtap="offerCard">{{cardOffer}} ↗</view>
+  <view class="composer" style="padding-bottom: {{keyboardHeight ? '18rpx' : 'calc(18rpx + env(safe-area-inset-bottom))'}}"><textarea value="{{draft}}" bindinput="input" bindkeyboardheightchange="keyboard" adjust-position="{{false}}" cursor-spacing="12" auto-height maxlength="2000" placeholder="{{canSend ? '发送消息…' : '当前暂不可发送'}}" disabled="{{!canSend}}" show-confirm-bar="{{false}}"/><button class="send" bindtap="send" disabled="{{!canSend || !draft}}">发送</button></view>
+</view>

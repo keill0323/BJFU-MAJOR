@@ -1,0 +1,5 @@
+{
+  "navigationBarTitleText": "聊天举报与禁言",
+  "navigationStyle": "custom",
+  "usingComponents": { "nav-drawer": "/components/nav-drawer/nav-drawer" }
+}

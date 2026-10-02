@@ -13,5 +13,5 @@ COPY .env.example ./.env.example
 
 EXPOSE 8000
 
-# 生产用 gunicorn 多 worker（uvicorn worker 需安装 gunicorn+uvicorn[standard]）
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 私聊票据与在线提示在单进程内；扩为多实例前必须增加共享广播与票据存储。
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--ws-max-size", "1024", "--ws-max-queue", "4"]

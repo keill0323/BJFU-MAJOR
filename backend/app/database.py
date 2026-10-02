@@ -18,6 +18,7 @@ engine = create_engine(
     if "sqlite" in settings.DATABASE_URL
     else {},
     echo=settings.DB_ECHO,
+    hide_parameters=True,  # SQL 异常和调试输出不暴露聊天正文、令牌及个人资料。
 )
 
 # 会话工厂：绑定了上述引擎，SessionLocal() 调用即获取一个新会话

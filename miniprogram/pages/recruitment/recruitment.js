@@ -15,11 +15,31 @@ Page({
     playersLoading: true, playersLoadingMore: false, playersError: '',
     posts: [], mine: null, myTeam: null, token: '', loading: true, failed: false, accountFailed: false,
     more: false, cursor: null, loadingMore: false, editing: false, draft: '', saving: false, applying: null },
-  onShow() { this.load() },
-  onUnload() { this._requestId = (this._requestId || 0) + 1; this._playersRequestId = (this._playersRequestId || 0) + 1 },
+  onShow() { this._chatVisible = true; this._chatGeneration = (this._chatGeneration || 0) + 1; this.load() },
+  onHide() { this.stopContact() },
+  onUnload() { this.stopContact(); this._requestId = (this._requestId || 0) + 1; this._playersRequestId = (this._playersRequestId || 0) + 1 },
   onPullDownRefresh() { return this.load().finally(() => wx.stopPullDownRefresh()) },
   onReachBottom() { return this.loadMore() },
   current(id, token) { return id === this._requestId && token === (wx.getStorageSync('token') || '') },
+  stopContact() { this._chatVisible = false; this._chatGeneration = (this._chatGeneration || 0) + 1; this._contactAttempt = null },
+  contactPlayer(e) {
+    const id = Number(e.currentTarget.dataset.id)
+    if (!this.data.players.some(player => player.id === id)) return
+    return this.startContact(id, 'user', false)
+  },
+  contactTeam(e) {
+    const id = Number(e.currentTarget.dataset.id)
+    if (!this.data.posts.some(post => post.team_id === id)) return
+    return this.startContact(id, 'team', true)
+  },
+  async startContact(id, source, card) {
+    if (!Number.isSafeInteger(id) || id <= 0 || this._contactAttempt) return
+    const generation = this._chatGeneration, token = wx.getStorageSync('token') || ''
+    const attempt = this._contactAttempt = {}
+    const isCurrent = () => this._chatVisible && generation === this._chatGeneration && token === (wx.getStorageSync('token') || '')
+    try { await require('../../utils/chat-client.js').contact(id, source, card, isCurrent) }
+    finally { if (this._contactAttempt === attempt) this._contactAttempt = null }
+  },
   decorate(items) { return items.map(p => Object.assign({}, p, {
     initial: (p.team_name || '队').slice(0, 1), timeText: String(p.updated_at || '').replace('T', ' ').slice(0, 16),
     logoFull: p.logo ? (/^https?:\/\//.test(p.logo) ? p.logo : api.BASE + p.logo) : ''

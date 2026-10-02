@@ -48,6 +48,7 @@ Page({
       const code = wxRes.code
       const data = await api.login(code)          // ② 交给后端换 JWT token
       wx.setStorageSync('token', data.access_token) // ③ 存本地，下次免登录
+      require('../../utils/chat-client.js').resetAccount()
       wx.reLaunch({ url: '/pages/index/index' })   // ④ 跳转首页
     } catch (err) {
       console.error('登录失败', err)

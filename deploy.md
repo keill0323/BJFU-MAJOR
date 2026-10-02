@@ -274,3 +274,64 @@ docker compose exec -T nginx nginx -s reload
 迁移只幂等创建 `admin_notice_batches` 与 `admin_notices` 两张表，不创建历史消息、不发送通知、不清理 QQ 历史列或其他业务数据。通知批次与收件记录同事务写入；相同管理员的同一 `request_id` 重试不会重复发送，复用 ID 但更改内容返回 409。收件人不可用时整批失败，不静默漏发。已读查询包含收件人条件，不能读取或标记别人的通知。
 
 先部署后端和通知表，再由维护者上传并发布新小程序。此次改动同时包含此前图片隐私授权修复；旧后端仍强制 QQ，会拒绝新版建队请求。发布前使用自愿测试账号验证创建队伍、管理员选人发送、仅指定用户收到、主页未读减少和非管理员权限；自动测试与离线预览不等同于微信真机或实际 MySQL 并发验收。
+
+## 十三、一对一聊天
+
+首版提供文字私聊和队伍／对阵卡片；首页「聊天」为独立入口，原系统通知继续使用消息页。完成学籍认证的用户可发起普通私聊，未认证用户可回复已有私聊或联系管理员。聊天资料不返回学号、QQ、认证截图或微信标识。管理员仅通过举报入口检查被举报的单条消息，支持驳回、隐藏和禁言，不提供任意浏览他人私聊的接口。
+
+### 配置与启用
+
+| 配置 | 默认与用途 |
+|---|---|
+| `CHAT_ENABLED` | `false`，关闭时聊天接口不可用；清理任务继续运行 |
+| `CHAT_WRITE_ENABLED` | `false`，单独关闭新建会话和发送，已有会话仍可阅读、已读和清理 |
+| `CHAT_ALLOW_USERS` | 空值为全部正常用户；灰度时填写两个自愿测试账号及管理员的用户 ID，以英文逗号分隔 |
+| `CHAT_MODERATION_ENABLED` | `true`；发送前调用微信 `msg_sec_check`，检测失败拒绝发送，真实环境不得关闭检测 |
+| `CHAT_DELETION_LEDGER` | Compose 固定为 `/app/chat-maintenance/deletions.jsonl`，独立 `chat_maintenance` 持久卷；非 Docker 运行必须设置可写的持久文件路径 |
+
+微信内容检测沿用后端 `WX_APPID`、`WX_SECRET` 与真实登录 OpenID，不使用订阅通知模板。上线前用真实登录且满足微信接口访问条件的自愿测试账号确认检测能力、额度和相关隐私说明。在微信公众平台将 `wss://bjfumajor.com` 对应主机配置为 socket 合法域名，并确认 request 合法域名。聊天首版没有离线微信逐条推送，也不收集 QQ。
+
+实时票据和广播在单个 Uvicorn 进程内；Dockerfile 显式 `--workers 1`、WebSocket 单帧最大 1KiB、传输待收队列最多 4 帧。不要直接扩为多进程或多个后端实例，扩容前需把票据、限流和广播迁移至共享设施。Nginx 为 `/api/chat/ws` 转发 Upgrade，容器日志限制为每容器 10MiB × 3。
+
+经维护者批准部署后，在已同步源码的服务器项目目录执行；初次升级保持 `CHAT_ENABLED=false`、`CHAT_WRITE_ENABLED=false`，不要覆盖服务器现有密钥：
+
+```bash
+(
+set -eu
+docker compose build backend
+docker compose stop backend
+chat_backup="before-chat-$(date +%Y%m%d-%H%M%S).sql"
+docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines --triggers cs2_competition' > "$chat_backup"
+test -s "$chat_backup"
+docker compose run --rm --no-deps backend python -m app.migrations.chat
+docker compose up -d --no-deps backend
+docker compose exec -T nginx nginx -t
+docker compose exec -T nginx nginx -s reload
+docker compose ps backend
+)
+```
+
+迁移仅创建聊天表，不生成测试账号或聊天，也不修改报名、比分或认证数据。日志轮转需要在适当维护窗口重建对应容器才对旧容器生效，单纯 reload nginx 不会应用 Docker logging 设置。随后维护者上传体验版，设置指定 `CHAT_ALLOW_USERS` 后开启两个聊天开关并 `docker compose up -d --no-deps --force-recreate backend`，完成双账号发送／重试／断线补收／已读／拉黑／举报验收，再决定发布并取消灰度名单。旧服务器未部署聊天接口时，新前端提示「聊天暂未开放」。
+
+Nginx 配置是单文件挂载；同步时应原地写入，避免用解压或文件替换改变文件 inode 后，容器仍读取旧配置。部署后比较主机 `nginx.conf` 与容器 `/etc/nginx/nginx.conf` 的 SHA-256；若不同，先执行 `docker compose run --rm --no-deps nginx nginx -t` 校验新挂载，再执行 `docker compose up -d --no-deps --force-recreate nginx`，重新核验 HTTPS 与 WSS。这会短暂重启反向代理，不需要重建 MySQL。
+
+### 缓存、同步和清理
+
+- 消息与 `chat_events` 在同一 MySQL 事务内保存，提交后 HTTP 才确认发送成功。事件表不复制正文；实时 worker 合并同会话的更新，向有界内存队列发送会话 ID 和序号。在线提醒失败或服务重启后，客户端从数据库补收；「提醒尝试完成」不等于送达或已读。
+- 手机缓存按账号隔离，只持久化最近 24 小时的内容，最多 20 个会话、每会话 100 条、总计 2MiB。进入页面须先向服务器验证权限并补齐撤回／删除事件，验证失败不显示旧正文。页面最多保留 200 条浏览窗口与 10 条待发送消息；更早历史分页浏览。退出、换号和当前登录失效会立即清缓存和连接。
+- 成功发送的本人消息视为本人已读；接收方仅上报实际进入视口的消息 ID，打开最新一页不会把旧消息一并标读。每分钟、每批最多 200 条清理「发送满 24 小时且接收方已读」的正文；长期未读正文继续保留。撤回／管理员隐藏立即清正文。每次清正文前同步写入无正文删除清单；清单缺失或写入失败会中止删除，并保留待处理记录供重试。
+- 清理后保留无正文去重元数据 35 天，增量事件保留 7 天；事件游标过期时取新快照。发送意图超过 24 小时不能新写入，因此去重元数据过期后也不能重放旧消息使其复活。举报原因、管理员处理记录与删除清单属于维护元数据，不能把它们当作已经清掉的普通消息正文；清单轮换须结合实际备份保留期，不自动删除最新清单。
+- 普通聊天删除不等于已有数据库备份或 MySQL binlog 的副本立即擦除。备份及日志按运维保留期淘汰；删除清单须另行保存在独立位置并备份，不能随旧数据库一起回退。异机备份和报警仍需实际配置，不能仅依赖服务器内的数据卷。
+
+### 恢复与回滚
+
+恢复数据库前关闭聊天读写，保留当前 `chat_maintenance` 卷和最新删除清单。恢复后先执行：
+
+```bash
+docker compose run --rm --no-deps backend python -m app.services.chat_deletions apply --ledger /app/chat-maintenance/deletions.jsonl
+docker compose run --rm --no-deps backend python -m app.services.chat_service
+```
+
+第一条按消息编号、会话、发送者、发送意图编号、请求摘要和创建时间核对并清除已删除正文，追加删除事件，支持幂等重试。清单损坏时非零退出；核对输出中的身份不匹配记录，未完成检查前不要开放聊天。第二条执行一批常规清理，大积压需重复运行至处理完。不要使用旧清单覆盖最新清单，也不要把整库回滚作为只回滚代码的方法。
+
+聊天回滚优先关闭写入，再关闭聊天入口；保留聊天表和新增业务数据。若切回不含 worker 的旧后端，应在保留的新版本维护镜像中定时执行清理 CLI，继续遵守已确认的保留规则。发布状态和验证结果统一见项目日志。

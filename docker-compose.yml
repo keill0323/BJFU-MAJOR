@@ -4,6 +4,11 @@ services:
   mysql:
     image: mysql:8.0
     restart: always
+    logging: &bounded-logs
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
@@ -23,11 +28,13 @@ services:
   backend:
     build: ./backend
     restart: always
+    logging: *bounded-logs
     depends_on:
       mysql:
         condition: service_healthy
     volumes:
       - uploads_data:/app/uploads   # 上传的截图持久化，容器重建不丢失
+      - chat_maintenance:/app/chat-maintenance # 删除清单独立于 MySQL 备份恢复
     environment:
       DATABASE_URL: mysql+pymysql://cs2_user:${MYSQL_PASSWORD:-cs2_pass123456}@mysql:3306/cs2_competition?charset=utf8mb4
       SECRET_KEY: ${SECRET_KEY:-please-change-me}
@@ -45,12 +52,18 @@ services:
       AI_API_KEY: ${AI_API_KEY:-}
       AI_BASE_URL: ${AI_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
       AI_MODEL: ${AI_MODEL:-GLM-5V-Turbo}
+      CHAT_ENABLED: ${CHAT_ENABLED:-false}
+      CHAT_WRITE_ENABLED: ${CHAT_WRITE_ENABLED:-false}
+      CHAT_ALLOW_USERS: ${CHAT_ALLOW_USERS:-}
+      CHAT_MODERATION_ENABLED: ${CHAT_MODERATION_ENABLED:-true}
+      CHAT_DELETION_LEDGER: /app/chat-maintenance/deletions.jsonl
     expose:
       - "8000"
 
   nginx:
     image: nginx:alpine
     restart: always
+    logging: *bounded-logs
     ports:
       - "80:80"
       - "443:443"
@@ -64,3 +77,4 @@ services:
 volumes:
   mysql_data:
   uploads_data:   # 上传文件存储卷
+  chat_maintenance: # 恢复数据库时保留此卷及最新异机副本，不能回退到旧清单

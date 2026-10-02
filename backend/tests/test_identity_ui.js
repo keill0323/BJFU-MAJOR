@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, '../..')
 
 function loadPage(name, methods, wxMethods = {}) {
   let page
-  const calls = { toasts: [], navigations: [], storage: [] }
+  const calls = { toasts: [], navigations: [], storage: [], chatAccountResets: 0 }
   const api = new Proxy(methods, {
     get(target, key) {
       if (key in target) return target[key]
@@ -30,6 +30,7 @@ function loadPage(name, methods, wxMethods = {}) {
     Page: definition => { page = definition },
     require(modulePath) {
       if (modulePath.endsWith('/api.js')) return api
+      if (modulePath.endsWith('/chat-client.js')) return { resetAccount: () => { calls.chatAccountResets++ } }
       if (modulePath.endsWith('/image-upload.js')) return { showImageError() { throw new Error('Unexpected image selection failure') } }
       if (modulePath.endsWith('/rank.js')) return require(path.join(root, 'miniprogram/utils/rank.js'))
       throw new Error('Unexpected module: ' + modulePath)
@@ -121,5 +122,6 @@ test('login requires consent and submits only once while the first request is pe
   await firstRequest
   assert.equal(page.data.loggingIn, false)
   assert.deepEqual(calls.storage, [['token', 'fixture-access-token']])
+  assert.equal(calls.chatAccountResets, 1)
   assert.equal(calls.navigations[0].url, '/pages/index/index')
 })

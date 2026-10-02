@@ -29,6 +29,7 @@
         <view wx:if="{{personalNotice.schedule_count}}" class="personal-task" bindtap="goNotice" data-section="schedules"><text>约赛通知 <text class="personal-count">{{personalNotice.schedule_count}}</text></text><text class="personal-link">查看未读 ›</text></view>
       </block>
     </view>
+    <chat-entry></chat-entry>
     <view class="shortcut-grid">
       <view wx:for="{{shortcuts}}" wx:key="url" class="shortcut" bindtap="goShortcut" data-url="{{item.url}}" aria-role="button" aria-label="{{item.title}}">
         <view class="shortcut-icon"><image src="/images/brand/{{item.icon}}.svg" mode="aspectFit"/></view>

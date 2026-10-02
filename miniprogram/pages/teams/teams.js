@@ -34,9 +34,15 @@ Page({
     detailMembers: []
   },
 
+  onLoad(options) { this._linkedTeamId = Number(options && options.teamId) || null },
+
   onShow() {
     this.closeTeamDetail()
     this.loadTeams()
+    if (this._linkedTeamId) {
+      const id = this._linkedTeamId; this._linkedTeamId = null
+      this.viewTeam({ currentTarget: { dataset: { id } } })
+    }
   },
 
   onHide() { this.closeTeamDetail() },

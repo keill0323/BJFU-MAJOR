@@ -59,6 +59,9 @@
 .retry-button { margin: 30rpx auto 0; min-height: 92rpx; width: 280rpx; max-width: 100%; padding: 22rpx 28rpx; border-radius: 16rpx; border: 1rpx solid #cce7e2; color: #076b74; background: #e9f7f3; font-size: 28rpx; line-height: 1.6; }
 .retry-button::after { border: none; }
 .retry-button:active { background: #d9efe9; }
+.contact-button { box-sizing: border-box; margin: 22rpx 0 0; min-height: 78rpx; padding: 18rpx 26rpx; border: 1rpx solid #c5e4de; border-radius: 14rpx; color: #076b74; background: #e9f7f3; font-size: 26rpx; line-height: 1.5; }
+.contact-button::after { border: none; }
+.contact-member { width: auto; display: inline-block; min-height: 68rpx; padding: 14rpx 22rpx; font-size: 24rpx; }
 @media (max-width: 350px) {
   .profile-surface { padding: 24rpx; }
   .identity-main { gap: 18rpx; }

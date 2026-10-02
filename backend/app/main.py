@@ -10,9 +10,11 @@ from fastapi.staticfiles import StaticFiles
 from app.database import engine, Base
 from app.config import settings
 import app.models
-from app.routers import auth, team, match, hall, admin, notifications, recruitment
+from app.routers import auth, team, match, hall, admin, notifications, recruitment, chat
 from contextlib import asynccontextmanager
 import threading
+import asyncio
+from contextlib import suppress
 from app.services import wechat_service
 
 Base.metadata.create_all(bind=engine)
@@ -20,10 +22,17 @@ Base.metadata.create_all(bind=engine)
 @asynccontextmanager
 async def lifespan(app):
     stop = threading.Event()
+    from app.services.chat_realtime import worker as chat_worker
+    chat_task = asyncio.create_task(chat_worker())
     if wechat_service.templates():
         threading.Thread(target=wechat_service.worker, args=(stop,), daemon=True, name="wechat-outbox").start()
-    yield
-    stop.set()
+    try:
+        yield
+    finally:
+        stop.set()
+        chat_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await chat_task
 
 
 app = FastAPI(title="北京林业大学CS2校赛报名系统", version="1.0.0", lifespan=lifespan)
@@ -51,6 +60,7 @@ app.include_router(hall.router)
 app.include_router(admin.router)
 app.include_router(notifications.router)
 app.include_router(recruitment.router)
+app.include_router(chat.router)
 
 
 @app.get("/")

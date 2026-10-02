@@ -17,6 +17,7 @@
         <view class="identity-copy"><text class="team-name">{{team.name}}</text><text class="captain-copy">队长 · {{team.captain_name}}</text></view>
       </view>
       <text class="team-description">{{team.description}}</text>
+      <button wx:if="{{team.captain_id}}" class="contact-button" bindtap="contactCaptain" disabled="{{contacting}}" loading="{{contacting}}" aria-label="私聊队长">{{loggedIn ? '联系队长' : '登录后联系队长'}}</button>
       <view class="team-stats">
         <view class="team-stat"><text class="stat-value accent">{{team.display_rating}}</text><text class="stat-caption">队伍水平分</text></view>
         <view class="team-stat"><text class="stat-value">{{team.member_count}}</text><text class="stat-caption">当前队员</text></view>
@@ -42,6 +43,7 @@
           <view class="member-score"><text class="score-value">{{item.score_text}}</text><text class="score-caption">水平分</text></view>
         </view>
         <view class="member-tags"><text class="identity-chip {{item.identity}}">{{item.identity_text}}</text><text class="verification-tag {{item.is_verified ? 'verified' : ''}}">{{item.verification_text}}</text></view>
+        <button wx:if="{{item.user_id}}" class="contact-button contact-member" bindtap="contactMember" data-id="{{item.user_id}}" disabled="{{contacting}}">联系选手</button>
       </view>
     </view>
   </block>

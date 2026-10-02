@@ -62,6 +62,10 @@ QQ 停用回归：`test_team_captain_qq.py`、`test_team_qq_ui.js` 验证无 QQ 
 
 这些用例不替代真实 MySQL 和微信真机验证。`champion_snapshots` 缺失表可由启动流程创建，已有表的字段升级必须显式迁移；冠军历史回填也需显式执行。验证与发布状态见[项目日志](../../项目总结与踩坑记录.md)。
 
+私聊回归：`test_chat.py` 验证权限、精准已读、时间清理、重试去重、排序分页和内容检测事务；`test_chat_realtime.py` 验证票据、握手、队列上限和合并提醒；`test_chat_deletions.py` 验证无正文清单同步落盘及备份恢复不复活。Node 的 `test_chat_ui.js`、`test_chat_page_ui.js`、`test_chat_integration_ui.js` 使用真实页面与客户端、模拟微信接口，覆盖账号切换、缓存同步、生命周期竞态、入口和举报治理，不会发送真实聊天或微信通知。
+
+`test_chat_mysql.py` 默认跳过。真实并发验证须显式设置 `CHAT_TEST_MYSQL_URL`，且仅接受全新空库 `cs2_chat_test_<十六进制后缀>`；套件使用 REPEATABLE READ，独立线程 Session，结束删除测试创建的表。不得填写业务数据库 URL。测试运行后的临时数据库与权限由测试操作者清理；此套件不部署源码，也不代表 HTTP/WebSocket 容量压测已通过。
+
 测试数据隐藏回归：`python -m unittest tests.test_test_data_visibility -v`。覆盖公开队伍列表和详情、管理员回溯权限、隐藏选手后的榜单名次与分页、人才市场、冠军快照展示、历史对手匿名化和可重跑的增量迁移。隐藏标记不依据昵称自动设置，不删除账号或改写比赛结果。
 
 旧数据若显示报名已通过但缺少赛事进度，管理端会显示待审核；仅在尚未编排、名单未锁定时可使用“通过报名”补齐。已经分组的赛事不能借此新增参赛队伍。已经产生的错误晋级或不合资格阵容不会被脚本自动重写，需要管理员核对后处理。

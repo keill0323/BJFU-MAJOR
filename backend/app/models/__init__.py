@@ -13,3 +13,4 @@ from app.models.hall import ChampionSnapshot
 from app.models.notification import ScheduleNotification
 from app.models.admin_notice import AdminNoticeBatch, AdminNotice
 from app.models.recruitment import RecruitmentPost, WechatSubscription, WechatOutbox
+from app.models.chat import ChatConversation, ChatMember, ChatMessage, ChatEvent, ChatBlock, ChatReport, ChatSanction, ChatAudit

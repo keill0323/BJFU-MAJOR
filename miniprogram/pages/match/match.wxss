@@ -164,3 +164,6 @@
 .reg-pending .register-done { color: #946821; background: #fcf5e7; }
 .reg-rejected .register-done { color: #b44848; background: #fff0ef; }
 .round-state.in_progress { color: #087f8c; }
+.round-side { flex-wrap: wrap; gap: 14rpx; }
+.round-contact { margin: 0; padding: 14rpx 20rpx; min-height: 62rpx; border-radius: 12rpx; color: #076b74; background: #e7f5f2; font-size: 23rpx; line-height: 1.5; }
+.round-contact::after { border: none; }

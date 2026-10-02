@@ -16,6 +16,7 @@ Component({
       { title: '赛事中心', icon: 'grid', url: '/pages/index/index' },
       { title: '我的队伍', icon: 'team', url: '/pages/team/team' },
       { title: '招募大厅', icon: 'team', url: '/pages/recruitment/recruitment' },
+      { title: '聊天', icon: 'mail', url: '/pages/chats/chats' },
       { title: '所有队伍', icon: 'team', url: '/pages/teams/teams' },
       { title: '名人堂', icon: 'honor', url: '/pages/hall/hall' },
       { title: '个人资料', icon: 'shield', url: '/pages/profile/profile' }
@@ -144,6 +145,7 @@ Component({
       const mains = ['/pages/index/index', '/pages/team/team', '/pages/teams/teams', '/pages/profile/profile', '/pages/messages/messages', '/pages/verify/verify', '/pages/settings/settings']
       if (url === '/pages/login/login') {
         wx.removeStorageSync('token')
+        require('../../utils/chat-client.js').resetAccount()
         wx.reLaunch({ url: target })
       } else if (url === '/pages/index/index') {
         return this.goEvents()

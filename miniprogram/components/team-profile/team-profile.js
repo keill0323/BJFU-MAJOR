@@ -96,7 +96,7 @@ Component({
       observer() { this.loadTeam() }
     }
   },
-  data: { loading: true, error: '', team: null, members: [], loggedIn: false },
+  data: { loading: true, error: '', team: null, members: [], loggedIn: false, contacting: false },
   lifetimes: {
     created() { this._generation = 0; this._detached = false },
     attached() { if (this._requestedTeamId === undefined) this.loadTeam() },
@@ -105,11 +105,33 @@ Component({
   pageLifetimes: {
     hide() {
       this._generation = (this._generation || 0) + 1
-      this.setData({ team: null, members: [], loggedIn: false })
+      this._contactAttempt = null
+      this.setData({ team: null, members: [], loggedIn: false, contacting: false })
     },
     show() { if (!this.data.team) this.loadTeam() }
   },
   methods: {
+    contactCaptain() {
+      if (!this.data.team) return
+      return this.startContact(this.data.team.id, 'team', true)
+    },
+    contactMember(e) {
+      const id = positiveId(e.currentTarget.dataset.id)
+      if (!this.data.members.some(member => member.user_id === id)) return
+      return this.startContact(id, 'user', false)
+    },
+    async startContact(id, source, card) {
+      if (this._detached || this._contactAttempt || !positiveId(id)) return
+      const token = wx.getStorageSync('token'), generation = this._generation
+      const attempt = this._contactAttempt = {}
+      const isCurrent = () => !this._detached && generation === this._generation && token === wx.getStorageSync('token')
+      this.setData({ contacting: true })
+      try { await require('../../utils/chat-client.js').contact(id, source, card, isCurrent) }
+      finally {
+        if (this._contactAttempt === attempt) this._contactAttempt = null
+        if (isCurrent()) this.setData({ contacting: false })
+      }
+    },
     async loadTeam() {
       if (this._detached) return
       const teamId = positiveId(this.data.teamId)

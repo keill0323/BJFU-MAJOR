@@ -58,6 +58,21 @@ Page({
     scheduleTime: ''
   },
 
+  onShow() { this._chatVisible = true; this._chatGeneration = (this._chatGeneration || 0) + 1 },
+  onHide() { this.stopContact() },
+  onUnload() { this.stopContact() },
+  stopContact() { this._chatVisible = false; this._chatGeneration = (this._chatGeneration || 0) + 1; this._contactAttempt = null },
+  async contactRound(e) {
+    const id = Number(e.currentTarget.dataset.id)
+    const round = (this.detail && this.detail.rounds || []).find(item => item.id === id)
+    if (!round || !this.decorateRound(round, this.data.myTeamId, this.data.isCaptain).can_chat || this._contactAttempt) return
+    const generation = this._chatGeneration, token = wx.getStorageSync('token') || ''
+    const attempt = this._contactAttempt = {}
+    const isCurrent = () => this._chatVisible && generation === this._chatGeneration && token === (wx.getStorageSync('token') || '')
+    try { await require('../../utils/chat-client.js').contact(id, 'round', true, isCurrent) }
+    finally { if (this._contactAttempt === attempt) this._contactAttempt = null }
+  },
+
   // 页面加载：拉完整赛事资料 + 报名状态
   async onLoad(options) {
     const id = options.id
@@ -471,7 +486,8 @@ Page({
     }
     if (my_side === 'team1') i_confirmed = !!r.team1_confirmed
     else if (my_side === 'team2') i_confirmed = !!r.team2_confirmed
-    return Object.assign({}, r, { schedule_text, window_text, can_operate, my_side, i_confirmed })
+    const can_chat = !!my_side && !!r.team1_id && !!r.team2_id
+    return Object.assign({}, r, { schedule_text, window_text, can_operate, can_chat, my_side, i_confirmed })
   },
 
   // 打开时间协商面板

@@ -1,0 +1,173 @@
+"""可选真实 MySQL RR 并发回归；默认跳过，绝不使用项目业务数据库。
+
+CHAT_TEST_MYSQL_URL 必须指向全新空库 cs2_chat_test_<十六进制后缀>。
+测试结束只删除本套件创建的表，不 DROP DATABASE。内容检测全程 mock。
+"""
+from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
+import os
+from pathlib import Path
+import re
+from tempfile import TemporaryDirectory
+import threading
+import unittest
+from unittest.mock import patch
+
+from tests import support  # noqa: F401 — 提前启用不读取项目 .env 的隔离配置。
+from fastapi import HTTPException
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.database import Base
+from app.models.user import User, UserRole
+from app.models.chat import ChatConversation, ChatEvent, ChatMessage
+from app.schemas.chat import OpenConversation, SendMessage
+from app.services import chat_service as chat
+
+
+@unittest.skipUnless(os.environ.get("CHAT_TEST_MYSQL_URL"), "未设置独立 MySQL 测试库，跳过真实数据库并发测试")
+class MySQLConcurrencyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        try:
+            url = make_url(os.environ["CHAT_TEST_MYSQL_URL"])
+        except Exception:
+            raise RuntimeError("CHAT_TEST_MYSQL_URL 格式不合法") from None
+        if url.get_backend_name() != "mysql" or not re.fullmatch(r"cs2_chat_test_[a-f0-9]+", url.database or ""):
+            raise RuntimeError("仅允许独立 MySQL 测试库 cs2_chat_test_<十六进制后缀>，已拒绝连接")
+        cls.engine = create_engine(url, isolation_level="REPEATABLE READ", pool_pre_ping=True)
+        cls.addClassCleanup(cls.engine.dispose)
+        inspection = inspect(cls.engine)
+        if inspection.get_table_names() or inspection.get_view_names():
+            raise RuntimeError("MySQL 测试数据库必须全新且为空；未修改任何已有表")
+        cls.owned_tables = tuple(Base.metadata.sorted_tables)
+        Base.metadata.create_all(cls.engine)
+        cls.addClassCleanup(cls.drop_owned_tables)
+        cls.ledger_dir = TemporaryDirectory(prefix="cs2-chat-mysql-ledger-")
+        cls.addClassCleanup(cls.ledger_dir.cleanup)
+        for key, value in {
+            "CHAT_ENABLED": True, "CHAT_WRITE_ENABLED": True, "CHAT_ALLOW_USERS": "",
+            "CHAT_MODERATION_ENABLED": False, "WX_MOCK_LOGIN": True,
+            "CHAT_DELETION_LEDGER": str(Path(cls.ledger_dir.name) / "deleted.jsonl"),
+        }.items():
+            patcher = patch.object(settings, key, value)
+            patcher.start()
+            cls.addClassCleanup(patcher.stop)
+
+    @classmethod
+    def drop_owned_tables(cls):
+        Base.metadata.drop_all(cls.engine, tables=list(cls.owned_tables), checkfirst=True)
+
+    def setUp(self):
+        with self.engine.begin() as connection:
+            for table in reversed(self.owned_tables):
+                connection.execute(table.delete())
+        with Session(self.engine, autoflush=False) as db:
+            self.assertEqual(db.connection().get_isolation_level(), "REPEATABLE READ")
+            users = [User(wx_openid="test-mysql-chat-" + str(index), nickname="并发测试" + str(index),
+                          role=UserRole.USER, is_hidden=False, is_verified=True) for index in range(3)]
+            db.add_all(users)
+            db.flush()
+            self.ids = [user.id for user in users]
+            db.commit()
+            self.cid = chat.open_conversation(db, self.ids[0], OpenConversation(target_id=self.ids[1]))["id"]
+
+    def packet(self, suffix, content="并发测试消息"):
+        return SendMessage(client_id="mysql-test-message-" + suffix, client_created_at=chat.now(), content=content)
+
+    def send_in_thread(self, user_id, packet):
+        with Session(self.engine, autoflush=False) as db:
+            # 模拟真实 HTTP 认证先 SELECT 用户并建立 RR 快照。
+            db.query(User).filter_by(id=user_id).first()
+            return chat.send_message(db, user_id, self.cid, packet)
+
+    def test_simultaneous_bidirectional_messages_have_unique_order(self):
+        barrier = threading.Barrier(2)
+        def detection(openid, content):
+            barrier.wait(timeout=10)
+        with patch.object(chat, "check_content", side_effect=detection), ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(self.send_in_thread, self.ids[0], self.packet("direction-a")),
+                       pool.submit(self.send_in_thread, self.ids[1], self.packet("direction-b"))]
+            responses = [future.result(timeout=20) for future in futures]
+        self.assertEqual(len({response["message"]["id"] for response in responses}), 2)
+        self.assertEqual(sorted(int(response["message"]["seq"]) for response in responses), [1, 2])
+        with Session(self.engine, autoflush=False) as db:
+            self.assertEqual(db.query(ChatMessage).count(), 2)
+            self.assertEqual(db.query(ChatEvent).count(), 2)
+            self.assertEqual(db.get(ChatConversation, self.cid).last_seq, 2)
+            for user_id in self.ids[:2]:
+                self.assertEqual(chat.summary(db, user_id)["unread"], 1)
+
+    def test_same_client_id_concurrently_creates_one_message(self):
+        barrier = threading.Barrier(2)
+        packet = self.packet("duplicate")
+        def detection(openid, content):
+            barrier.wait(timeout=10)
+        with patch.object(chat, "check_content", side_effect=detection), ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(self.send_in_thread, self.ids[0], packet) for _ in range(2)]
+            responses = [future.result(timeout=20) for future in futures]
+        self.assertEqual(responses[0]["message"]["id"], responses[1]["message"]["id"])
+        self.assertEqual(sorted(response["replayed"] for response in responses), [False, True])
+        with Session(self.engine, autoflush=False) as db:
+            self.assertEqual(db.query(ChatMessage).count(), 1)
+            self.assertEqual(db.query(ChatEvent).count(), 1)
+            self.assertEqual(db.get(ChatConversation, self.cid).last_seq, 1)
+
+    def test_block_committed_during_detection_stops_send(self):
+        entered, release = threading.Event(), threading.Event()
+        def detection(openid, content):
+            entered.set()
+            if not release.wait(timeout=10):
+                raise RuntimeError("外部检测测试暂停超时")
+        with patch.object(chat, "check_content", side_effect=detection), ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(self.send_in_thread, self.ids[0], self.packet("blocked"))
+            try:
+                self.assertTrue(entered.wait(timeout=10))
+                with Session(self.engine, autoflush=False) as db:
+                    db.query(User).filter_by(id=self.ids[1]).first()
+                    chat.set_block(db, self.ids[1], self.ids[0], True)
+            finally:
+                release.set()
+            with self.assertRaises(HTTPException) as error:
+                future.result(timeout=20)
+        self.assertEqual(error.exception.status_code, 403)
+        with Session(self.engine, autoflush=False) as db:
+            self.assertEqual(db.query(ChatMessage).count(), 0)
+            self.assertEqual(db.query(ChatEvent).filter_by(kind="message").count(), 0)
+
+    def test_actual_read_and_cleanup_race_does_not_delete_unread_or_duplicate_events(self):
+        with patch.object(chat, "check_content", return_value=None):
+            sent = self.send_in_thread(self.ids[0], self.packet("cleanup"))["message"]
+        message_id = int(sent["id"])
+        with Session(self.engine, autoflush=False) as db:
+            message = db.get(ChatMessage, message_id)
+            message.created_at = chat.now() - timedelta(days=2)
+            db.commit()
+        def read():
+            with Session(self.engine, autoflush=False) as db:
+                db.query(User).filter_by(id=self.ids[1]).first()
+                return chat.mark_read(db, self.ids[1], self.cid, message_ids=[message_id])
+        def clean():
+            with Session(self.engine, autoflush=False) as db:
+                return chat.cleanup(db)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(read), pool.submit(clean)]
+            results = [future.result(timeout=20) for future in futures]
+        self.assertIn(results[1], (0, 1))
+        with Session(self.engine, autoflush=False) as db:
+            chat.cleanup(db)
+            message = db.get(ChatMessage, message_id)
+            self.assertIsNotNone(message.read_at)
+            self.assertIsNone(message.content)
+            self.assertEqual(message.state, "purged")
+            self.assertEqual(db.query(ChatEvent).filter_by(kind="read").count(), 1)
+            self.assertEqual(db.query(ChatEvent).filter_by(kind="delete").count(), 1)
+            events = db.query(ChatEvent).filter_by(conversation_id=self.cid).order_by(ChatEvent.seq).all()
+            self.assertEqual([event.seq for event in events], [1, 2, 3])
+            self.assertEqual(chat.summary(db, self.ids[1])["unread"], 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

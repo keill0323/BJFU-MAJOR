@@ -50,6 +50,14 @@ function normalizeRole(data) {
  * @param data  请求体（JSON 对象），GET 请求可省略
  * @returns Promise，成功 resolve 后端返回的数据，失败 reject 错误信息
  */
+function expireToken(requestToken) {
+  // 旧账号请求的 401 不能清掉用户刚换上的新账号令牌。
+  if ((wx.getStorageSync('token') || '') !== (requestToken || '')) return
+  wx.removeStorageSync('token')
+  // 请求回调时再加载，避免 api 与 chat-client 在模块初始化时循环依赖。
+  if (typeof require === 'function') require('./chat-client.js').resetAccount()
+}
+
 function request(path, method = 'GET', data = {}) {
   const token = wx.getStorageSync('token')   // 从本地存储读 JWT
   return new Promise((resolve, reject) => {
@@ -67,7 +75,7 @@ function request(path, method = 'GET', data = {}) {
           // 401 = 未登录或令牌过期：清 token，但不强制跳登录页
           // （让用户先浏览内容，只有主动操作时才引导登录，符合登录规范）
           if (res.statusCode === 401) {
-            wx.removeStorageSync('token')
+            expireToken(token)
             reject({ detail: '请先登录', unauthorized: true, statusCode: res.statusCode })
             return
           }
@@ -134,7 +142,7 @@ function uploadFile(path, filePath, raw = true) {
           try { detail = JSON.parse(res.data).detail || '' } catch (e) {}
           if (res.statusCode === 401) {
             // 与 request() 保持一致：只清 token，不强制跳登录页
-            wx.removeStorageSync('token')
+            expireToken(token)
             reject({ detail: '请先登录', unauthorized: true })
             return
           }
@@ -313,6 +321,9 @@ module.exports = {
       }
     })
   }),
+
+  // 私聊独立接口，原系统通知接口保持兼容。
+  chatRequest: (path, method = 'GET', data = {}) => request('/api/chat' + path, method, data),
 
   // ===== 阶段时间窗口 + 对阵时间协商 =====
   getScheduleNotifications: (beforeId) => request('/api/notifications/schedules' + (beforeId ? '?before_id=' + encodeURIComponent(beforeId) : ''))

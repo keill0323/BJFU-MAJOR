@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     WX_SUBSCRIBE_ENABLED: bool = False
     WX_SUBSCRIBE_TEMPLATES: str = "{}"  # kind -> {template_id, fields: {thing1: team_name, ...}}
     WX_SUBSCRIBE_ENV: str = "formal"  # formal / trial / developer
+    CHAT_ENABLED: bool = False
+    CHAT_WRITE_ENABLED: bool = False
+    CHAT_ALLOW_USERS: str = ""  # 灰度用户 ID，逗号分隔；空值表示全部正常账号。
+    CHAT_MODERATION_ENABLED: bool = True
+    CHAT_DELETION_LEDGER: str = ""  # 生产指向独立持久卷；未配置时禁止删除正文。
     """AI配置"""
     AI_REVIEW_ENABLED: bool = False                                         #总开关,上线启用AI审核
     AI_API_KEY: str = ""                                                    #智谱API密钥

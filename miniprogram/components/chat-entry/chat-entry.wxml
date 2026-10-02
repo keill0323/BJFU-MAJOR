@@ -1,0 +1,5 @@
+<view class="chat-entry" bindtap="open" aria-role="button" aria-label="打开聊天">
+  <view class="chat-symbol"><image src="/images/brand/mail.svg" mode="aspectFit"/></view>
+  <view class="chat-entry-copy"><text class="chat-entry-title">聊天</text><text class="chat-entry-sub">联系选手、队长与管理员</text></view>
+  <text wx:if="{{unread > 0}}" class="chat-entry-badge">{{unread > 99 ? '99+' : unread}}</text><text class="chat-entry-arrow">↗</text>
+</view>

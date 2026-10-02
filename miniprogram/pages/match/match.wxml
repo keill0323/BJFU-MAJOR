@@ -128,6 +128,7 @@
                     <text class="tag tag-blue">{{r.group_name}}</text>
                     <text wx:if="{{!r.can_operate}}" class="schedule-status {{r.schedule_status}}">{{r.schedule_text}}</text>
                     <text wx:else class="schedule-status {{r.schedule_status}} clickable" data-id="{{r.id}}" catchtap="openSchedule">{{r.schedule_text}}</text>
+                    <button wx:if="{{r.can_chat}}" class="round-contact" data-id="{{r.id}}" catchtap="contactRound">联系对方队长</button>
                   </view>
                   </view>
                 </view>
@@ -154,6 +155,7 @@
                     <text class="tag tag-blue">{{r.group_name}}</text>
                     <text wx:if="{{!r.can_operate}}" class="schedule-status {{r.schedule_status}}">{{r.schedule_text}}</text>
                     <text wx:else class="schedule-status {{r.schedule_status}} clickable" data-id="{{r.id}}" catchtap="openSchedule">{{r.schedule_text}}</text>
+                    <button wx:if="{{r.can_chat}}" class="round-contact" data-id="{{r.id}}" catchtap="contactRound">联系对方队长</button>
                   </view>
                 </view>
               </scroll-view>
@@ -205,6 +207,7 @@
                     <text class="tag tag-blue">{{r.group_name}}</text>
                     <text wx:if="{{!r.can_operate}}" class="schedule-status {{r.schedule_status}}">{{r.schedule_text}}</text>
                     <text wx:else class="schedule-status {{r.schedule_status}} clickable" data-id="{{r.id}}" catchtap="openSchedule">{{r.schedule_text}}</text>
+                    <button wx:if="{{r.can_chat}}" class="round-contact" data-id="{{r.id}}" catchtap="contactRound">联系对方队长</button>
                   </view>
               </view>
             </scroll-view>
@@ -256,6 +259,7 @@
               <text class="bo3-more">小局 ›</text>
               <text wx:if="{{!item.can_operate}}" class="schedule-status {{item.schedule_status}}">{{item.schedule_text}}</text>
               <text wx:else class="schedule-status {{item.schedule_status}} clickable" data-id="{{item.id}}" catchtap="openSchedule">{{item.schedule_text}}</text>
+              <button wx:if="{{item.can_chat}}" class="round-contact" data-id="{{item.id}}" catchtap="contactRound">联系对方队长</button>
             </view>
           </view>
         </view>
@@ -313,6 +317,7 @@
           <image class="detail-close" src="/images/icons/x.svg" bindtap="closeSchedule"/>
         </view>
         <text class="team-meta">{{scheduleRound.team1_name || '轮空'}} vs {{scheduleRound.team2_name || '轮空'}}</text>
+        <button wx:if="{{scheduleRound.can_chat}}" class="round-contact" data-id="{{scheduleRound.id}}" catchtap="contactRound">先和对方队长聊一聊</button>
         <text wx:if="{{scheduleRound.window_text}}" class="team-meta">限定时段：{{scheduleRound.window_text}}</text>
 
         <!-- 未约定：提交时间 -->

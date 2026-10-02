@@ -22,6 +22,7 @@
 .section-title { font-weight: 700; font-size: 30rpx; color: #14334b; overflow-wrap: anywhere; }.muted { display: block; color: #62798c; font-size: 24rpx; line-height: 1.7; }.manage>.muted { margin-top: 12rpx; }
 .status,.tag { flex-shrink: 0; font-size: 22rpx; color: #087f8c; background: #e8f6f4; padding: 6rpx 14rpx; border-radius: 8rpx; }.arrow { font-size: 44rpx; color: #087f8c; }
 .actions { display: flex; gap: 16rpx; margin-top: 24rpx; }.actions button { flex: 1; }
+.contact-row { display: flex; justify-content: flex-end; margin: 18rpx 0; }
 button { margin: 0; padding: 18rpx 22rpx; font-size: 26rpx; line-height: 1.4; border-radius: 14rpx; }button::after { border: none; }
 .primary,.apply { background: #087f8c; color: #fff; }.secondary { background: #edf5f6; color: #256374; }.manage>.secondary { margin-top: 16rpx; }
 .editor { box-sizing: border-box; width: 100%; height: 280rpx; padding: 22rpx; margin-top: 24rpx; background: #f6f9fb; border: 1rpx solid #cadbe3; border-radius: 16rpx; font-size: 28rpx; line-height: 1.7; color: #18364e; }.placeholder { color: #7a8f9e; }.counter { display: block; margin-top: 8rpx; text-align: right; color: #6d8495; font-size: 22rpx; }

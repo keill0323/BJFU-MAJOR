@@ -10,6 +10,9 @@ Page({
   openNotices() {
     if (this.data.user && this.data.user.role === 'admin') wx.navigateTo({ url: '/pages/admin/notices/notices' })
   },
+  openChatReports() {
+    if (this.data.user && this.data.user.role === 'admin') wx.navigateTo({ url: '/pages/admin/chat/chat' })
+  },
   data: {
     tab: 'overview',
     tabs: [

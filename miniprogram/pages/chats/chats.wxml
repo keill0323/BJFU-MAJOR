@@ -1,0 +1,16 @@
+<nav-drawer title="聊天"/>
+<view class="chat-list-page">
+  <view class="chat-heading"><view><text class="eyebrow">MEET YOUR TEAMMATES</text><text class="title">聊聊下一场。</text></view><text class="heading-symbol">↗</text></view>
+  <text class="retention-note">消息发送满 24 小时且双方已读后自动清理；未读消息继续保留。</text>
+  <view wx:if="{{!logged}}" class="state"><text>登录后，与选手和队长交流</text><button class="primary" bindtap="login">登录</button></view>
+  <block wx:else>
+    <view class="search"><input placeholder="搜索昵称或游戏 ID" value="{{keyword}}" bindinput="input" bindconfirm="search" confirm-type="search" maxlength="64"/><button bindtap="search">找人</button></view>
+    <view class="quick-links"><text bindtap="search" data-admins="true">联系管理员 ›</text><text wx:if="{{isAdmin}}" bindtap="manage">处理聊天举报 ›</text></view>
+    <view wx:if="{{searched}}" class="people-panel"><view class="panel-head"><text>选择联系人</text><text bindtap="closeSearch">收起</text></view><text wx:if="{{searching}}" class="state">正在查找…</text><text wx:elif="{{!people.length}}" class="state">没有找到选手</text><view wx:for="{{people}}" wx:key="id" class="person" bindtap="contact" data-id="{{item.id}}"><text class="person-name">{{item.nickname}}</text><text class="muted">{{item.is_admin ? '管理员' : item.is_verified ? '已认证' : '待认证'}}　›</text></view></view>
+    <view wx:if="{{error}}" class="error" bindtap="retry">{{error}} · 点击重试</view>
+    <view wx:elif="{{loading}}" class="state">正在加载聊天…</view>
+    <view wx:elif="{{!rooms.length}}" class="empty"><text class="empty-title">从一声你好开始</text><text>查找选手，或从招募大厅联系队长。</text></view>
+    <view wx:for="{{rooms}}" wx:key="id" class="conversation {{item.pinned ? 'pinned' : ''}}" bindtap="open" data-id="{{item.id}}"><view class="avatar"><image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view><view class="conversation-copy"><view class="line"><text class="name">{{item.peer.nickname}}</text><text class="time">{{item.timeText}}</text></view><view class="line"><text class="preview">{{item.muted ? '免打扰 · ' : ''}}{{item.preview}}</text><text wx:if="{{item.unread}}" class="badge {{item.muted ? 'quiet' : ''}}">{{item.unread > 99 ? '99+' : item.unread}}</text></view></view></view>
+    <view wx:if="{{more}}" class="state" bindtap="onReachBottom">加载更早的会话</view>
+  </block>
+</view>

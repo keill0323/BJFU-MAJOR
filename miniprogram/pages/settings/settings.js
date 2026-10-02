@@ -38,6 +38,7 @@ Page({
       success: (res) => {
         if (!res.confirm) return
         wx.removeStorageSync('token')
+        require('../../utils/chat-client.js').resetAccount()
         wx.reLaunch({ url: '/pages/login/login' })
       }
     })
