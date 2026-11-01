@@ -52,7 +52,7 @@ Page({
     messages: [], draft: '', sending: false, confirming: '', requestError: '', retryAvailable: false,
     context: {}, contextLabels: {}, selector: '', selectorTitle: '', selectorKeyword: '', selectorLoading: false, selectorError: '', options: [],
     scrollTarget: '', endAnchor: 'assistant-end-0', windowHeight: 700, keyboardHeight: 0,
-    suggestions: ['我的下一场对阵是谁？', '看看我还缺哪些报名条件', '帮我找合适的队友', '帮我完成认证']
+    suggestions: ['帮我报名赛事', '看看我还缺哪些报名条件', '我的下一场对阵是谁？', '帮我完成认证']
   },
   onLoad() {
     this._generation = 0

@@ -14,7 +14,7 @@
       <view wx:elif="{{!enabled || !available}}" class="assistant-state"><text>{{reason}}</text><button size="mini" bindtap="loadStatus">刷新状态</button></view>
       <view wx:elif="{{!logged}}" class="assistant-state"><text>登录后继续交流</text><button size="mini" bindtap="goLogin">微信登录</button></view>
       <view wx:if="{{!messages.length}}" class="assistant-welcome">
-        <text class="welcome-title">今天想了解什么？</text><text class="welcome-note">直接提问，或试试下面的问题。</text>
+        <text class="welcome-title">今天想了解什么？</text><text class="welcome-note">可协助报名、检查资格、生成报名预览，也能查对阵和认证要求。</text>
         <view class="suggestions"><button wx:for="{{suggestions}}" wx:key="*this" bindtap="askSuggestion" data-index="{{index}}">{{item}} <text>↗</text></button></view>
         <text class="privacy-note">请勿发送学号、凭据或认证图片。材料请从认证卡片进入原认证页提交；问答与必要公开赛事资料由智谱文本模型处理。</text>
       </view>

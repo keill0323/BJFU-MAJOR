@@ -1,10 +1,10 @@
 <view class="page">
   <nav-drawer id="main-nav" title="北林 MAJOR" show-admin-notice="{{true}}" bind:userchange="onUserChange"></nav-drawer>
   <view class="home-content">
-    <view class="assistant-entry" bindtap="goAssistant" aria-role="button" aria-label="打开赛事助手">
+    <view class="assistant-entry" bindtap="goAssistant" aria-role="button" aria-label="打开赛事助手，协助报名、查资格、看对阵">
       <view class="assistant-entry-heading"><text class="assistant-entry-title">赛事助手</text><text class="assistant-status assistant-status-{{assistantState}}">{{assistantStatusLabel}}</text></view>
-      <text class="assistant-entry-caption">对阵、比分、选手数据，一处查询</text>
-      <view class="assistant-entry-foot"><text class="assistant-entry-hint">报名咨询 · 寻找队友</text><view class="assistant-entry-action">进入助手 <text>↗</text></view></view>
+      <text class="assistant-entry-caption">帮你报名参赛，查资格、看对阵</text>
+      <view class="assistant-entry-foot"><text class="assistant-entry-hint">生成报名预览 · 确认后提交</text><view class="assistant-entry-action">进入助手 <text>↗</text></view></view>
     </view>
     <view class="player-card">
       <view wx:if="{{user}}" class="player-identity" bindtap="goIdentity">
