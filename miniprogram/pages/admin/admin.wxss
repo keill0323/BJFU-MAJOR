@@ -118,13 +118,31 @@
 .registration-hint { display: block; color: #526b7e; line-height: 1.7; font-size: 25rpx; margin-top: 20rpx; }
 .create-card > .btn-primary { min-height: 96rpx; font-size: 30rpx; }
 .mask { position: fixed; inset: 0; background: rgba(16,42,67,.45); z-index: 100; display: flex; align-items: center; justify-content: center; }
-.detail-panel { box-sizing: border-box; width: 90%; max-height: 82vh; overflow-y: auto; background: #fff; border-radius: 26rpx; padding: 28rpx; }
+.detail-panel { box-sizing: border-box; width: 90%; height: 76vh; background: #fff; border-radius: 26rpx; padding: 28rpx; }
 .detail-header { display: flex; justify-content: space-between; align-items: center; gap: 20rpx; margin-bottom: 18rpx; }
 .detail-close { padding: 14rpx; font-size: 34rpx; color: #62798c; }
 .detail-avatar { display: block; width: 120rpx; height: 120rpx; border-radius: 50%; margin: 20rpx 0; background: #f3f7fa; }
 .member-row { display: flex; justify-content: space-between; align-items: center; gap: 16rpx; padding: 20rpx 0; border-bottom: 1rpx solid #e2ebf0; }
 .member-name { flex: 1; min-width: 0; font-size: 26rpx; word-break: break-all; }
 .member-rank { flex-shrink: 0; font-size: 23rpx; color: #62798c; }
+.workbench-kicker { font-size: 22rpx; }
+.workbench-head-compact { padding: 20rpx 26rpx; margin-bottom: 16rpx; }
+.workbench-head-compact .workbench-kicker, .workbench-head-compact .workbench-caption { display: none; }
+.workbench-head-compact .workbench-title { font-size: 32rpx; }
+.workbench-head-compact .workbench-number { font-size: 36rpx; }
+.workbench-head-compact .workbench-total { display: flex; align-items: center; gap: 10rpx; padding-left: 20rpx; font-size: 24rpx; }
+.workbench-head-compact .workbench-number { margin: 0; }
+.admin-pending-summary { display: flex; justify-content: space-between; align-items: center; gap: 16rpx; margin: 0 24rpx 18rpx; padding: 20rpx 22rpx; color: #82602e; background: #fcf5e7; border-radius: 14rpx; font-size: 24rpx; line-height: 1.6; }
+.admin-pending-summary > text:last-child { color: #087782; flex-shrink: 0; }
+.review-toggle { display: flex; justify-content: space-between; align-items: center; margin: 14rpx 0 0; width: 100%; padding: 20rpx; min-height: 88rpx; color: #087782; background: #edf7f5; font-size: 28rpx; line-height: 1.6; border-radius: 12rpx; }
+.review-toggle::after, .admin-status-filter::after, .admin-more::after { border: 0; }
+.review-expanded { padding-top: 16rpx; }
+.admin-status-filters { display: flex; flex-wrap: wrap; gap: 10rpx; margin: 20rpx 0 16rpx; }
+.admin-status-filter { margin: 0; padding: 14rpx 18rpx; min-height: 76rpx; font-size: 24rpx; line-height: 1.6; color: #526d82; background: #f3f7fa; border-radius: 12rpx; }
+.admin-status-filter.selected { color: #087782; background: #e1f2ee; font-weight: 650; }
+.admin-more { margin: 0; padding: 12rpx 18rpx; color: #526d82; background: transparent; font-size: 24rpx; line-height: 1.6; }
+.team-card-footer { align-items: center; justify-content: space-between; }
+.user-actions > button { margin: 0; }
 @media (max-width: 350px) {
   .workbench-head { padding: 26rpx; gap: 14rpx; }
   .workbench-title { font-size: 36rpx; }

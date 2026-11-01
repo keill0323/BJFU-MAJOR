@@ -4,6 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
+const { parseWxml, createRenderer } = require('../../tools/preview-miniprogram.js')
 const root = path.resolve(__dirname, '../..')
 
 function load(relative, api, token = '') {
@@ -34,6 +35,7 @@ test('home status filters and clear-search preserve real counts without extra fi
   } })
   await page.loadMatches()
   assert.equal(page.data.total, 3)
+  assert.equal(page.data.groups[0].status, 'in_progress')
   assert.equal(page.data.matches[0].progress, 38)
   assert.equal(page.data.matches[0].timing, '报名截止 09.23 18:00')
   page.setFilter({ currentTarget: { dataset: { value: 'finished' } } })
@@ -46,6 +48,36 @@ test('home status filters and clear-search preserve real counts without extra fi
   assert.equal(page.data.activeFilter, 'all')
   assert.equal(page.data.keyword, '')
   assert.equal(page.data.groups.length, 3)
+})
+
+test('home keeps all notice counts but shows one priority item above events', () => {
+  const { page } = load('pages/index/index.js', {})
+  const tree = parseWxml(fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxml'), 'utf8'))
+  page.data.personalNotice = { total: 9, admin_notice_count: 2, admin_notice_title: '比赛日通知', application_count: 3, invitation_count: 3, schedule_count: 1 }
+  tree.scope = page.data
+  let html = createRenderer({})(tree)
+  assert.match(html, /9 条 · 查看全部/)
+  assert.match(html, /比赛日通知/)
+  assert.doesNotMatch(html, /去处理 ›|查看邀请 ›/)
+  page.data.personalNotice.admin_notice_count = 0
+  html = createRenderer({})(tree)
+  assert.match(html, /入队申请/)
+  assert.doesNotMatch(html, /查看邀请 ›/)
+  assert.match(html, /chat-entry-title/)
+  assert.ok(html.indexOf('section-heading') < html.indexOf('shortcut-grid'))
+})
+
+test('home administrator summary expands locally without fetching or affecting other pages', () => {
+  const { page } = load('components/nav-drawer/nav-drawer.js', {})
+  page.data.currentRoute = '/pages/index/index'
+  assert.equal(page.data.adminNoticeExpanded, false)
+  page.toggleAdminNotice()
+  assert.equal(page.data.adminNoticeExpanded, true)
+  page.toggleAdminNotice()
+  assert.equal(page.data.adminNoticeExpanded, false)
+  page.data.currentRoute = '/pages/profile/profile'
+  page.toggleAdminNotice()
+  assert.equal(page.data.adminNoticeExpanded, false)
 })
 
 test('late home search responses cannot overwrite newer results or hide their loading state', async () => {

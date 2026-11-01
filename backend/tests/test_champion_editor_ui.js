@@ -73,6 +73,16 @@ test('editor verifies admin before reading archives and never publishes on load'
   assert.doesNotMatch(html, /正在读取/)
 })
 
+test('champion editor returns to the existing management stack and opens the correct match', async () => {
+  const { page, calls } = loadPage()
+  await page.onLoad({ matchId: '8' })
+  page.goMatchAdmin()
+  assert.equal(calls.navigations[0].url, '/pages/admin/mdetail/mdetail?matchId=8')
+  page.goManagement()
+  assert.equal(calls.navigations[1].delta, 1)
+  assert.match(render(page), /返回管理/)
+})
+
 test('reviewer, player and guest cannot read or publish admin champion archives', async () => {
   for (const user of [{ role: 'reviewer' }, { role: 'member' }, null]) {
     const { page, calls } = loadPage({ getMe: async () => user })

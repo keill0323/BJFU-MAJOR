@@ -32,6 +32,106 @@ function makeFixtures() {
   return { user, team, matches, detail: { match: matches[1], teams, rounds } }
 }
 
+// A complete fictional double round-robin, shared by the captain/member/filter
+// previews. Permissions and derived labels still come from the real page logic.
+function makeDoubleRoundFixture(fixtures, member = false) {
+  const names = [
+    ['北林森林回响', '白桦竞技', '最后一颗闪光与校园老朋友一起向冠军出发'],
+    ['松林长风', '回防不要急', '北京林业大学长队名完整显示测试战队'],
+    ['林间突击队', '竹林守望', '曙光步枪手'],
+    ['落叶回响', '晚风狙击队', '向下一场']
+  ]
+  const groups = ['A', 'B', 'C', 'D']
+  const groupTeams = groups.map((group_name, i) => names[i].map((team_name, j) => ({
+    team_id: 10 + i * 3 + j, team_name, group_name, stage: 'challenger',
+    seed: 5 + i * 3 + j, registration_status: 'approved', rating: 330 - i * 12 - j * 4
+  })))
+  const rounds = []
+  groups.forEach((group_name, groupIndex) => {
+    const teams = groupTeams[groupIndex]
+    const day = groupIndex < 2 ? '2026-10-10' : '2026-10-11'
+    const pairs = [[0, 1], [0, 2], [1, 2]]
+    for (let cycle = 0; cycle < 2; cycle++) {
+      pairs.forEach(([first, second], pairIndex) => {
+        const [a, b] = cycle ? [teams[second], teams[first]] : [teams[first], teams[second]]
+        const sequence = cycle * 12 + groupIndex * 3 + pairIndex + 1
+        const result = groupIndex === 0 && ((cycle === 0 && pairIndex === 0) || (cycle === 1 && pairIndex === 1))
+          ? { status: 'finished', winner_id: a.team_id, team1_score: 13, team2_score: cycle ? 11 : 8,
+              scheduled_time: day + 'T13:00:00', schedule_status: 'confirmed', team1_confirmed: true, team2_confirmed: true }
+          : groupIndex === 0 && cycle === 0 && pairIndex === 1
+            ? { scheduled_time: day + 'T14:00:00', schedule_status: 'pending', team1_confirmed: false, team2_confirmed: true }
+            : groupIndex === 0 && cycle === 1 && pairIndex === 0
+              ? { scheduled_time: day + 'T15:00:00', schedule_status: 'confirmed', team1_confirmed: true, team2_confirmed: true }
+              : { schedule_status: 'unconfirmed', team1_confirmed: false, team2_confirmed: false }
+        rounds.push({ id: 100 + sequence, round_number: sequence, group_name,
+          team1_id: a.team_id, team2_id: b.team_id, team1_name: a.team_name, team2_name: b.team_name,
+          status: 'pending', winner_id: null, team1_score: null, team2_score: null,
+          window_start: day + 'T13:00:00', window_end: day + 'T18:00:00', ...result })
+      })
+    }
+  })
+  fixtures.detail.match = { ...fixtures.matches[1], name: '2026届起源杯 · 离线示例', match_type: 'freshman',
+    description: '本页全部为虚构的布局示例。四组小组赛双循环 BO1，周末分组并行进行。',
+    registered_count: 16, max_teams: 16 }
+  fixtures.detail.teams = groupTeams.flat().concat(['杉林竞技', '校园曙光', '山风五人组', '北林老朋友'].map((team_name, i) => ({
+    team_id: 40 + i, team_name, stage: 'legend', group_name: null, seed: i + 1,
+    registration_status: 'approved', rating: 400 - i * 10
+  })))
+  fixtures.detail.rounds = rounds.sort((a, b) => a.round_number - b.round_number)
+  if (member) {
+    const currentMember = fixtures.team.members[1]
+    fixtures.user = { ...fixtures.user, id: currentMember.user_id, nickname: currentMember.nickname,
+      game_id: currentMember.game_id, rank: currentMember.rank, individual_rating: currentMember.rating }
+  }
+}
+
+// Six qualifiers: zone winners have byes; the first round is Upper #2 vs
+// Lower #3 and Lower #2 vs Upper #3. Future nodes come from the real
+// page builder, never from fixture-only bracket fields.
+function makeKnockoutFixture(fixtures, awaiting = false) {
+  const qualifiers = [
+    [10, '北林森林回响', '上区', 2],
+    [11, '白桦竞技', '上区', 3],
+    [12, '松林长风', '上区', 1],
+    [13, '林间突击队', '下区', 2],
+    [14, '最后一颗闪光与校园老朋友一起向冠军出发', '下区', 3],
+    [15, '校园曙光', '下区', 1]
+  ].map(([team_id, team_name, group_name, seed]) => ({
+    team_id, team_name, group_name, seed, stage: 'playoff',
+    registration_status: 'approved', rating: 350 - team_id
+  }))
+  const teamById = new Map(qualifiers.map(team => [team.team_id, team]))
+  const finished = (winner, a, b, scoreA, scoreB) => ({
+    status: 'finished', winner_id: winner, team1_score: scoreA, team2_score: scoreB,
+    schedule_status: 'confirmed', scheduled_time: '2026-10-10T13:00:00',
+    team1_confirmed: true, team2_confirmed: true,
+    bo3_scores: scoreA === 0 ? [{ t1: 8, t2: 13 }, { t1: 7, t2: 13 }]
+      : scoreB === 0 ? [{ t1: 13, t2: 8 }, { t1: 13, t2: 7 }]
+        : winner === a ? [{ t1: 13, t2: 8 }, { t1: 7, t2: 13 }, { t1: 13, t2: 10 }]
+          : [{ t1: 13, t2: 9 }, { t1: 6, t2: 13 }, { t1: 8, t2: 13 }]
+  })
+  const round = (sequence, a, b, result = {}) => ({
+    id: 200 + sequence, round_number: 30 + sequence, group_name: '淘汰赛',
+    team1_id: a, team2_id: b, team1_name: teamById.get(a).team_name,
+    team2_name: teamById.get(b).team_name,
+    status: 'pending', winner_id: null, team1_score: null, team2_score: null,
+    schedule_status: 'unconfirmed', team1_confirmed: false, team2_confirmed: false,
+    window_start: '2026-10-10T13:00:00', window_end: '2026-10-11T20:00:00', ...result
+  })
+  fixtures.detail.match = { ...fixtures.matches[1], name: '2026届起源杯 · 离线示例',
+    match_type: 'freshman', description: '全部为虚构数据。六强淘汰赛 BO3，首轮跨区，两区第一轮空。',
+    registered_count: 16, max_teams: 16 }
+  fixtures.detail.teams = qualifiers
+  fixtures.detail.rounds = awaiting ? [round(1, 10, 14), round(2, 13, 11)] : [
+    round(1, 10, 14, finished(10, 10, 14, 2, 1)),
+    round(2, 13, 11, finished(11, 13, 11, 1, 2)),
+    round(3, 12, 11, finished(11, 12, 11, 0, 2)),
+    round(4, 15, 10, finished(10, 15, 10, 1, 2)),
+    round(5, 11, 10, { scheduled_time: '2026-10-11T15:00:00', schedule_status: 'pending',
+      team1_confirmed: true, team2_confirmed: false })
+  ]
+}
+
 function setData(values) {
   for (const [key, value] of Object.entries(values)) {
     const parts = key.replace(/\[(\d+)\]/g, '.$1').split('.')
@@ -74,7 +174,7 @@ function createEnvironment(fixtures, route, guest = false) {
     getHallPlayers: () => fixtures.hallPlayers,
     getMyRegistration: () => ({ registered: true, registration: { team_id: fixtures.team.id, status: 'approved' } }),
     getApplications: () => [], getInvitations: () => [], getMyInvitations: () => [], getMyRankApplications: () => [],
-    getAdminNotices: () => ({ items: [{ id: 1, title: '请确认本轮比赛时间', content: '请两位队长进入赛事详情，在本轮对阵中确认约赛时间。\n有变动请及时重新协商。', is_read: false, created_at: '2026-09-15T18:00:00' }], unread_count: 1, has_more: false, next_cursor: null }),
+    getAdminNotices: () => ({ items: [{ id: 1, title: '请确认本轮比赛时间', content: '本轮比赛时间已由管理员安排，请进入赛事详情查看本队对阵。\n如需调整，请联系赛事管理员。', is_read: false, created_at: '2026-09-15T18:00:00' }], unread_count: 1, has_more: false, next_cursor: null }),
     getAdminNoticeRecipients: () => ({ items: fixtures.team.members.map(m => ({ id: m.user_id, nickname: m.nickname, game_id: m.game_id, is_verified: true })), has_more: false, next_cursor: null }),
     getAdminNoticeHistory: () => ({ items: [{ id: 1, title: '本轮赛程确认', content: '请前往赛事详情确认约赛时间。', created_at: '2026-09-15T18:00:00', recipient_count: 4, read_count: 2 }] }),
     getScheduleNotifications: () => ({ items: [
@@ -112,6 +212,17 @@ function createEnvironment(fixtures, route, guest = false) {
       if (modulePath.endsWith('/rank.js')) return require(path.join(appRoot, 'utils/rank.js'))
       if (modulePath.endsWith('/tournament.js')) return require(path.join(appRoot, 'utils/tournament.js'))
       if (modulePath.endsWith('/navigation.js')) return require(path.join(appRoot, 'utils/navigation.js'))
+      if (modulePath.endsWith('/chat-client.js')) return {
+        ensure: async () => ({ user_id: fixtures.user.id, is_admin: false }),
+        store: { compare: (a, b) => Number(a) - Number(b), save() {}, forget() {} },
+        async call(endpoint) {
+          if (endpoint === '/conversations') return { items: [
+            { id: '1', peer: { id: 12, nickname: '白桦竞技队长' }, pinned: false, unread: 2, updated_at: '2026-10-11T12:30:00+08:00', latest: { kind: 'text', content: '收到，我们会按管理员安排的时间到场。', created_at: '2026-10-11T12:30:00+08:00' } }
+          ], has_more: false, next_cursor: null }
+          if (endpoint.startsWith('/contacts?')) return { items: [{ id: 12, nickname: '白桦竞技队长', game_id: 'Birch_AWP', is_verified: true }] }
+          throw new Error('Preview refuses unsupported chat access: ' + endpoint)
+        }
+      }
       if (modulePath.endsWith('/admin-todos.js')) return {
         getTodoItems: require(path.join(appRoot, 'utils/admin-todos.js')).getTodoItems,
         refresh: async () => {
@@ -193,6 +304,18 @@ async function pageData(name) {
     fixtures.detail.rounds = [] // Assigned groups must appear before rounds exist.
     fixtures.windows = [{ group_name: 'B', window_start: '2026-09-21T18:00:00', window_end: '2026-09-25T22:00:00' }]
   }
+  if (['match-info', 'match-all-rounds', 'match-date', 'match-overview', 'match-mine', 'match-mine-member', 'match-group-filtered', 'admin-rounds', 'admin-round-schedule', 'admin-score-bo1', 'admin-score-bo1-keyboard'].includes(name)) {
+    makeDoubleRoundFixture(fixtures, name === 'match-mine-member')
+    if (name === 'match-group-filtered') {
+      const completed = fixtures.detail.rounds.find(round => round.group_name === 'B')
+      Object.assign(completed, { status: 'finished', winner_id: completed.team1_id,
+        team1_score: 13, team2_score: 8, scheduled_time: '2026-10-10T13:00:00',
+        schedule_status: 'confirmed', team1_confirmed: true, team2_confirmed: true })
+    }
+  }
+  if (['match-bracket', 'match-bracket-awaiting', 'admin-score-bo3', 'admin-score-bo3-keyboard'].includes(name)) {
+    makeKnockoutFixture(fixtures, name === 'match-bracket-awaiting')
+  }
   if (['match-standings', 'match-history', 'admin-standings', 'admin-history'].includes(name)) {
     fixtures.detail.match = { ...fixtures.matches[0], status: 'finished' }
     fixtures.detail.teams = Array.from({ length: 6 }, (_, i) => ({ team_id: i + 1,
@@ -266,12 +389,43 @@ async function pageData(name) {
     page.setData({ token: 'offline-preview-token' })
     await page.loadMessages()
     await page.loadAdminNotices()
+    page.updateVisible()
+  } else if (route === 'chats') {
+    page._visible = true
+    await page.load()
+    if (name === 'chats-search') { page.setData({ keyword: '12' }); await page.search() }
+  } else if (route === 'chat') {
+    page._cid = '1'; page._pending = []
+    page._items = [
+      { id: '1', seq: '1', sender_id: 12, kind: 'text', content: '你好，我们是白桦竞技。', state: 'active', created_at: '2026-10-11T12:30:00+08:00', read_at: '2026-10-11T12:31:00+08:00' },
+      { id: '2', seq: '2', sender_id: fixtures.user.id, kind: 'text', content: '收到，我们会按管理员安排的时间到场。', state: 'active', created_at: '2026-10-11T12:31:00+08:00', read_at: '2026-10-11T12:32:00+08:00' },
+      { id: '3', seq: '3', sender_id: 12, kind: 'text', content: '好，赛场见！', state: 'active', created_at: '2026-10-11T12:36:00+08:00' }
+    ]
+    page.setData({ room: { peer: { id: 12, nickname: '白桦竞技队长' } }, selfId: fixtures.user.id,
+      status: name === 'chat-retrying' ? 'retrying' : 'online', showRules: name === 'chat-rules',
+      canSend: true, loading: false, windowHeight: 780 })
+    page.render(false)
   } else if (route === 'verify' || route === 'profile') {
     page.setData({ token: 'offline-preview-token' })
     await page.loadUser()
   } else if (route === 'match') {
     await page.onLoad({ id: fixtures.detail.match.id })
-    page.setData({ tab: name === 'match-knockout' ? 'knockout' : name === 'match-awaiting' ? 'teams' : 'challenger' })
+    if (name === 'match-info' || ['match-three', 'match-four'].includes(name)) {
+      page.switchTab({ currentTarget: { dataset: { tab: 'info' } } })
+    } else if (name === 'match-all-rounds' || name === 'match-date') {
+      page.switchTab({ currentTarget: { dataset: { tab: 'matches' } } })
+      if (name === 'match-date') page.changeMatchupDate({ detail: { value: 1 } })
+    } else if (name === 'match-group-filtered') {
+      page.switchTab({ currentTarget: { dataset: { tab: 'challenger' } } })
+      page.selectChallengerGroup({ currentTarget: { dataset: { group: 'B' } } })
+    } else if (['match-bracket', 'match-bracket-awaiting', 'match-knockout'].includes(name)) {
+      page.switchTab({ currentTarget: { dataset: { tab: 'knockout' } } })
+      if (name !== 'match-knockout') page.toggleMatchupBracket()
+    } else if (['match-mine', 'match-mine-member'].includes(name)) {
+      page.switchTab({ currentTarget: { dataset: { tab: 'mine' } } })
+    } else if (name !== 'match-overview') {
+      page.switchTab({ currentTarget: { dataset: { tab: name === 'match-awaiting' ? 'teams' : 'challenger' } } })
+    }
   } else if (route === 'login') {
     page.onLoad()
   } else if (route === 'hall') {
@@ -297,9 +451,22 @@ async function pageData(name) {
     if (name.startsWith('admin-challenger')) page.setData({ tab: 'challenger' })
     if (name === 'admin-registration') page.openRegistrationPanel()
     if (name.startsWith('admin-windows')) await page.openWindowPanel()
+    if (name === 'admin-rounds') { page.setData({ tab: 'schedule' }); page.resetRoundFilters() }
+    if (name === 'admin-round-schedule' || name.startsWith('admin-score-bo1')) page.setData({ tab: 'challenger' })
+    if (name === 'admin-round-schedule') page.openRoundSchedule({ currentTarget: { dataset: { id: fixtures.detail.rounds.find(round => round.status === 'pending').id } } })
+    if (name.startsWith('admin-score-bo3')) page.setData({ tab: 'knockout' })
+    if (name.startsWith('admin-score-')) {
+      page.openScore({ currentTarget: { dataset: { id: fixtures.detail.rounds[0].id } } })
+      if (name.endsWith('-keyboard')) {
+        page._scoreWindowHeight = 568
+        page.onScoreFocus({ currentTarget: { dataset: { focusId: page.data.isBo3 ? 'score-game-2' : 'score-single' } } })
+        page.onScoreKeyboardHeightChange({ detail: { height: 300 } })
+      }
+    }
   }
   if (name.endsWith('-standings') || name.endsWith('-history')) {
-    page.setData({ tab: 'teams' })
+    if (route === 'match') page.switchTab({ currentTarget: { dataset: { tab: 'teams' } } })
+    else page.setData({ tab: 'teams' })
     if (name.endsWith('-history')) page.showTeam({ currentTarget: { dataset: { id: 5 } } })
   }
   let teamProfile = null
@@ -419,11 +586,12 @@ function browserCss(source) {
 function createRenderer(navData, teamProfileData = null) {
   const navTree = parseWxml(fs.readFileSync(path.join(appRoot, 'components/nav-drawer/nav-drawer.wxml'), 'utf8'))
   const returnTree = parseWxml(fs.readFileSync(path.join(appRoot, 'components/event-return/event-return.wxml'), 'utf8'))
+  const chatEntryTree = parseWxml(fs.readFileSync(path.join(appRoot, 'components/chat-entry/chat-entry.wxml'), 'utf8'))
   const profileTree = teamProfileData ? parseWxml(fs.readFileSync(path.join(appRoot, 'components/team-profile/team-profile.wxml'), 'utf8')) : null
   function children(nodes, scope) {
     let output = '', branchTaken = false, chainOpen = false
     for (const node of nodes) {
-      if ('text' in node) { output += escapeHtml(interpolate(node.text, scope)); continue }
+      if ('text' in node) { if (node.text.trim()) output += escapeHtml(interpolate(node.text, scope)); continue }
       const attrs = node.attrs
       if ('wx:if' in attrs) {
         chainOpen = true
@@ -450,6 +618,7 @@ function createRenderer(navData, teamProfileData = null) {
     if (node.tag === 'block') return children(node.children, scope)
     if (node.tag === 'nav-drawer') return '<div class="preview-component">' + children(navTree.children, { ...navData, title: interpolate(attrs.title, scope), showAdminNotice: attrs['show-admin-notice'] ? !!evaluate(attrs['show-admin-notice'], scope) : !!navData.showAdminNotice }) + '</div>'
     if (node.tag === 'event-return') return '<div class="preview-component">' + children(returnTree.children, {}) + '</div>'
+    if (node.tag === 'chat-entry') return '<div class="preview-component">' + children(chatEntryTree.children, { unread: 0 }) + '</div>'
     if (node.tag === 'team-profile') return profileTree ? '<div class="preview-component">' + children(profileTree.children, teamProfileData) + '</div>' : ''
     let tag = ({ view: 'div', text: 'span', image: 'img', 'scroll-view': 'div', swiper: 'div', 'swiper-item': 'div', picker: 'div', switch: 'input', input: 'input', textarea: 'textarea', button: 'button' })[node.tag] || 'div'
     let htmlAttrs = ''
@@ -469,6 +638,7 @@ function createRenderer(navData, teamProfileData = null) {
     if (tag === 'input' || tag === 'textarea') {
       if (attrs.placeholder) htmlAttrs += ' placeholder="' + escapeHtml(interpolate(attrs.placeholder, scope)) + '"'
     }
+    if (tag === 'textarea' && attrs['auto-height']) htmlAttrs += ' rows="1"'
     if (tag === 'img' || tag === 'input') return '<' + tag + htmlAttrs + '>'
     let body
     if (node.tag === 'swiper') {
@@ -491,11 +661,11 @@ async function renderPreview(name) {
   const base = path.join(appRoot, pagePath)
   const tree = parseWxml(fs.readFileSync(base + '.wxml', 'utf8'))
   tree.scope = data
-  const css = browserCss(cssSource(path.join(appRoot, 'app.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/nav-drawer/nav-drawer.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/event-return/event-return.wxss')) + '\n' + (teamProfile ? cssSource(path.join(appRoot, 'components/team-profile/team-profile.wxss')) : '') + '\n' + cssSource(base + '.wxss'))
+  const css = browserCss(cssSource(path.join(appRoot, 'app.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/nav-drawer/nav-drawer.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/event-return/event-return.wxss')) + '\n' + cssSource(path.join(appRoot, 'components/chat-entry/chat-entry.wxss')) + '\n' + (teamProfile ? cssSource(path.join(appRoot, 'components/team-profile/team-profile.wxss')) : '') + '\n' + cssSource(base + '.wxss'))
   const config = JSON.parse(fs.readFileSync(base + '.json', 'utf8'))
   const nativeNav = config.navigationStyle !== 'custom' ? '<div class="preview-native-nav"><span>‹</span><strong>' + escapeHtml(config.navigationBarTitleText || '北林CS2校赛') + '</strong><span>•••</span></div>' : ''
   const html = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'"><title>' + name + ' · 离线布局预览</title><style>'
-    + 'html,body{margin:0;padding:0;width:100%;min-height:100%;}div{box-sizing:border-box}button,input,textarea{font:inherit;box-sizing:border-box}button{cursor:pointer}img{display:inline-block;vertical-align:middle}img[data-fit="cover"]{object-fit:cover}img[data-fit="contain"]{object-fit:contain}.mini-swiper-item{width:100%;height:100%;overflow:hidden}.mini-scroll-y{overflow-y:auto}.mini-scroll-x{overflow-x:auto}.preview-native-nav{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 0;height:64px;background:white;color:#102a43;font-size:15px}.preview-native-nav span{font-size:22px}.preview-disclaimer{padding:20px;text-align:center;font-size:11px;line-height:1.7;color:#6d8193;background:#f3f7fa}[hidden]{display:none!important}'
+    + 'html,body{margin:0;padding:0;width:100%;min-height:100%;}div{box-sizing:border-box}button,input,textarea{font:inherit;box-sizing:border-box}button{cursor:pointer;border:0}input,textarea{border:0;outline:none}textarea{resize:none}img{display:inline-block;vertical-align:middle}img[data-fit="cover"]{object-fit:cover}img[data-fit="contain"]{object-fit:contain}.mini-swiper-item{width:100%;height:100%;overflow:hidden}.mini-scroll-y{overflow-y:auto}.mini-scroll-x{overflow-x:auto}.preview-native-nav{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 0;height:64px;background:white;color:#102a43;font-size:15px}.preview-native-nav span{font-size:22px}.preview-disclaimer{padding:20px;text-align:center;font-size:11px;line-height:1.7;color:#6d8193;background:#f3f7fa}[hidden]{display:none!important}'
     + css + '</style></head><body>' + nativeNav + createRenderer(nav, teamProfile)(tree) + '<div class="preview-disclaimer">离线布局预览 · 全部为示例数据<br>真实 WXML / WXSS 与页面数据逻辑转换；不替代微信开发者工具及真机验收。</div></body></html>'
   return html
 }
@@ -514,6 +684,10 @@ async function main() {
   const supported = ['index', 'index-guest', 'index-manager', 'index-manager-error', 'team', 'teams', 'verify', 'verify-empty', 'profile', 'login', 'match', 'match-knockout', 'match-three', 'match-four', 'match-awaiting', 'admin', 'admin-registration', 'admin-windows', 'admin-windows-four', 'admin-challenger', 'admin-challenger-four', 'admin-awaiting', 'admin-roster-locked', 'hall', 'hall-players', 'hall-empty', 'workbench', 'workbench-verify', 'workbench-users', 'workbench-rankapps', 'workbench-teams', 'workbench-matches', 'workbench-create', 'workbench-create-empty', 'workbench-blocked', 'workbench-empty', 'workbench-error', 'champion', 'champion-edit', 'champion-readonly']
   supported.push('workbench-team-profile', 'recruitment-filtered', 'recruitment', 'recruitment-edit', 'recruitment-guest', 'messages', 'match-standings', 'match-history', 'admin-standings', 'admin-history')
   supported.push('notices', 'team-create', 'teams-detail', 'teams-detail-guest')
+  supported.push('chats', 'chats-search', 'chat', 'chat-rules', 'chat-retrying')
+  supported.push('match-info', 'match-all-rounds', 'match-date', 'match-mine', 'match-mine-member', 'match-group-filtered')
+  supported.push('match-bracket', 'match-bracket-awaiting')
+  supported.push('match-overview', 'admin-rounds', 'admin-round-schedule', 'admin-score-bo1', 'admin-score-bo1-keyboard', 'admin-score-bo3', 'admin-score-bo3-keyboard')
   if (requested && !supported.includes(requested)) throw new Error('Unsupported page: ' + requested)
   const directory = arg('--out') ? path.resolve(arg('--out')) : fs.mkdtempSync(path.join(os.tmpdir(), 'bjfu-layout-preview-'))
   const tempRoot = path.resolve(os.tmpdir())

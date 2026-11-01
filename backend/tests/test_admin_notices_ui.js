@@ -25,11 +25,13 @@ function load(relative, overrides = {}) {
   let page
   vm.runInNewContext(fs.readFileSync(path.join(root, relative + '.js'), 'utf8'), {
     Page: value => { page = value }, console,
+    getCurrentPages: () => state.pages || [{ route: 'pages/admin/admin' }, { route: 'pages/admin/notices/notices' }],
     require: name => name.endsWith('/api.js') ? api : require(path.join(root, 'utils/rank.js')),
     wx: { getStorageSync: () => state.token, showModal: options => {
       state.modals.push(options)
       if (state.confirm !== null) options.success({ confirm: state.confirm })
     }, showToast: value => state.toasts.push(value), navigateTo: value => state.navigations.push(value.url),
+    navigateBack: value => state.navigations.push({ delta: value.delta }), redirectTo: value => state.navigations.push(value.url),
     pageScrollTo: value => state.scrolls.push(value.selector), stopPullDownRefresh() {} }
   })
   page.data = plain(page.data)
@@ -245,6 +247,7 @@ test('workbench notice entry is administrator-only and editor renders selected p
   assert.deepEqual(state.navigations, ['/pages/admin/notices/notices'])
   const { page: form } = await editor()
   compose(form)
+  form.toggleRecipients()
   const tree = parseWxml(fs.readFileSync(path.join(root, 'pages/admin/notices/notices.wxml'), 'utf8'))
   tree.scope = form.data
   const html = createRenderer({})(tree)
@@ -252,4 +255,65 @@ test('workbench notice entry is administrator-only and editor renders selected p
   assert.match(html, /标题/)
   assert.match(html, /预览并发送/)
   assert.doesNotMatch(html, /学号|QQ/)
+})
+
+function renderEditor(page) {
+  const tree = parseWxml(fs.readFileSync(path.join(root, 'pages/admin/notices/notices.wxml'), 'utf8'))
+  tree.scope = page.data
+  return createRenderer({})(tree)
+}
+
+test('notice tabs keep the draft and recipients while history details expand only when requested', async () => {
+  const { page, state } = await editor({ getAdminNoticeHistory: async () => ({ items: [{ ...notice(8), content: '仅展开时显示的历史正文', recipient_count: 5, read_count: 2 }] }) })
+  compose(page)
+  let html = renderEditor(page)
+  assert.match(html, /选手2/)
+  assert.doesNotMatch(html, /Player2|仅展开时显示的历史正文/)
+  page.toggleRecipients()
+  assert.match(renderEditor(page), /Player2/)
+  page.switchTab({ currentTarget: { dataset: { tab: 'history' } } })
+  html = renderEditor(page)
+  assert.match(html, /赛事安排8|已读 2 \/ 5 人/)
+  assert.doesNotMatch(html, /预览并发送|仅展开时显示的历史正文/)
+  page.toggleHistory(click(8))
+  assert.match(renderEditor(page), /仅展开时显示的历史正文/)
+  page.toggleHistory(click(8))
+  assert.doesNotMatch(renderEditor(page), /仅展开时显示的历史正文/)
+  page.switchTab({ currentTarget: { dataset: { tab: 'compose' } } })
+  assert.equal(page.data.title.trim(), '比赛安排')
+  assert.equal(page.data.content.trim(), '请确认本轮时间。')
+  assert.equal(page.data.selectedCount, 1)
+  assert.equal(state.sends.length, 0)
+  assert.equal(state.reads.length, 0)
+})
+
+test('stale history refresh cannot replace the newest rows or reopen removed details', async () => {
+  const { page, api } = await editor({ getAdminNoticeHistory: async () => ({ items: [notice(4)] }) })
+  page.toggleHistory(click(4))
+  const old = deferred()
+  api.getAdminNoticeHistory = () => old.promise
+  const pending = page.loadHistory()
+  api.getAdminNoticeHistory = async () => ({ items: [notice(5)] })
+  await page.loadHistory()
+  old.resolve({ items: [notice(4)] })
+  await pending
+  assert.deepEqual(plain(page.data.history.map(item => item.id)), [5])
+  assert.equal(page.data.expandedHistoryId, null)
+  assert.equal(page.data.historyLoading, false)
+})
+
+test('return to management reuses the stack, falls back for direct entry and blocks during sending', async () => {
+  const { page, state } = await editor()
+  page.goManagement()
+  assert.deepEqual(state.navigations, [{ delta: 1 }])
+  state.pages = [{ route: 'pages/admin/notices/notices' }]
+  page.goManagement()
+  assert.equal(state.navigations[1], '/pages/admin/admin')
+  page.setData({ sending: true })
+  page.goManagement()
+  page.switchTab({ currentTarget: { dataset: { tab: 'history' } } })
+  page.toggleRecipients()
+  assert.equal(state.navigations.length, 2)
+  assert.equal(page.data.activeTab, 'compose')
+  assert.equal(page.data.recipientsExpanded, false)
 })

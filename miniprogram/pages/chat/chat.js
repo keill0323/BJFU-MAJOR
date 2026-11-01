@@ -9,7 +9,7 @@ function decorate(m, selfId) {
 }
 Page({
   data: { room: null, rows: [], draft: '', loading: true, error: '', status: 'connecting', selfId: null,
-    more: false, loadingMore: false, anchor: '', newMessages: false, keyboardHeight: 0, windowHeight: 600, returnHeight: 44, canSend: false, cardOffer: '' },
+    more: false, loadingMore: false, anchor: '', newMessages: false, keyboardHeight: 0, windowHeight: 600, returnHeight: 44, canSend: false, cardOffer: '', showRules: false },
   onLoad(options) {
     this._cid = Number(options.id); this._items = []; this._pending = []; this._atBottom = true
     this._card = ['team', 'round'].includes(options.card) && Number(options.source) > 0 ? { kind: options.card, id: Number(options.source) } : null
@@ -88,7 +88,13 @@ Page({
     }
     const ids = new Set(this._items.filter(m => m.sender_id === this.data.selfId).map(m => m.client_id))
     this._pending = this._pending.filter(m => !ids.has(m.client_id))
-    const rows = this._items.concat(this._pending).map(m => decorate(m, this.data.selfId))
+    let lastTime = null
+    const rows = this._items.concat(this._pending).map(m => {
+      const row = decorate(m, this.data.selfId), stamp = Date.parse(m.created_at)
+      row.showTime = lastTime === null || !Number.isFinite(lastTime) || !Number.isFinite(stamp) || Math.abs(stamp - lastTime) >= 5 * 60 * 1000
+      if (row.showTime) lastTime = stamp
+      return row
+    })
     const update = { rows }
     if (scroll && rows.length) { update.anchor = rows[rows.length - 1].elementId; update.newMessages = false }
     this.setData(update, () => this.observeRead())
@@ -145,6 +151,7 @@ Page({
     finally { if (this.current(g)) this.setData({ loadingMore: false }) }
   },
   input(e) { this.setData({ draft: e.detail.value }) },
+  toggleRules() { this.setData({ showRules: !this.data.showRules }) },
   keyboard(e) { this.setData({ keyboardHeight: e.detail.height || 0 }); if (this._atBottom) this.bottom() },
   async send() {
     if (!this.data.canSend || !this.data.draft.trim()) return

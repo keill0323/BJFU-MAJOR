@@ -129,3 +129,7 @@ page { background: #f3f7fa; color: #102a43; }
 button.create-button { box-sizing: border-box; font-weight: 500; }
 button.create-button::after { border: none; }
 button.create-button[disabled] { background: #92b8ba; color: #fff; }
+
+.application-summary { display:flex; justify-content:space-between; align-items:center; gap:18rpx; margin:22rpx 0; padding:24rpx; background:#e5f5f2; border:1rpx solid #aad9d2; border-radius:20rpx; color:#087580; font-size:26rpx; }
+.member-toggle { display:block; font-size:24rpx; margin-top:8rpx; color:#087580; }
+.roster-card .member-row { padding-top:20rpx; padding-bottom:20rpx; }

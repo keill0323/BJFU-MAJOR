@@ -116,7 +116,7 @@ test('confirmed empty overview renders success only after counts finish loading'
   assert.match(render(page), /当前没有待办/)
 })
 
-test('todo shortcuts remain explicit on other tabs and force a fresh queue read', async () => {
+test('compact todo summary remains explicit on other tabs and queue navigation forces a fresh read', async () => {
   let reads = 0
   const { page, calls } = loadPage({
     getMatches: async () => [], getVerifyList: async () => [{ id: ++reads, nickname: '待审选手' }]
@@ -126,7 +126,8 @@ test('todo shortcuts remain explicit on other tabs and force a fresh queue read'
   const html = render(page)
   assert.match(html, /需要你审核/)
   assert.match(html, /查看全部待办/)
-  assert.match(html, /2 份 ›/)
+  assert.match(html, /需要你审核 · 2 项/)
+  assert.doesNotMatch(html, /pending-shortcut-list/)
   await page.openTodo(event({ tab: 'verify' }))
   assert.equal(page.data.verifyUsers[0].id, 1)
   await page.switchTab(event({ tab: 'matches' }))
@@ -306,6 +307,7 @@ test('confirmed OCR school ID is submitted with approval and its exact evidence 
   })
   await page.onLoad({ tab: 'verify' })
   assert.equal(page.data.studentIdDrafts[8].value, '001234567')
+  page.toggleReview(event({ kind: 'verify', id: 8 }))
   assert.match(render(page), /确认并通过/)
   page.onStudentIdInput({ ...event({ id: 8, source: 'verify' }), detail: { value: ' 001234568 ' } })
   const pending = page.verifyPass(event({ id: 8 }))

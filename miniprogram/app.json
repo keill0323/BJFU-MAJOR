@@ -18,7 +18,8 @@
     "pages/verify/verify",
     "pages/settings/settings",
     "pages/teams/teams",
-    "pages/recruitment/recruitment"
+    "pages/recruitment/recruitment",
+    "pages/assistant/assistant"
   ],
   "window": {
     "navigationBarBackgroundColor": "#ffffff",

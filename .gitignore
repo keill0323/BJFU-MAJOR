@@ -58,3 +58,6 @@ coverage/
 /dist/
 /build/
 *.log
+
+# Local detector predictions, training plots and checkpoint artifacts.
+/runs/

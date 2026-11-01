@@ -71,3 +71,8 @@
   .rank-detail { gap: 10rpx; }
   .rank-badge { width: 54rpx; height: 54rpx; }
 }
+
+.member-card { padding:20rpx 0; }
+.member-top { min-height:86rpx; }
+.member-toggle { flex-shrink:0; font-size:24rpx; color:#087580; }
+.member-id { font-size:24rpx; color:#526d80; }

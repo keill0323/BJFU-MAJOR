@@ -4,6 +4,7 @@
 发送超时/进程中断不能确定是否已送达，标为 unknown，不自动重发。
 """
 from datetime import datetime, timedelta
+import hashlib
 import json
 import logging
 import re
@@ -11,12 +12,15 @@ import threading
 import time
 from urllib.request import Request, urlopen
 from fastapi import HTTPException
+from sqlalchemy import and_, or_
 from app.config import settings
 from app.database import SessionLocal
 from app.models.user import User
 from app.models.team import TeamApplication, TeamInvitation, ApplicationStatus, Team
-from app.models.recruitment import WechatSubscription, WechatOutbox
+from app.models.recruitment import (WechatSubscription, WechatOutbox, WechatSubscriptionAttempt,
+                                    WechatSubscriptionState, WechatSubscriptionDelivery)
 from app.services.team_request_service import actionable
+from app.services.locking import lock_row
 
 logger = logging.getLogger(__name__)
 KINDS = {"team_invitation": "入队邀请", "team_application": "入队申请"}
@@ -58,27 +62,134 @@ def configuration():
     return {"enabled": bool(items), "templates": items}
 
 
-def record_choice(db, user_id, choices):
+def _legacy_needs_resubscribe(db, user_id, template_id, subscription):
+    if subscription is None or not subscription.enabled:
+        return True
+    used = db.query(WechatOutbox).filter(
+        WechatOutbox.user_id == user_id, WechatOutbox.template_id == template_id,
+        or_(WechatOutbox.status == "sent",
+            and_(WechatOutbox.status == "failed", WechatOutbox.error_code == "43101")),
+    ).order_by(WechatOutbox.updated_at.desc(), WechatOutbox.id.desc()).first()
+    return bool(used and used.updated_at >= subscription.updated_at)
+
+
+def _state_for_update(db, user_id, template_id, subscription):
+    """调用方先锁用户；不把旧本地enabled当作微信剩余次数。"""
+    state = db.query(WechatSubscriptionState).filter_by(
+        user_id=user_id, template_id=template_id).populate_existing().with_for_update().first()
+    if state is None:
+        state = WechatSubscriptionState(
+            user_id=user_id, template_id=template_id, grant_version=0,
+            last_choice="accept" if subscription and subscription.enabled else None,
+            accepted_at=subscription.updated_at if subscription and subscription.enabled else None,
+            needs_resubscribe=(_legacy_needs_resubscribe(db, user_id, template_id, subscription)
+                               if subscription else False),
+        )
+        db.add(state)
+    return state
+
+
+def subscription_state(db, user_id):
+    """仅返回当前账号及当前配置模板。GET不写入，也不推测真实剩余额度。"""
+    config = configuration()
+    result, cache = [], {}
+    for item in config["templates"]:
+        tid = item["template_id"]
+        if tid not in cache:
+            subscription = db.get(WechatSubscription, (user_id, tid))
+            state = db.get(WechatSubscriptionState, (user_id, tid))
+            latest = db.query(WechatOutbox).filter_by(user_id=user_id, template_id=tid).order_by(
+                WechatOutbox.updated_at.desc(), WechatOutbox.id.desc()).first()
+            successes = db.query(WechatOutbox.id).filter_by(user_id=user_id, template_id=tid, status="sent").count()
+            enabled = bool(subscription and subscription.enabled)
+            needs = (not enabled or bool(state.needs_resubscribe)) if state else _legacy_needs_resubscribe(
+                db, user_id, tid, subscription)
+            delivery = latest.status if latest else None
+            if not enabled:
+                message = "尚未记录允许接收该提醒，请点击订阅；实际发送次数由微信校验"
+            elif delivery == "unknown":
+                message = "上次发送结果待确认，不会自动重发；剩余次数未知，可主动补充订阅"
+            elif delivery == "failed" and latest.error_code != "43101":
+                message = "上次微信提醒未发送成功，请查看站内消息；可联系管理员检查配置"
+            elif needs:
+                message = ("微信未接受上次提醒，建议重新订阅；不影响站内消息" if latest and latest.error_code == "43101" else
+                           "已使用一次提醒，建议补充订阅；不代表全部次数已耗尽" if successes else
+                           "建议再次订阅，以确认接收提醒；剩余次数未知")
+            else:
+                message = "已记录允许接收提醒；剩余次数未知，实际发送以微信校验为准"
+            cache[tid] = {"enabled": enabled, "has_accepted": bool(enabled or (state and state.accepted_at)),
+                          "actual_remaining": "unknown", "last_delivery_status": delivery,
+                          "last_error_code": _public_error(latest.error_code) if latest else None,
+                          "successful_send_count": successes, "needs_resubscribe": needs,
+                          "grant_version": state.grant_version if state else 0,
+                          "authorization_attempts_tracked": bool(state and state.last_attempt_id),
+                          "message": message}
+        result.append(dict(item, **cache[tid]))
+    return {"enabled": config["enabled"], "templates": result}
+
+
+def _public_error(value):
+    if value is None:
+        return None
+    if value in ("interrupted", "transport_or_token_error", "provider_response_invalid"):
+        return value
+    return str(value) if re.fullmatch(r"-?[0-9]{1,12}", str(value)) else "delivery_error"
+
+
+def record_choice(db, user_id, choices, *, attempt_id=None):
+    if not isinstance(choices, dict) or not 1 <= len(choices) <= 3 or any(
+            not isinstance(tid, str) or choice not in ("accept", "reject", "ban") for tid, choice in choices.items()):
+        raise HTTPException(422, "订阅选择无效")
+    if attempt_id is not None and (not isinstance(attempt_id, str) or
+                                   not re.fullmatch(r"[A-Za-z0-9_-]{16,96}", attempt_id)):
+        raise HTTPException(422, "订阅尝试标识无效")
+    digest = hashlib.sha256(json.dumps(choices, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
     configured = templates()
     allowed = {item["template_id"] for item in configured.values()}
-    if not choices or any(tid not in allowed or choice not in ("accept", "reject", "ban") for tid, choice in choices.items()):
-        raise HTTPException(422, "订阅配置已变化，请刷新后重试")
-    # 锁用户，串行处理同一用户的授权回调；重复回调不会虚增发送次数。
     try:
-        user = db.query(User).filter(User.id == user_id).with_for_update().one()
+        # 与发送回执使用相同用户锁；SQLite也使用真实写锁，防重复回调并发插入。
+        if lock_row(db, User, user_id) is None:
+            raise HTTPException(404, "用户不存在")
+        if attempt_id is not None:
+            attempt = db.query(WechatSubscriptionAttempt).filter_by(
+                user_id=user_id, attempt_id=attempt_id).populate_existing().with_for_update().first()
+            if attempt is not None:
+                if attempt.choices_hash != digest:
+                    raise HTTPException(409, "同一次订阅尝试的回调内容不一致，请刷新后重试")
+                db.commit()
+                return {"message": "该订阅回调已记录；实际发送以微信授权为准", "idempotent": True,
+                        "attempt_id": attempt_id, "attempt_recorded": True}
+        if any(tid not in allowed for tid in choices):
+            raise HTTPException(422, "订阅配置已变化，请刷新后重试")
+        now = datetime.now()
         for tid, choice in choices.items():
-            row = db.get(WechatSubscription, (user_id, tid))
+            row = db.query(WechatSubscription).filter_by(user_id=user_id, template_id=tid).populate_existing().with_for_update().first()
+            state = _state_for_update(db, user_id, tid, row)
             if row is None:
                 row = WechatSubscription(user_id=user_id, template_id=tid)
                 db.add(row)
-            row.enabled, row.updated_at = choice == "accept", datetime.now()
-        # SessionLocal 关闭了 autoflush；入队前必须能查到本次新建的订阅记录。
+            row.enabled, row.updated_at = choice == "accept", now
+            state.last_choice, state.updated_at = choice, now
+            if choice == "accept":
+                state.accepted_at = now
+                if attempt_id is not None:
+                    # 这是客户端报告的不同授权尝试版本，不是微信额度计数。
+                    state.grant_version += 1
+                    state.needs_resubscribe = False
+            else:
+                state.needs_resubscribe = True
+            if attempt_id is not None:
+                state.last_attempt_id = attempt_id
+        if attempt_id is not None:
+            db.add(WechatSubscriptionAttempt(user_id=user_id, attempt_id=attempt_id,
+                                              choices_hash=digest, choices=dict(choices)))
         db.flush()
         db.commit()
     except Exception:
         db.rollback()
         raise
-    return {"message": "订阅选择已记录；实际发送以微信授权为准"}
+    return {"message": "订阅选择已记录；实际发送以微信授权为准", "idempotent": False,
+            "attempt_id": attempt_id, "attempt_recorded": attempt_id is not None}
 
 
 def _can_receive(user):
@@ -137,6 +248,59 @@ def send(payload):
         return code
 
 
+def _capture_delivery(db, row, subscription):
+    """调用方持有用户锁；版本在网络发送前持久化，旧发送不能覆盖新授权。"""
+    receipt = db.query(WechatSubscriptionDelivery).filter_by(
+        outbox_id=row.id).populate_existing().with_for_update().first()
+    if receipt is not None:
+        # An outbox was manually reset or interrupted. A durable attempt must
+        # never become a second automatic send merely by changing pending.
+        row.status = receipt.status if receipt.status != "sending" else "unknown"
+        row.error_code = receipt.error_code if receipt.status != "sending" else "interrupted"
+        row.updated_at = datetime.now()
+        if receipt.status == "sending":
+            receipt.status, receipt.error_code = "unknown", "interrupted"
+            receipt.updated_at = datetime.now()
+        db.commit()
+        return None
+    state = _state_for_update(db, row.user_id, row.template_id, subscription)
+    version = state.grant_version
+    db.add(WechatSubscriptionDelivery(outbox_id=row.id, user_id=row.user_id,
+                                     template_id=row.template_id, grant_version=version, status="sending"))
+    return version
+
+
+def _finish_delivery(db, notice_id, version, status, error_code):
+    row = db.query(WechatOutbox).filter_by(id=notice_id).first()
+    if row is None:
+        return
+    # Same lock order as record_choice; no network operation occurs in here.
+    if lock_row(db, User, row.user_id) is None:
+        db.rollback()
+        return
+    row = lock_row(db, WechatOutbox, notice_id)
+    receipt = db.query(WechatSubscriptionDelivery).filter_by(
+        outbox_id=notice_id).populate_existing().with_for_update().first()
+    if row is None or row.status != "sending" or (receipt and receipt.status != "sending"):
+        db.rollback()
+        return  # A late worker cannot turn an interrupted/unknown receipt into a new send.
+    subscription = db.query(WechatSubscription).filter_by(
+        user_id=row.user_id, template_id=row.template_id).populate_existing().with_for_update().first()
+    state = _state_for_update(db, row.user_id, row.template_id, subscription)
+    if receipt is None:
+        receipt = WechatSubscriptionDelivery(outbox_id=row.id, user_id=row.user_id,
+                                             template_id=row.template_id, grant_version=version)
+        db.add(receipt)
+    now = datetime.now()
+    row.status, row.error_code, row.updated_at = status, error_code, now
+    receipt.status, receipt.error_code, receipt.updated_at = status, error_code, now
+    # Success means one confirmed use, not "all grants consumed". A newer
+    # callback is preserved even when an older send finishes later.
+    if state.grant_version == version and (status == "sent" or (status == "failed" and error_code == "43101")):
+        state.needs_resubscribe, state.updated_at = True, now
+    db.commit()  # Receipt and outbox terminal state commit atomically.
+
+
 def deliver_pending(session_factory=SessionLocal, sender=send):
     if not templates():
         return
@@ -144,6 +308,11 @@ def deliver_pending(session_factory=SessionLocal, sender=send):
         now = datetime.now()
         db.query(WechatOutbox).filter(WechatOutbox.status == "sending", WechatOutbox.updated_at < now - timedelta(minutes=5)).update(
             {"status": "unknown", "error_code": "interrupted"}, synchronize_session=False)
+        db.query(WechatSubscriptionDelivery).filter(
+            WechatSubscriptionDelivery.status == "sending",
+            WechatSubscriptionDelivery.outbox_id.in_(
+                db.query(WechatOutbox.id).filter(WechatOutbox.status == "unknown")),
+        ).update({"status": "unknown", "error_code": "interrupted", "updated_at": now}, synchronize_session=False)
         db.query(WechatOutbox).filter(WechatOutbox.status == "pending", WechatOutbox.created_at < now - timedelta(days=1)).update(
             {"status": "expired"}, synchronize_session=False)
         db.commit()
@@ -157,8 +326,9 @@ def deliver_pending(session_factory=SessionLocal, sender=send):
             if not claimed:
                 continue
             row = db.get(WechatOutbox, notice_id)
-            recipient = db.get(User, row.user_id)
-            subscription = db.get(WechatSubscription, (row.user_id, row.template_id))
+            recipient = lock_row(db, User, row.user_id)
+            subscription = db.query(WechatSubscription).filter_by(
+                user_id=row.user_id, template_id=row.template_id).populate_existing().with_for_update().first()
             if row.kind in ("team_invitation", "team_application"):
                 source_model = TeamInvitation if row.kind == "team_invitation" else TeamApplication
                 source = db.query(source_model).filter(source_model.id == row.source_id, *actionable(db, source_model)).first()
@@ -174,17 +344,21 @@ def deliver_pending(session_factory=SessionLocal, sender=send):
                 row.status = "skipped"
                 db.commit()
                 continue
+            version = _capture_delivery(db, row, subscription)
+            if version is None:
+                continue
             payload = dict(row.payload, touser=recipient.wx_openid, template_id=row.template_id, miniprogram_state=settings.WX_SUBSCRIBE_ENV, lang="zh_CN")
             db.commit()  # 网络期间不持有数据库事务/行锁。
             try:
                 code = sender(payload)
-                row.status, row.error_code = ("sent", None) if code == 0 else ("failed", str(code)[:48])
-                # 43101 只影响本次通知；不能覆盖用户可能刚完成的新授权。
+                if type(code) is not int:
+                    status, error = "unknown", "provider_response_invalid"
+                else:
+                    status, error = ("sent", None) if code == 0 else ("failed", str(code)[:48])
             except Exception:
                 # 不记录异常正文，避免 HTTP 异常中的 access_token 泄露。
-                row.status, row.error_code = "unknown", "transport_or_token_error"
-            row.updated_at = datetime.now()
-            db.commit()
+                status, error = "unknown", "transport_or_token_error"
+            _finish_delivery(db, notice_id, version, status, error)
 
 
 def worker(stop):

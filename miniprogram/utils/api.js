@@ -58,13 +58,14 @@ function expireToken(requestToken) {
   if (typeof require === 'function') require('./chat-client.js').resetAccount()
 }
 
-function request(path, method = 'GET', data = {}) {
+function request(path, method = 'GET', data = {}, timeout = 60000) {
   const token = wx.getStorageSync('token')   // 从本地存储读 JWT
   return new Promise((resolve, reject) => {
     wx.request({
       url: BASE + path,          // 拼完整地址
       method: method,
       data: data,
+      timeout,
       header: {
         'Authorization': token ? 'Bearer ' + token : ''   // 有 token 就带上
       },
@@ -84,7 +85,11 @@ function request(path, method = 'GET', data = {}) {
           if (Array.isArray(detail)) {
             detail = detail.map(d => d.msg || JSON.stringify(d)).join('；')
           }
-          reject({ detail: detail || ('请求失败（' + res.statusCode + '）'), statusCode: res.statusCode })
+          const code = detail && typeof detail === 'object' && typeof detail.code === 'string' ? detail.code : ''
+          if (detail && typeof detail === 'object') detail = typeof detail.message === 'string' ? detail.message : ''
+          const error = { detail: detail || ('请求失败（' + res.statusCode + '）'), statusCode: res.statusCode }
+          if (code) error.code = code
+          reject(error)
         }
       },
       fail() {
@@ -122,13 +127,14 @@ function approveTeamRegistration(matchId, teamId) {
  * @param raw     是否原样返回后端 JSON（true 不归一化 role）——默认 true
  * @returns Promise，成功 resolve 后端返回数据，失败 reject 错误信息
  */
-function uploadFile(path, filePath, raw = true) {
+function uploadFile(path, filePath, raw = true, timeout = 60000) {
   const token = wx.getStorageSync('token')
   return new Promise((resolve, reject) => {
     wx.uploadFile({
       url: BASE + path,
       filePath: filePath,
       name: 'file',
+      timeout,
       header: { 'Authorization': token ? 'Bearer ' + token : '' },
       success(res) {
         if (res.statusCode < 400) {
@@ -143,10 +149,10 @@ function uploadFile(path, filePath, raw = true) {
           if (res.statusCode === 401) {
             // 与 request() 保持一致：只清 token，不强制跳登录页
             expireToken(token)
-            reject({ detail: '请先登录', unauthorized: true })
+            reject({ detail: '请先登录', unauthorized: true, statusCode: res.statusCode })
             return
           }
-          reject({ detail: detail || ('上传失败（' + res.statusCode + '）') })
+          reject({ detail: detail || ('上传失败（' + res.statusCode + '）'), statusCode: res.statusCode })
         }
       },
       fail(err) {
@@ -163,6 +169,14 @@ function uploadFile(path, filePath, raw = true) {
  * 每个方法对应后端一个路由，字段名与后端 Pydantic schema 保持一致
  */
 module.exports = {
+  // 独立赛事助手；不复用用户私聊的会话或消息接口。
+  getAssistantStatus: () => request('/api/assistant/status'),
+  getAssistantVerificationStatus: () => request('/api/assistant/verification'),
+  createAssistantConversation: () => request('/api/assistant/conversations', 'POST'),
+  getAssistantConversation: id => request('/api/assistant/conversations/' + encodeURIComponent(id)),
+  sendAssistantMessage: (id, body) => request('/api/assistant/conversations/' + encodeURIComponent(id) + '/messages', 'POST', body, 75000),
+  confirmAssistantAction: id => request('/api/assistant/actions/' + encodeURIComponent(id) + '/confirm', 'POST'),
+
   getRecruitmentPlayers: (beforeId, keyword, filters = {}) => request('/api/recruitment/players?keyword=' + encodeURIComponent(keyword || '')
     + (beforeId ? '&before_id=' + encodeURIComponent(beforeId) : '')
     + (filters.rank ? '&rank=' + encodeURIComponent(filters.rank) : '')
@@ -182,7 +196,8 @@ module.exports = {
   saveRecruitment: (teamId, content) => request('/api/recruitment/' + teamId, 'PUT', { content }),
   closeRecruitment: (teamId) => request('/api/recruitment/' + teamId, 'DELETE'),
   getWechatConfig: () => request('/api/notifications/wechat/config'),
-  saveWechatSubscriptions: (choices) => request('/api/notifications/wechat/subscriptions', 'POST', { choices }),
+  getWechatSubscriptionState: () => request('/api/notifications/wechat/state'),
+  saveWechatSubscriptions: (choices, attemptId) => request('/api/notifications/wechat/subscriptions', 'POST', Object.assign({ choices }, attemptId ? { attempt_id: attemptId } : {}), 10000),
 
   BASE: BASE,   // 后端地址（拼接上传图片完整 URL 用）
 
@@ -207,7 +222,8 @@ module.exports = {
   uploadVerify: (filePath) => uploadFile('/api/auth/upload-verify', filePath, false),
 
   // 上传游戏段位截图（完美/5E平台，AI 识别段位）
-  uploadRank: (filePath) => uploadFile('/api/auth/upload-rank', filePath, true),
+  // CPU 本地 OCR 包含初始化时间；只延长段位上传，不影响其他接口。
+  uploadRank: (filePath) => uploadFile('/api/auth/upload-rank', filePath, true, 240000),
 
   // 上传头像
   uploadAvatar: (filePath) => uploadFile('/api/auth/upload-avatar', filePath, false),
@@ -246,6 +262,10 @@ module.exports = {
   getMatch: (id) => request('/api/matches/' + id),                        // 赛事详情
   getRounds: (matchId) => request('/api/matches/' + matchId + '/rounds'), // 某赛事的对阵
   getMatchDetail: (matchId) => request('/api/matches/' + matchId + '/detail'),  // 赛事详情（队伍进度+对阵，用户端展示）
+  getMatchPlayerStats: (matchId, { keyword = '', offset = 0, limit = 50 } = {}) => request('/api/matches/' + encodeURIComponent(matchId)
+    + '/player-stats?offset=' + encodeURIComponent(offset) + '&limit=' + encodeURIComponent(limit)
+    + (String(keyword).trim() ? '&keyword=' + encodeURIComponent(String(keyword).trim()) : ''))
+    .catch(err => backendVersionError(err, '选手赛事数据')),
   searchMatches: (kw) => request('/api/matches/search?keyword=' + kw),    // 按名字搜索赛事
 
   // ===== 报名 =====
@@ -325,18 +345,15 @@ module.exports = {
   // 私聊独立接口，原系统通知接口保持兼容。
   chatRequest: (path, method = 'GET', data = {}) => request('/api/chat' + path, method, data),
 
-  // ===== 阶段时间窗口 + 对阵时间协商 =====
+  // ===== 阶段时间窗口与管理员排期 =====
   getScheduleNotifications: (beforeId) => request('/api/notifications/schedules' + (beforeId ? '?before_id=' + encodeURIComponent(beforeId) : ''))
-    .catch(err => backendVersionError(err, '约赛通知')),
+    .catch(err => backendVersionError(err, '赛程通知')),
   readScheduleNotification: (id) => request('/api/notifications/schedules/' + id + '/read', 'PUT'),
   // 管理员：设置某阶段（group_name）的限定时段
   setStageWindow: (matchId, groupName, data) => request('/api/matches/' + matchId + '/stage-windows/' + encodeURIComponent(groupName), 'PUT', data),
   // 管理员：查某赛事所有阶段窗口
   getStageWindows: (matchId) => request('/api/matches/' + matchId + '/stage-windows'),
-  // 队长：提交/修改约定比赛时间（scheduledTime 传 ISO 字符串，如 '2026-09-03T19:00:00'）
-  scheduleRound: (roundId, scheduledTime) => request('/api/matches/rounds/' + roundId + '/schedule', 'PUT', { scheduled_time: scheduledTime }),
-  // 队长：确认约定时间（expectedTime 传客户端看到的提议时间，后端校验是否已被对方修改）
-  confirmRoundSchedule: (roundId, expectedTime) => request('/api/matches/rounds/' + roundId + '/schedule/confirm', 'POST', { expected_time: expectedTime }),
-  // 队长：拒绝/作废约定时间
-  rejectRoundSchedule: (roundId, expectedTime) => request('/api/matches/rounds/' + roundId + '/schedule/reject', 'POST', { expected_time: expectedTime }),
+  // 管理员逐场安排；null 取消时间，expectedTime 防止覆盖其他管理员的新安排。
+  adminScheduleRound: (roundId, scheduledTime, expectedTime) => request('/api/matches/rounds/' + roundId + '/admin-schedule', 'PUT', { scheduled_time: scheduledTime, expected_time: expectedTime })
+    .catch(err => backendVersionError(err, '管理员逐场排期')),
 }

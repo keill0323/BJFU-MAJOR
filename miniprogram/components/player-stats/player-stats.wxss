@@ -1,0 +1,45 @@
+.player-stats { margin: 24rpx; padding: 28rpx 24rpx; border: 1rpx solid #dce6ec; border-radius: 24rpx; background: #fff; color: #18364e; box-sizing: border-box; }
+.stats-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.stats-title { display: block; font-size: 32rpx; line-height: 1.5; font-weight: 750; }
+.stats-source { display: block; color: #667f8e; font-size: 22rpx; margin-top: 6rpx; }
+.stats-refresh, .stats-clear { margin: 0; padding: 12rpx 16rpx; font-size: 23rpx; line-height: 1.6; color: #087782; background: #edf6f4; border-radius: 12rpx; }
+button::after { border: 0; }
+.stats-coverage { display: flex; flex-wrap: wrap; align-items: center; gap: 20rpx; padding: 22rpx 0 8rpx; color: #087782; font-size: 24rpx; font-weight: 600; }
+.stats-updated { display: block; font-size: 21rpx; line-height: 1.6; color: #8193a3; }
+.stats-search { display: flex; align-items: center; gap: 12rpx; margin: 24rpx 0; }
+.stats-search-input { flex: 1; min-width: 0; height: 76rpx; padding: 0 18rpx; border-radius: 12rpx; background: #f1f5f7; font-size: 25rpx; box-sizing: border-box; }
+.stats-search-button { margin: 0; padding: 18rpx 22rpx; font-size: 24rpx; line-height: 1.6; color: #fff; background: #087f8c; border-radius: 12rpx; }
+.stats-clear { padding: 18rpx 12rpx; background: transparent; color: #667f8e; }
+.stats-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22rpx; min-height: 220rpx; padding: 30rpx 10rpx; color: #667f8e; font-size: 25rpx; line-height: 1.8; text-align: center; }
+.stats-retry { margin: 0; padding: 16rpx 28rpx; border-radius: 12rpx; background: #edf6f4; color: #087782; font-size: 24rpx; line-height: 1.6; }
+.stats-results-heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 10rpx; margin: 20rpx 0 16rpx; color: #667f8e; font-size: 21rpx; line-height: 1.6; }
+.stats-results-heading > text:first-child { color: #18364e; font-size: 25rpx; font-weight: 650; }
+.stats-table-scroll { width: 100%; border: 1rpx solid #dce6ec; border-radius: 14rpx; box-sizing: border-box; }
+.stats-table { width: 860rpx; }
+.stats-row { display: flex; align-items: stretch; min-height: 104rpx; border-bottom: 1rpx solid #e7eef2; font-size: 24rpx; line-height: 1.5; font-variant-numeric: tabular-nums; background: #fff; }
+.stats-row:last-child { border-bottom: 0; }
+.stats-row > text { display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box; padding: 20rpx 6rpx; }
+.stats-person { position: sticky; left: 0; z-index: 1; display: flex; flex-direction: column; justify-content: center; flex-shrink: 0; width: 240rpx; padding: 18rpx; box-sizing: border-box; background: #fff; border-right: 1rpx solid #e7eef2; box-shadow: 4rpx 0 8rpx rgba(24,54,78,.035); }
+.stats-table-head { min-height: 76rpx; background: #edf4f5; color: #526d82; font-size: 21rpx; font-weight: 650; }
+.stats-table-head .stats-person { background: #edf4f5; }
+.stats-table-head .stats-rating { font-size: 20rpx; }
+.stats-nickname { font-size: 25rpx; line-height: 1.5; font-weight: 650; color: #18364e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-team { margin-top: 5rpx; font-size: 20rpx; line-height: 1.5; color: #8193a3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-maps { width: 70rpx; }
+.stats-kda { width: 180rpx; }
+.stats-kd { width: 100rpx; }
+.stats-adr { width: 110rpx; color: #087782; }
+.stats-rating { width: 160rpx; font-weight: 650; }
+.stats-more-error { display: flex; flex-direction: column; align-items: center; gap: 16rpx; padding: 28rpx 8rpx; color: #a25757; font-size: 23rpx; line-height: 1.6; }
+.stats-load-more { margin: 24rpx 0 0; padding: 20rpx; border-radius: 12rpx; background: #edf6f4; color: #087782; font-size: 25rpx; line-height: 1.6; }
+.stats-end { display: block; padding: 24rpx 0 4rpx; color: #8193a3; font-size: 21rpx; text-align: center; }
+.stats-method { margin-top: 24rpx; border-top: 1rpx solid #e7eef2; }
+.stats-method-toggle { display: flex; justify-content: space-between; align-items: center; margin: 0; padding: 22rpx 0 0; background: transparent; color: #526d82; font-size: 23rpx; line-height: 1.6; }
+.stats-method-toggle > text { color: #8193a3; font-size: 21rpx; }
+.stats-method-copy { display: flex; flex-direction: column; gap: 12rpx; padding-top: 20rpx; font-size: 22rpx; line-height: 1.8; color: #667f8e; }
+@media (max-width: 350px) {
+  .player-stats { margin: 18rpx; padding: 24rpx 20rpx; }
+  .stats-search { gap: 8rpx; }
+  .stats-search-input { padding: 0 12rpx; }
+  .stats-search-button { padding: 18rpx 16rpx; }
+}

@@ -132,17 +132,18 @@ def validate_verify_result(result):
 
 
 def normalize_rank(rank):
-    """把 AI 返回的段位归一化到合法值（D/C/C+/C++/B/B+/B++/A/A+/A++/S1~S50），非法返回 None"""
+    """归一化合法段位；缺失星数不补值，S0 如实保留。"""
     if not rank:
         return None
     rank = str(rank).strip().upper().replace(" ", "")
     m = re.fullmatch(r"S([0-9]{0,2})", rank)
     if m:
         n_str = m.group(1)
-        # S（无星数）或 S0 星 → 都归到最低 S1
-        n = int(n_str) if n_str else 0
+        if not n_str:
+            return None
+        n = int(n_str)
         if 0 <= n <= 50:
-            return "S1" if n == 0 else f"S{n}"
+            return f"S{n}"
         return None
     if rank in VALID_RANKS:
         return rank

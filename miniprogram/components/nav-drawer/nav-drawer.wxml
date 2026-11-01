@@ -12,19 +12,22 @@
   </view>
 </view>
 <view wx:if="{{isManager && showAdminNotice && (adminTodoCount > 0 || adminTodoError)}}" class="admin-notice {{adminTodoError ? 'admin-notice-unavailable' : ''}}">
-  <view class="admin-notice-heading"><text>{{adminTodoError ? '待办状态暂时不可用' : '需要你审核'}}</text><text wx:if="{{!adminTodoError}}" class="admin-count">{{adminTodoBadge}} 项待处理</text></view>
+  <view class="admin-notice-heading" bindtap="toggleAdminNotice" aria-role="button"><text>{{adminTodoError ? '待办状态暂时不可用' : '需要你审核'}}</text><text wx:if="{{!adminTodoError}}" class="admin-count">{{adminTodoBadge}} 项待处理</text></view>
   <block wx:if="{{adminTodoError}}">
     <text class="admin-notice-sub">{{adminTodoErrorText}}</text>
     <text wx:if="{{adminTodoCount > 0}}" class="admin-notice-sub">上次记录：{{adminTodoSummary}}。请刷新确认。</text>
     <view class="admin-notice-actions"><view class="admin-notice-action" bindtap="goAdmin" aria-role="button">进入管理后台 ›</view><view class="admin-notice-action" bindtap="retryAdminTodos" aria-role="button">{{adminTodoLoading ? '正在重试…' : '重新获取'}}</view></view>
   </block>
   <block wx:else>
-    <text class="admin-notice-sub">点击下面的事项，直接打开对应审核列表。</text>
+    <view wx:if="{{currentRoute === '/pages/index/index' && !adminNoticeExpanded}}" class="admin-notice-summary" bindtap="toggleAdminNotice"><text>{{adminTodoSummary}}</text><text class="admin-notice-expand">展开 ›</text></view>
+    <block wx:else>
     <view class="admin-task-list">
       <view wx:for="{{adminTodoItems}}" wx:key="key" class="admin-task" bindtap="goAdminTodo" data-tab="{{item.tab}}" aria-role="button">
         <text class="admin-task-title">{{item.title}} {{item.count}} {{item.unit}}</text><text class="admin-task-action">去审核 ›</text>
       </view>
     </view>
+    <view wx:if="{{currentRoute === '/pages/index/index'}}" class="admin-notice-expand" bindtap="toggleAdminNotice">收起事项</view>
+    </block>
   </block>
 </view>
 <view wx:if="{{open}}" class="drawer-mask" bindtap="closeDrawer" catchtouchmove="preventMove"></view>
@@ -40,7 +43,7 @@
     <view class="drawer-section">我的主场</view>
     <view wx:for="{{navigation}}" wx:key="url" class="drawer-item {{currentRoute === item.url ? 'selected' : ''}}" bindtap="go" data-url="{{item.url}}"><image src="/images/brand/{{item.icon}}.svg"/><text>{{item.title}}</text><text class="drawer-arrow">›</text></view>
     <view class="drawer-section">服务与支持</view>
-    <view class="drawer-item" bindtap="go" data-url="/pages/messages/messages"><image src="/images/brand/mail.svg"/><text>消息</text></view>
+    <view class="drawer-item" bindtap="go" data-url="/pages/messages/messages"><image src="/images/brand/mail.svg"/><text>系统通知</text></view>
     <view class="drawer-item" bindtap="go" data-url="/pages/verify/verify"><image src="/images/brand/shield.svg"/><text>认证中心</text></view>
     <view class="drawer-item" bindtap="go" data-url="/pages/settings/settings"><image src="/images/icons/settings.svg"/><text>设置</text></view>
     <view class="drawer-item" bindtap="go" data-url="/pages/rules/rules"><image src="/images/icons/swords.svg"/><text>赛事规则</text></view>

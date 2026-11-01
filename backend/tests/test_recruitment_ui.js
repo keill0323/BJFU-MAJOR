@@ -15,8 +15,21 @@ function load(file, overrides = {}, token = 'token') {
   const wx = { getStorageSync: () => state.token, showToast: value => state.toasts.push(value),
     showModal: options => { state.modal = options }, requestSubscribeMessage: options => { state.subscribe = options },
     navigateTo: options => state.routes.push(options.url), stopPullDownRefresh() {} }
+  let subscriptions
+  const dependency = name => {
+    if (name.endsWith('/rank.js')) return require(path.join(root, 'miniprogram/utils/rank.js'))
+    if (name.endsWith('/wechat-subscriptions.js')) {
+      if (!subscriptions) {
+        const module = { exports: {} }
+        vm.runInNewContext(fs.readFileSync(path.join(root, 'miniprogram/utils/wechat-subscriptions.js'), 'utf8'), { module, require: () => api, wx, console })
+        subscriptions = module.exports
+      }
+      return subscriptions
+    }
+    return api
+  }
   vm.runInNewContext(fs.readFileSync(path.join(root, 'miniprogram', file), 'utf8'), {
-    Page: d => { definition = d }, Component: d => { definition = d }, require: name => name.endsWith('/rank.js') ? require(path.join(root, 'miniprogram/utils/rank.js')) : api, wx, console
+    Page: d => { definition = d }, Component: d => { definition = d }, require: dependency, wx, console
   })
   const page = { ...definition, ...definition.methods }
   page.data = JSON.parse(JSON.stringify(page.data))
@@ -69,7 +82,7 @@ test('all application entry points collect an optional introduction and submit i
   for (const name of ['recruitment', 'teams', 'team']) {
     const submissions = []
     const { page, state } = load('pages/' + name + '/' + name + '.js', { applyJoin: async (id, message) => submissions.push({ id, message }) })
-    page.setData({ token: 'token', posts: [{ team_id: 2, team_name: '白桦' }] })
+    page.setData({ token: 'token', posts: [{ team_id: 2, team_name: '白桦' }], teams: [{ id: 2, name: '白桦', status: 'approved' }] })
     const click = { currentTarget: { dataset: { id: 2, name: '白桦' } } }
     if (name === 'recruitment') page.apply(click)
     else await page.applyJoin(click)

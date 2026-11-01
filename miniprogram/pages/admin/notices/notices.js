@@ -2,9 +2,9 @@ const api = require('../../../utils/api.js')
 
 Page({
   data: {
-    allowed: false, checking: true, error: '', keyword: '', searchedKeyword: '',
+    allowed: false, checking: true, error: '', activeTab: 'compose', recipientsExpanded: false, selectedSummary: '', keyword: '', searchedKeyword: '',
     users: [], selected: [], selectedCount: 0, searching: false, searchError: '', cursor: null, hasMore: false,
-    title: '', content: '', sending: false, sendError: '', sentMessage: '', history: [], historyError: ''
+    title: '', content: '', sending: false, sendError: '', sentMessage: '', history: [], historyError: '', historyLoading: false, expandedHistoryId: null
   },
   onShow() { return this.initialize() },
   onUnload() { this._gone = true; this._generation = (this._generation || 0) + 1; this._searchGeneration = (this._searchGeneration || 0) + 1 },
@@ -15,7 +15,7 @@ Page({
     const generation = this._generation = (this._generation || 0) + 1
     if (this._token !== token) {
       this._attempt = null
-      this.setData({ users: [], selected: [], selectedCount: 0, title: '', content: '', history: [], sentMessage: '' })
+      this.setData({ users: [], selected: [], selectedCount: 0, selectedSummary: '', recipientsExpanded: false, activeTab: 'compose', title: '', content: '', history: [], expandedHistoryId: null, sentMessage: '' })
     }
     this._token = token
     this.setData({ allowed: false, checking: true, error: '' })
@@ -33,6 +33,28 @@ Page({
   onKeyword(e) { if (!this.data.sending) this.setData({ keyword: e.detail.value }) },
   onTitle(e) { if (!this.data.sending) this.setData({ title: e.detail.value, sendError: '', sentMessage: '' }) },
   onContent(e) { if (!this.data.sending) this.setData({ content: e.detail.value, sendError: '', sentMessage: '' }) },
+  switchTab(e) {
+    const tab = e.currentTarget.dataset.tab
+    if (!this.data.allowed || this.data.sending || !['compose', 'history'].includes(tab)) return
+    this.setData({ activeTab: tab })
+  },
+  toggleRecipients() {
+    if (this.data.allowed && !this.data.sending) this.setData({ recipientsExpanded: !this.data.recipientsExpanded })
+  },
+  toggleHistory(e) {
+    if (!this.data.allowed) return
+    const id = Number(e.currentTarget.dataset.id)
+    if (!this.data.history.some(item => item.id === id)) return
+    this.setData({ expandedHistoryId: this.data.expandedHistoryId === id ? null : id })
+  },
+  goManagement() {
+    if (this.data.sending) return
+    const pages = getCurrentPages()
+    const index = pages.findIndex(page => page.route === 'pages/admin/admin')
+    const fallback = () => wx.redirectTo({ url: '/pages/admin/admin' })
+    if (index >= 0 && index < pages.length - 1) wx.navigateBack({ delta: pages.length - 1 - index, fail: fallback })
+    else fallback()
+  },
   decorate(rows) {
     const selected = new Set(this.data.selected.map(u => u.id))
     return rows.map(u => ({ id: u.id, nickname: u.nickname || '玩家' + u.id, game_id: u.game_id || '',
@@ -70,18 +92,24 @@ Page({
       if (selected.length >= 100) { wx.showToast({ title: '每次最多选择 100 人', icon: 'none' }); return }
       selected = selected.concat({ id: user.id, nickname: user.nickname })
     }
-    this.setData({ selected, selectedCount: selected.length, sendError: '', sentMessage: '' })
+    const selectedSummary = selected.slice(0, 3).map(user => user.nickname).join('、') + (selected.length > 3 ? '等 ' + selected.length + ' 人' : '')
+    this.setData({ selected, selectedCount: selected.length, selectedSummary, sendError: '', sentMessage: '' })
     this.setData({ users: this.decorate(this.data.users) })
   },
   async loadHistory() {
     if (!this.data.allowed) return
     const generation = this._generation, token = this._token
+    const request = this._historyRequest = (this._historyRequest || 0) + 1
+    this.setData({ historyLoading: true, historyError: '' })
     try {
       const result = await api.getAdminNoticeHistory()
-      if (this.current(generation, token)) this.setData({ history: result.items.map(n => Object.assign({}, n,
-        { timeText: String(n.created_at || '').replace('T', ' ').slice(0, 16) })), historyError: '' })
+      if (this.current(generation, token) && request === this._historyRequest) this.setData({ history: result.items.map(n => Object.assign({}, n,
+        { timeText: String(n.created_at || '').replace('T', ' ').slice(0, 16) })), historyError: '',
+        expandedHistoryId: result.items.some(item => item.id === this.data.expandedHistoryId) ? this.data.expandedHistoryId : null })
     } catch (err) {
-      if (this.current(generation, token)) this.setData({ historyError: err.detail || '发送记录加载失败，请重试' })
+      if (this.current(generation, token) && request === this._historyRequest) this.setData({ historyError: err.detail || '发送记录加载失败，请重试' })
+    } finally {
+      if (this.current(generation, token) && request === this._historyRequest) this.setData({ historyLoading: false })
     }
   },
   async sendNotice() {
@@ -108,7 +136,7 @@ Page({
       const result = await api.sendAdminNotice({ request_id: this._attempt.requestId, recipient_ids: ids, title, content })
       if (!this.current(generation, token)) return
       this._attempt = null
-      this.setData({ selected: [], selectedCount: 0, title: '', content: '', sentMessage: '通知已送入 ' + result.recipient_count + ' 位用户的站内收件箱' })
+      this.setData({ selected: [], selectedCount: 0, selectedSummary: '', recipientsExpanded: false, title: '', content: '', sentMessage: '通知已送入 ' + result.recipient_count + ' 位用户的站内收件箱' })
       this.setData({ users: this.decorate(this.data.users) })
       await this.loadHistory()
     } catch (err) {

@@ -41,12 +41,18 @@ Page({
     userKeyword: '',
     // 认证审核
     verifyUsers: [],
+    expandedVerifyId: null,
     // 学号候选与人工输入按用户及原始凭证 URL 隔离，不等同于已认证学号。
     studentIdDrafts: {},
     // 段位更新申请
     rankApplications: [],
+    expandedRankId: null,
     // 队伍管理
     teams: [],
+    visibleTeams: [],
+    teamKeyword: '',
+    teamFilter: 'all',
+    teamFilterOptions: [{ id: 'all', label: '全部' }, { id: 'pending', label: '待审核' }, { id: 'approved', label: '已通过' }, { id: 'rejected', label: '已驳回' }],
     pendingTeamCount: 0,
     // 详情弹层
     showUserDetailPanel: false,
@@ -55,6 +61,10 @@ Page({
     detailTeamId: 0,
     // 赛事管理
     matches: [],
+    visibleMatches: [],
+    matchKeyword: '',
+    matchFilter: 'all',
+    matchFilterOptions: [{ id: 'all', label: '全部' }, { id: 'in_progress', label: '进行中' }, { id: 'registering', label: '报名中' }, { id: 'finished', label: '已结束' }, { id: 'draft', label: '草稿' }],
     // 创建赛事表单
     newMatch: { name: '', max_teams: 16, team_size: 5, match_type: 'major', description: '' },
     creatingMatch: false,
@@ -112,6 +122,7 @@ Page({
     const tab = e.currentTarget.dataset.tab
     if (!this.data.tabs.some(item => item.id === tab)) return
     this.setData({ tab })
+    if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 180 })
     if (this.data.user) return this.loadActiveTab()
   },
 
@@ -182,6 +193,11 @@ Page({
       const values = transform ? transform(data || []) : data || []
       this.setData({ [field]: values, ['listReady.' + tab]: true })
       if (tab === 'teams') this.setData({ pendingTeamCount: values.filter(team => team.status === 'pending').length })
+      if (tab === 'teams' || tab === 'matches') this.applyLocalListFilters()
+      if (tab === 'verify' || tab === 'rankapps') {
+        const key = tab === 'verify' ? 'expandedVerifyId' : 'expandedRankId'
+        if (this.data[key] && !values.some(item => item.id == this.data[key])) this.setData({ [key]: values.length ? values[0].id : null })
+      }
     }).catch(() => {
       if (!this._unloaded && this._listVersions[tab] === version) this.setData({ ['listErrors.' + tab]: true })
     }).finally(() => {
@@ -222,7 +238,8 @@ Page({
 
   openHonors() {
     if (!this.data.user || this.data.user.role !== 'admin') return
-    this.setData({ tab: 'matches' })
+    this.setData({ tab: 'matches', matchFilter: 'finished', matchKeyword: '' })
+    this.applyLocalListFilters()
     wx.showToast({ title: '请在已结束赛事中选择「补录冠军」', icon: 'none' })
     return this.loadActiveTab()
   },
@@ -234,6 +251,59 @@ Page({
   },
 
   // ===== 用户管理 =====
+  toggleReview(e) {
+    const kind = e.currentTarget.dataset.kind
+    const id = Number(e.currentTarget.dataset.id)
+    const rows = kind === 'verify' ? this.data.verifyUsers : kind === 'rankapps' ? this.data.rankApplications : []
+    if (!rows.some(item => item.id == id)) return
+    const key = kind === 'verify' ? 'expandedVerifyId' : 'expandedRankId'
+    // 识别/保存中的学号草稿保持可见，避免误以为操作中断。
+    if (kind === 'verify' && Object.values(this.data.studentIdDrafts).some(item => item.saving || item.recognizing)) return
+    this.setData({ [key]: this.data[key] === id ? null : id })
+  },
+  showUserActions(e) {
+    const id = Number(e.currentTarget.dataset.id)
+    if (!this.data.user || !this.data.users.some(item => item.id == id)) return
+    const actions = [{ label: '设置学号与认证', method: 'setStudentId' }, { label: '设置段位', method: 'setRank' }, { label: '设置新生 / 老生身份', method: 'setIdentity' }]
+    if (this.data.user.role === 'admin') actions.push({ label: '修改管理权限', method: 'setRole' })
+    wx.showActionSheet({ itemList: actions.map(item => item.label), success: result => {
+      const action = actions[result.tapIndex]
+      if (!this._unloaded && action) this[action.method]({ currentTarget: { dataset: { id } } })
+    } })
+  },
+  showTeamActions(e) {
+    const id = Number(e.currentTarget.dataset.id)
+    if (!this.data.teams.some(item => item.id == id)) return
+    wx.showActionSheet({ itemList: ['查看资料与阵容', '删除队伍'], success: result => {
+      if (this._unloaded) return
+      const event = { currentTarget: { dataset: { id } } }
+      if (result.tapIndex === 0) this.showTeamDetail(event)
+      else if (result.tapIndex === 1) this.deleteTeam(event)
+    } })
+  },
+  onListKeyword(e) {
+    const kind = e.currentTarget.dataset.kind
+    if (kind !== 'teams' && kind !== 'matches') return
+    this.setData({ [kind === 'teams' ? 'teamKeyword' : 'matchKeyword']: e.detail.value })
+    this.applyLocalListFilters()
+  },
+  setListFilter(e) {
+    const kind = e.currentTarget.dataset.kind
+    const value = e.currentTarget.dataset.filter
+    const options = kind === 'teams' ? this.data.teamFilterOptions : kind === 'matches' ? this.data.matchFilterOptions : []
+    if (!options.some(item => item.id === value)) return
+    this.setData({ [kind === 'teams' ? 'teamFilter' : 'matchFilter']: value })
+    this.applyLocalListFilters()
+  },
+  applyLocalListFilters() {
+    const teamKeyword = this.data.teamKeyword.trim().toLowerCase()
+    const matchKeyword = this.data.matchKeyword.trim().toLowerCase()
+    this.setData({
+      visibleTeams: this.data.teams.filter(team => (this.data.teamFilter === 'all' || team.status === this.data.teamFilter) && (!teamKeyword || [team.id, team.name, team.captain_name, team.captain_id].join(' ').toLowerCase().includes(teamKeyword))),
+      visibleMatches: this.data.matches.filter(match => (this.data.matchFilter === 'all' || match.status === this.data.matchFilter) && (!matchKeyword || [match.id, match.name].join(' ').toLowerCase().includes(matchKeyword)))
+    })
+  },
+
   onUserKeyword(e) {
     this.setData({ userKeyword: e.detail.value })
   },
@@ -845,7 +915,7 @@ Page({
   // 进入赛事详情页（点击赛事卡片）
   goMDetail(e) {
     const id = e.currentTarget.dataset.id
-    wx.navigateTo({ url: '/pages/admin/mdetail/mdetail?matchId=' + id })
+    wx.navigateTo({ url: '/pages/admin/mdetail/mdetail?matchId=' + id + (e.currentTarget.dataset.tab === 'teams' ? '&tab=teams' : '') })
   },
 
   // 状态文字

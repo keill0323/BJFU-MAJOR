@@ -2,13 +2,15 @@ const api = require('../../utils/api.js')
 const { rankDisplay } = require('../../utils/rank.js')
 
 const scheduleTitles = {
-  proposed: '对方发来约赛时间，请确认', updated: '对方修改了约赛时间，请确认',
-  confirmed: '对方已同意，比赛时间已确定', rejected: '对方拒绝了约赛时间',
-  cancelled: '对方已撤回或作废约定时间', window_changed: '管理者调整时段，原约定已作废'
+  admin_scheduled: '管理员已安排比赛时间', admin_rescheduled: '管理员已调整比赛时间',
+  admin_cancelled: '管理员已取消原比赛时间，等待重新安排',
+  proposed: '历史约赛提议，请以管理员赛程为准', updated: '历史约赛变更，请以管理员赛程为准',
+  confirmed: '历史比赛时间确认，请查看最新赛程', rejected: '历史约赛提议已被拒绝',
+  cancelled: '历史约定时间已作废', window_changed: '历史时段调整，原约定已作废'
 }
 function decorateNotice(item) {
   return Object.assign({}, item, {
-    title: scheduleTitles[item.kind] || '约赛时间通知',
+    title: scheduleTitles[item.kind] || '赛程时间通知',
     timeText: String(item.scheduled_time || '').replace('T', ' ').slice(0, 16),
     createdText: String(item.created_at || '').replace('T', ' ').slice(0, 16)
   })
@@ -17,6 +19,8 @@ function decorateNotice(item) {
 Page({
   data: {
     token: '', loading: false, loadError: false,
+    messageFilter: 'all', focusedSection: '', pendingCount: 0, visibleCount: 0,
+    visibleInvitations: [], visibleApplications: [], visibleRanks: [], visibleAdminNotices: [], visibleScheduleNotices: [],
     invitations: [], teamApplications: [],
     adminNotices: [], adminUnread: 0, adminError: '', adminLoading: false, adminLoadingMore: false,
     adminCursor: null, adminHasMore: false, readingAdminId: null,
@@ -25,20 +29,53 @@ Page({
     hasMoreNotices: false, loadingMore: false, noticeError: '', openingNotice: null
   },
 
-  onLoad(options) { this._section = options && ['admin', 'invitations', 'applications', 'schedules'].includes(options.section) ? options.section : '' },
+  onLoad(options) {
+    this._section = options && ['admin', 'invitations', 'applications', 'schedules'].includes(options.section) ? options.section : ''
+    this.setData({ focusedSection: this._section, messageFilter: 'all' })
+  },
+  switchFilter(e) {
+    const value = e.currentTarget.dataset.filter
+    if (!['pending', 'unread', 'all'].includes(value)) return
+    this._section = ''
+    this.setData({ messageFilter: value, focusedSection: '' })
+    this.updateVisible()
+  },
+  updateVisible() {
+    const filter = this.data.messageFilter
+    const invitations = this.data.invitations.filter(item => !item.status || item.status === 'pending')
+    const applications = this.data.teamApplications.filter(item => !item.status || item.status === 'pending')
+    const update = {
+      visibleInvitations: filter === 'unread' ? [] : invitations,
+      visibleApplications: filter === 'unread' ? [] : applications,
+      visibleRanks: filter === 'all' ? this.data.rankApplications : [],
+      visibleAdminNotices: filter === 'pending' ? [] : this.data.adminNotices.filter(item => filter === 'all' || !item.is_read),
+      visibleScheduleNotices: filter === 'pending' ? [] : this.data.scheduleNotices.filter(item => filter === 'all' || !item.is_read),
+      pendingCount: invitations.length + applications.length
+    }
+    update.visibleCount = update.visibleInvitations.length + update.visibleApplications.length + update.visibleRanks.length + update.visibleAdminNotices.length + update.visibleScheduleNotices.length
+    this.setData(update, () => this.scrollToSection())
+  },
+  scrollToSection() {
+    if (this._unloaded || !this._section || this.data.loading || this.data.adminLoading || this.data.token !== wx.getStorageSync('token')) return
+    wx.pageScrollTo({ selector: '#notice-' + this._section, duration: 250, offsetTop: -100 })
+    this._section = ''
+  },
 
   onShow() {
+    this._unloaded = false
     const token = wx.getStorageSync('token') || ''
     if (token !== this.data.token) {
       this.setData({ invitations: [], teamApplications: [], rankApplications: [], scheduleNotices: [], unreadSchedules: 0,
+        adminNotices: [], adminUnread: 0, adminCursor: null, adminHasMore: false,
         noticeCursor: null, hasMoreNotices: false, openingNotice: null })
     }
-    this.setData({ token })
+    this.setData({ token, loading: !!token, adminLoading: !!token })
+    this.updateVisible()
     this.loadAdminNotices()
     this.loadMessages()
   },
 
-  onUnload() { this._requestId = (this._requestId || 0) + 1; this._adminGeneration = (this._adminGeneration || 0) + 1 },
+  onUnload() { this._unloaded = true; this._requestId = (this._requestId || 0) + 1; this._adminGeneration = (this._adminGeneration || 0) + 1 },
 
   onPullDownRefresh() {
     Promise.all([this.loadMessages(), this.loadAdminNotices()]).finally(() => wx.stopPullDownRefresh())
@@ -51,6 +88,7 @@ Page({
     if (!this.data.token) {
       this.setData({ invitations: [], teamApplications: [], rankApplications: [], scheduleNotices: [], unreadSchedules: 0,
         loading: false, loadError: false, loadingMore: false, noticeError: '', hasMoreNotices: false })
+      this.updateVisible()
       return
     }
     this.setData({ loading: true, loadError: false, noticeError: '', loadingMore: false })
@@ -61,7 +99,7 @@ Page({
       api.getMyRankApplications().catch(() => { loadError = true; return [] }),
       api.getScheduleNotifications().catch(err => {
         loadError = true
-        noticeError = err.detail || '约赛通知加载失败，请重试'
+        noticeError = err.detail || '赛程通知加载失败，请重试'
         return null
       }),
       api.getMyTeamApplications().catch(() => { loadError = true; return [] })
@@ -77,10 +115,7 @@ Page({
       noticeCursor: results[2].next_cursor, hasMoreNotices: results[2].has_more
     })
     this.setData(updates, () => {
-      if (this._section && this._section !== 'admin' && this.isCurrent(requestId, token)) {
-        wx.pageScrollTo({ selector: '#notice-' + this._section, duration: 250, offsetTop: -100 })
-        this._section = ''
-      }
+      this.updateVisible()
     })
   },
 
@@ -99,6 +134,7 @@ Page({
     const token = this.data.token
     if (this._adminToken !== token || !token) {
       this.setData({ adminNotices: [], adminUnread: 0, adminCursor: null, adminHasMore: false, readingAdminId: null })
+      this.updateVisible()
     }
     this._adminToken = token
     if (this.data.readingAdminId) return
@@ -112,14 +148,12 @@ Page({
       this.setData({ adminNotices: more ? this.data.adminNotices.concat(rows.filter(n => !this.data.adminNotices.some(old => old.id === n.id))) : rows,
         adminUnread: result.unread_count, adminCursor: result.next_cursor, adminHasMore: result.has_more,
         adminLoading: false, adminLoadingMore: false }, () => {
-        if (this._section === 'admin' && this.adminCurrent(generation, token)) {
-          wx.pageScrollTo({ selector: '#notice-admin', duration: 250, offsetTop: -100 }); this._section = ''
-        }
+        this.updateVisible()
       })
     } catch (err) {
       if (this.adminCurrent(generation, token)) this.setData({ adminError: err.detail || '管理员通知加载失败，请重试' })
     } finally {
-      if (this.adminCurrent(generation, token)) this.setData({ adminLoading: false, adminLoadingMore: false })
+      if (this.adminCurrent(generation, token)) this.setData({ adminLoading: false, adminLoadingMore: false }, () => this.scrollToSection())
     }
   },
   async openAdminNotice(e) {
@@ -134,10 +168,12 @@ Page({
         showCancel: false, confirmText: '我知道了', success: res => resolve(!!res.confirm), fail: () => resolve(false) }))
       if (!confirmed || !this.adminCurrent(generation, token) || notice.is_read) return
       await api.readAdminNotice(notice.id)
-      if (this.adminCurrent(generation, token)) this.setData({
+      if (!this.adminCurrent(generation, token)) return
+      this.setData({
         adminNotices: this.data.adminNotices.map(n => n.id === notice.id ? Object.assign({}, n, { is_read: true }) : n),
         adminUnread: Math.max(0, this.data.adminUnread - 1)
       })
+      this.updateVisible()
     } catch (err) {
       if (this.adminCurrent(generation, token)) wx.showToast({ title: err.detail || '已读状态保存失败，请重试', icon: 'none' })
     } finally {
@@ -145,7 +181,7 @@ Page({
     }
   },
 
-  onReachBottom() { this.loadMoreNotices() },
+  onReachBottom() { if (this.data.messageFilter !== 'pending') { this.loadMoreNotices(); this.loadMoreAdminNotices() } },
   async loadMoreNotices() {
     if (this.data.loading || this.data.loadingMore || this.data.openingNotice || !this.data.hasMoreNotices || this.data.noticeError) return
     const requestId = this._requestId, token = this.data.token
@@ -156,6 +192,7 @@ Page({
       const existing = new Set(this.data.scheduleNotices.map(n => n.id))
       this.setData({ scheduleNotices: this.data.scheduleNotices.concat(page.items.filter(n => !existing.has(n.id)).map(decorateNotice)),
         noticeCursor: page.next_cursor, hasMoreNotices: page.has_more, unreadSchedules: page.unread_count })
+      this.updateVisible()
     } catch (err) {
       if (this.isCurrent(requestId, token)) wx.showToast({ title: err.detail || '加载失败，请重试', icon: 'none' })
     } finally {
@@ -175,6 +212,7 @@ Page({
         if (!this.isCurrent(requestId, token)) return
         this.setData({ scheduleNotices: this.data.scheduleNotices.map(n => n.id === notice.id ? Object.assign({}, n, { is_read: true }) : n),
           unreadSchedules: Math.max(0, this.data.unreadSchedules - 1) })
+        this.updateVisible()
       }
       if (!this.isCurrent(requestId, token)) return
       if (!notice.round_available) {

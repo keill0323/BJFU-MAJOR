@@ -169,7 +169,14 @@ def contacts(db, user_id, keyword="", admins=False, before_id=None):
         query = query.filter(User.role == UserRole.ADMIN)
     elif keyword.strip():
         value = keyword.strip()
-        query = query.filter(or_(User.nickname.contains(value, autoescape=True), User.game_id.contains(value, autoescape=True)))
+        matches = [User.nickname.contains(value, autoescape=True),
+                   User.game_id.contains(value, autoescape=True)]
+        if value.isascii() and value.isdecimal():
+            digits = value.lstrip('0')
+            # 系统ID精确匹配，不将主键转为字符串；超大输入仍可搜索昵称/游戏ID。
+            if digits and len(digits) <= 10 and int(digits) <= 2147483647:
+                matches.append(User.id == int(digits))
+        query = query.filter(or_(*matches))
     if before_id:
         query = query.filter(User.id < before_id)
     rows = query.order_by(User.id.desc()).limit(31).all()

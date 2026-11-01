@@ -3,10 +3,11 @@ const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 const test = require('node:test')
+const { parseWxml, createRenderer } = require('../../tools/preview-miniprogram.js')
 const root = path.resolve(__dirname, '../..')
 const plain = value => JSON.parse(JSON.stringify(value))
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
-const notice = (id = 1, overrides = {}) => ({ id, match_id: 7, round_id: 42, kind: 'proposed',
+const notice = (id = 1, overrides = {}) => ({ id, match_id: 7, round_id: 42, kind: 'admin_scheduled',
   match_name: '测试赛事', team1_name: '测试队伍', team2_name: '对手队伍',
   scheduled_time: '2036-09-12T19:00:00', created_at: '2036-09-11T18:00:00',
   is_read: false, round_available: true, ...overrides })
@@ -14,7 +15,7 @@ const inbox = (items = [notice()], more = false) => ({ items, unread_count: item
   has_more: more, next_cursor: more ? items[items.length - 1].id : null })
 
 function load(relative, methods = {}) {
-  const state = { token: 'token', navigations: [], toasts: [], reads: [] }
+  const state = { token: 'token', navigations: [], toasts: [], reads: [], scrolls: [] }
   const api = { getMyTeamApplications: async () => [], getMyInvitations: async () => [], getMyRankApplications: async () => [],
     getScheduleNotifications: async () => inbox(),
     readScheduleNotification: async id => { state.reads.push(id) }, ...methods }
@@ -24,26 +25,36 @@ function load(relative, methods = {}) {
     require: name => name.endsWith('/api.js') ? api : require(path.join(root, 'miniprogram/utils', name.endsWith('/rank.js') ? 'rank.js' : 'tournament.js')),
     wx: { getStorageSync: key => key === 'token' ? state.token : true,
       navigateTo: options => state.navigations.push(options), showToast: value => state.toasts.push(value),
+      pageScrollTo: value => state.scrolls.push(plain(value)),
       stopPullDownRefresh() {}, showModal() {} }
   })
   page.data = plain(page.data)
-  page.setData = changes => Object.assign(page.data, changes)
+  page.setData = (changes, callback) => { Object.assign(page.data, changes); if (callback) callback() }
   page.data.token = state.token
   return { page, state, api }
 }
 const messages = methods => load('miniprogram/pages/messages/messages.js', methods)
 const click = id => ({ currentTarget: { dataset: { id } } })
 
-test('schedule notices coexist with invitations and show event titles, time and unread count', async () => {
+test('administrator schedule notices coexist with invitations and historical proposals do not request confirmation', async () => {
   const { page } = messages({ getMyInvitations: async () => [{ id: 8 }],
-    getScheduleNotifications: async () => inbox(['proposed', 'confirmed', 'rejected', 'cancelled', 'window_changed'].map((kind, i) => notice(i + 1, { kind }))) })
+    getScheduleNotifications: async () => inbox(['admin_scheduled', 'admin_rescheduled', 'admin_cancelled',
+      'proposed', 'updated', 'confirmed', 'rejected', 'cancelled', 'window_changed'].map((kind, i) => notice(i + 1, { kind }))) })
   await page.loadMessages()
   assert.equal(page.data.invitations.length, 1)
-  assert.equal(page.data.unreadSchedules, 5)
-  assert.match(page.data.scheduleNotices[0].title, /请确认/)
-  assert.match(page.data.scheduleNotices[1].title, /已确定/)
-  assert.match(page.data.scheduleNotices[4].title, /原约定已作废/)
+  assert.equal(page.data.unreadSchedules, 9)
+  assert.match(page.data.scheduleNotices[0].title, /管理员已安排比赛时间/)
+  assert.match(page.data.scheduleNotices[1].title, /管理员已调整比赛时间/)
+  assert.match(page.data.scheduleNotices[2].title, /管理员已取消原比赛时间/)
+  assert.ok(page.data.scheduleNotices.slice(3).every(item => item.title.includes('历史')))
+  assert.ok(page.data.scheduleNotices.every(item => !/请确认|已同意/.test(item.title)))
   assert.equal(page.data.scheduleNotices[0].timeText, '2036-09-12 19:00')
+  const tree = parseWxml(fs.readFileSync(path.join(root, 'miniprogram/pages/messages/messages.wxml'), 'utf8'))
+  tree.scope = page.data
+  const html = createRenderer({})(tree)
+  assert.match(html, /赛程通知/)
+  assert.match(html, /管理员/)
+  assert.doesNotMatch(html, /查看 \/ 处理|当前对阵并处理|请确认比赛时间/)
 })
 
 test('an inbox failure is displayed instead of masquerading as no messages', async () => {
@@ -126,40 +137,100 @@ test('pagination keeps distinct notices and does not overwrite a newer refresh',
   assert.deepEqual(plain(page.data.scheduleNotices.map(n => n.id)), [9])
 })
 
-function matchPage(changes = {}, captain = true) {
+function matchPage(changes = {}, captain = true, teams = []) {
   const round = { id: 42, match_id: 7, round_number: 1, group_name: '淘汰赛', team1_id: 100, team2_id: 200,
-    status: 'pending', schedule_status: 'pending', scheduled_time: '2036-09-12T21:00:00',
+    status: 'pending', schedule_status: 'confirmed', scheduled_time: '2036-09-12T21:00:00',
     team1_confirmed: false, team2_confirmed: true, ...changes }
   return load('miniprogram/pages/match/match.js', {
-    getMatchDetail: async () => ({ match: { id: 7, name: '测试赛事' }, teams: [], rounds: [round] }),
+    getMatchDetail: async () => ({ match: { id: 7, name: '测试赛事' }, teams, rounds: [round] }),
     getMyRegistration: async () => ({ registered: true, registration: { team_id: 100 } }),
     getMyTeam: async () => ({ id: 100, captain_id: captain ? 10 : 20 }),
     getMe: async () => ({ id: 10 })
   })
 }
 
-test('deep link waits for captain identity and opens the current proposal rather than old notice time', async () => {
-  const { page } = matchPage()
+test('deep link shows the current administrator time and scrolls to that match without opening actions', async () => {
+  const { page, state } = matchPage()
   await page.onLoad({ id: '7', roundId: '42' })
   assert.equal(page.data.tab, 'knockout')
-  assert.equal(page.data.showSchedule, true)
-  assert.equal(page.data.scheduleTime, '21:00')
-  assert.equal(page.data.scheduleRound.i_confirmed, false)
+  assert.equal(page.data.focusedRoundId, 42)
+  assert.equal(page.data.allRounds[0].schedule_text, '比赛时间 09-12 21:00')
+  assert.equal(Object.hasOwn(page.data, 'showSchedule'), false)
+  assert.deepEqual(state.scrolls, [{ selector: '#round-42', duration: 180 }])
+  assert.equal(state.toasts.length, 0)
 })
 
-test('finished rounds and former captains do not receive an active scheduling panel', async () => {
-  for (const [changes, captain] of [[{ status: 'finished' }, true], [{}, false]]) {
+test('finished rounds, former captains and legacy pending proposals remain read-only deep links', async () => {
+  for (const [changes, captain] of [[{ status: 'finished' }, true], [{}, false], [{ schedule_status: 'pending' }, true]]) {
     const { page, state } = matchPage(changes, captain)
     await page.onLoad({ id: '7', roundId: '42' })
-    assert.equal(page.data.showSchedule, false)
-    assert.equal(state.toasts.length, 1)
+    assert.equal(Object.hasOwn(page.data, 'showSchedule'), false)
+    assert.equal(page.data.focusedRoundId, 42)
+    assert.equal(page.data.tab, 'knockout')
+    assert.equal(state.toasts.length, 0)
+    assert.deepEqual(state.scrolls, [{ selector: '#round-42', duration: 180 }])
+    if (changes.schedule_status === 'pending') assert.equal(page.data.allRounds[0].schedule_text, '待管理员安排')
+  }
+})
+
+test('schedule links choose the exact challenger, playoff or legend section for all viewer identities', async () => {
+  for (const [group, tab, stage] of [['C', 'challenger', 0], ['附加赛', 'challenger', 1],
+    ['上区', 'legend', 0], ['下区', 'legend', 1]]) {
+    for (const viewer of ['captain', 'member', 'visitor']) {
+      const { page, state } = matchPage({ group_name: group }, viewer === 'captain')
+      if (viewer === 'visitor') state.token = ''
+      await page.onLoad({ id: '7', roundId: '42' })
+      assert.equal(page.data.tab, tab, group + ' ' + viewer)
+      if (tab === 'legend') assert.equal(page.data.legendStage, stage)
+      else {
+        assert.equal(page.data.challengerStage, stage)
+        assert.equal(page.data.selectedChallengerGroup, group === '附加赛' ? '' : group)
+      }
+      assert.equal(page.data.focusedRoundId, 42)
+      assert.deepEqual(state.scrolls, [{ selector: '#round-42', duration: 180 }])
+      assert.equal(state.toasts.length, 0)
+      assert.equal(Object.hasOwn(page.data, 'showSchedule'), false)
+    }
+  }
+})
+
+test('notification scrolling waits for the selected section to render and the actual template exposes matching anchors', async () => {
+  const { page, state } = matchPage({ group_name: '下区' }, false)
+  const rendered = []
+  page.setData = (changes, callback) => { Object.assign(page.data, changes); if (callback) rendered.push(callback) }
+  await page.onLoad({ id: '7', roundId: '42' })
+  assert.equal(page.data.legendStage, 1)
+  assert.equal(state.scrolls.length, 0)
+  assert.equal(rendered.length, 1)
+  rendered.shift()()
+  assert.deepEqual(state.scrolls, [{ selector: '#round-42', duration: 180 }])
+  const source = fs.readFileSync(path.join(root, 'miniprogram/pages/match/match.wxml'), 'utf8')
+  assert.match(source, /id="round-\{\{r\.id\}\}"/)
+  // Group, legend and knockout fallback now share the same round list.
+  assert.match(source, /id="round-\{\{node\.round\.id\}\}"/)
+  assert.match(source, /scroll-into-view="\{\{[^"\n]*focusedRoundId[^"\n]*\}\}"/)
+})
+
+test('four-group historical playoff deep links stay on the overview and explain the obsolete stage', async () => {
+  const teams = ['A', 'B', 'C', 'D'].map((group_name, index) => ({
+    team_id: 100 + index, team_name: '队伍 ' + index, group_name, stage: 'challenger', registration_status: 'approved'
+  }))
+  for (const captain of [true, false]) {
+    const { page, state } = matchPage({ group_name: '附加赛' }, captain, teams)
+    await page.onLoad({ id: '7', roundId: '42' })
+    assert.equal(page.data.hasPlayoffStage, false)
+    assert.equal(page.data.tab, 'teams')
+    assert.equal(page.data.focusedRoundId, null)
+    assert.deepEqual(state.scrolls, [])
+    assert.equal(state.toasts[0].title, '本赛事已不设附加赛，该通知仅作历史记录')
+    assert.equal(Object.hasOwn(page.data, 'showSchedule'), false)
   }
 })
 
 test('missing notification round shows an explanation', async () => {
   const { page, state } = matchPage()
   await page.onLoad({ id: '7', roundId: '999' })
-  assert.equal(page.data.showSchedule, false)
+  assert.equal(Object.hasOwn(page.data, 'showSchedule'), false)
   assert.match(state.toasts[0].title, /已移除/)
 })
 
@@ -179,4 +250,7 @@ test('notification API uses authenticated cursor/read routes and explains an out
   await assert.rejects(module.exports.getScheduleNotifications(), error => error.code === 'BACKEND_UPGRADE_REQUIRED')
   response = { statusCode: 404, data: { detail: '通知不存在' } }
   await assert.rejects(module.exports.readScheduleNotification(6), error => error.detail === '通知不存在')
+  for (const method of ['scheduleRound', 'confirmRoundSchedule', 'rejectRoundSchedule']) {
+    assert.equal(typeof module.exports[method], 'undefined', 'user-side API wrapper removed: ' + method)
+  }
 })

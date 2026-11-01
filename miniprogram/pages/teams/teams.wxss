@@ -106,3 +106,8 @@ page { background: #f3f7fa; color: #102a43; }
 @media (max-width: 350px) { .teams-directory { padding-left: 22rpx; padding-right: 22rpx; } .page-title { font-size: 39rpx; } .team-card { padding-left: 24rpx; padding-right: 24rpx; } .card-bottom { padding-left: 24rpx; padding-right: 24rpx; margin-left: -24rpx; margin-right: -24rpx; } .card-metrics { gap: 16rpx; } .rating-tier { padding-left: 16rpx; } .rating-tier text { display: none; } .overview-strip { gap: 22rpx; } }
 
 .member-identity { display: inline-block; margin-top: 10rpx; padding: 4rpx 10rpx; border-radius: 8rpx; color: #126a70; background: #e5f4f2; font-size: 22rpx; }
+
+.apply-button, .detail-apply { margin:0; font-size:25rpx; line-height:1.5; }
+.apply-button::after, .detail-apply::after { border:0; }
+.apply-button[disabled], .detail-apply[disabled] { color:#607787; background:#eaf0f3; }
+.team-description { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }

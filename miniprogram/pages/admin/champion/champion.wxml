@@ -1,6 +1,6 @@
 <event-return />
 <view class="archive-page">
-  <view class="archive-heading"><text class="eyebrow">CHAMPION ARCHIVE</text><text class="page-title">为历史冠军，留下名字。</text><text class="page-caption">补齐往届赛事的冠军资料，在名人堂公开展示。</text></view>
+  <view class="archive-heading"><view class="heading-row"><text class="page-title">冠军补录</text><button class="back-button" bindtap="goManagement" disabled="{{saving}}">返回管理</button></view><text class="page-caption">填写往届冠军资料，核对后发布到名人堂。</text></view>
   <view wx:if="{{loading}}" class="state-card">正在读取赛事与冠军档案…</view>
   <view wx:elif="{{denied}}" class="state-card"><text class="state-title">仅管理员可补录冠军</text><text class="helper">认证审核员与普通用户没有此操作权限。</text><button class="secondary-button" bindtap="goManagement">返回管理页面</button></view>
   <view wx:elif="{{loadError}}" class="state-card"><text class="state-title">暂时无法打开档案</text><text class="helper">{{loadError}}</text><button class="secondary-button" bindtap="load">重新加载</button></view>

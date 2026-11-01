@@ -8,7 +8,7 @@ Component({
     showAdminNotice: { type: Boolean, value: false }
   },
   data: {
-    open: false, statusBarHeight: 20, navHeight: 44, capsuleSpace: 100,
+    open: false, adminNoticeExpanded: false, statusBarHeight: 20, navHeight: 44, capsuleSpace: 100,
     user: null, isManager: false, currentRoute: '',
     adminTodoCount: null, adminTodoBadge: '', adminTodoSummary: '', adminTodoError: false,
     adminTodoItems: [], adminTodoLoading: false, adminTodoErrorText: '',
@@ -49,6 +49,9 @@ Component({
     show() { this.loadUser() }
   },
   methods: {
+    toggleAdminNotice() {
+      if (this.data.currentRoute === '/pages/index/index') this.setData({ adminNoticeExpanded: !this.data.adminNoticeExpanded })
+    },
     loadUser() {
       const token = wx.getStorageSync('token')
       if (!token) {

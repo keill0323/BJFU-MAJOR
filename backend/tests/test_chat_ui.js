@@ -13,7 +13,7 @@ async function settle() { for (let i = 0; i < 30; i++) await Promise.resolve() }
 
 function fixture(options = {}) {
   const state = { now: Date.parse('2026-10-02T08:00:00Z'), storage: new Map([['token', 'account-a']]), requests: [], sockets: [],
-    timers: new Map(), nextTimer: 0, hooks: {}, toasts: [], navigations: [] }
+    timers: new Map(), nextTimer: 0, hooks: {}, toasts: [], navigations: [], scrolls: [] }
   const wx = {
     getStorageSync: key => state.storage.get(key),
     setStorageSync: (key, value) => state.storage.set(key, plain(value)),
@@ -31,6 +31,15 @@ function fixture(options = {}) {
     }
   }
   if (options.noSocket) delete wx.connectSocket
+  if (options.measure) {
+    wx.pageScrollTo = value => state.scrolls.push(value)
+    wx.createSelectorQuery = () => {
+      let page, callback
+      const query = { in(value) { page = value; return query }, selectAll() { return query },
+        fields(_options, fn) { callback = fn; return query }, exec() { Promise.resolve(options.measure(page, state)).then(callback) } }
+      return query
+    }
+  }
   const api = { BASE: 'https://example.test', chatRequest(pathname, method, body) {
     state.requests.push({ path: pathname, method, body })
     if (options.request) return options.request(pathname, method, body, state)
@@ -57,7 +66,7 @@ function fixture(options = {}) {
   function screen(filename) {
     const definition = load(filename), screen = Object.assign({}, definition, definition.methods)
     screen.data = plain(definition.data || {})
-    screen.setData = value => Object.assign(screen.data, plain(value))
+    screen.setData = (value, callback) => { Object.assign(screen.data, plain(value)); if (callback) callback() }
     return screen
   }
   function run(ms) {
@@ -332,6 +341,26 @@ function pageRequest(handler) {
     return handler(pathname, method, body, state)
   }
 }
+function conversationFixture(rows, options = {}) {
+  const server = { rows, calls: [], request: null }
+  function response(pathname) {
+    const ordered = server.rows.slice().sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updated_at.localeCompare(a.updated_at) || b.id - a.id)
+    let candidates = ordered
+    if (pathname.includes('?cursor=')) {
+      const [pinned, stamp, id] = JSON.parse(Buffer.from(decodeURIComponent(pathname.split('?cursor=')[1]), 'base64url').toString())
+      candidates = ordered.filter(row => (pinned && !row.pinned) || (row.pinned === pinned && (row.updated_at < stamp || (row.updated_at === stamp && row.id < id))))
+    }
+    const items = candidates.slice(0, 30), tail = items[items.length - 1]
+    const next = candidates.length > 30 ? Buffer.from(JSON.stringify([tail.pinned, tail.updated_at, tail.id])).toString('base64url') : null
+    return listResult(items, next)
+  }
+  const f = fixture({ ...options, request: pageRequest(pathname => {
+    server.calls.push(pathname)
+    return server.request ? server.request(pathname, () => response(pathname)) : Promise.resolve(response(pathname))
+  }) })
+  return { ...f, server, page: f.screen('pages/chats/chats.js') }
+}
+const manyRooms = (count = 100, start = count) => Array.from({ length: count }, (_, i) => room(start - i))
 
 test('conversation pagination encodes opaque cursors and de-duplicates the same room across pages', async () => {
   const cursor = 'opaque+cursor/with=padding'
@@ -345,6 +374,190 @@ test('conversation pagination encodes opaque cursors and de-duplicates the same 
   assert.equal(page.data.rooms.length, 3)
   assert.equal(page.data.rooms.find(row => row.id === 2).unread, 3)
   assert.equal(page.data.rooms[0].id, 1, 'pinned rooms stay first')
+  page.stop()
+})
+
+test('a realtime refresh retains the loaded second page, follows a displaced boundary and advances the next cursor', async () => {
+  const f = conversationFixture(manyRooms()), { page, server } = f
+  page.onShow(); await settle(); await page.onReachBottom()
+  assert.equal(page.data.rooms.length, 60)
+  server.rows.push(room(101, { unread: 2 })); server.rows.find(row => row.id === 80).unread = 4
+  f.state.sockets[0].callbacks.message({ data: '{"type":"ready"}' }); await settle()
+  assert.equal(server.calls.length, 5, 'refresh re-reads three pages rather than discarding the loaded tail')
+  assert.equal(page.data.rooms[0].id, 101)
+  assert.equal(page.data.rooms.find(row => row.id === 80).unread, 4)
+  assert.ok(page.data.rooms.some(row => row.id === 41), 'previous loaded boundary remains visible')
+  assert.equal(page.data.rooms.length, 90)
+  assert.equal(new Set(page.data.rooms.map(row => row.id)).size, 90)
+  assert.equal(page._windowEnd.id, 12, 'next refresh covers every rendered row, including page spillover')
+  await page.onReachBottom()
+  assert.equal(page.data.rooms.length, 101)
+  assert.equal(page.data.rooms[100].id, 1)
+  assert.equal(page.data.more, false)
+  page.stop()
+})
+
+test('successive refreshes retain a previously displayed third page after a new room disappears and the old boundary is pinned', async () => {
+  const f = conversationFixture(manyRooms()), { page, server } = f
+  page.onShow(); await settle(); await page.onReachBottom()
+  server.rows.push(room(101)); await page.load()
+  const retained = page.data.rooms.map(row => row.id).filter(id => id !== 101)
+  assert.equal(page._windowEnd.id, 12)
+  server.rows = server.rows.filter(row => row.id !== 101)
+  server.rows.find(row => row.id === 12).pinned = true
+  await page.load()
+  assert.equal(page.data.rooms[0].id, 12)
+  assert.ok(retained.every(id => page.data.rooms.some(row => row.id === id)), 'all still-available rendered rows survive the next refresh')
+  assert.equal(page._windowEnd.id, page.data.rooms[page.data.rooms.length - 1].id)
+  assert.equal(page._loadedPages, 3)
+  page.stop()
+})
+
+test('refresh preserves pin ordering, refreshes anonymized peers and removes rooms actually absent from the server', async () => {
+  const f = conversationFixture(manyRooms()), { page, server } = f
+  page.onShow(); await settle(); await page.onReachBottom()
+  server.rows = server.rows.filter(row => ![65, 41].includes(row.id))
+  server.rows.find(row => row.id === 50).pinned = true
+  server.rows.find(row => row.id === 80).peer = null
+  await page.load()
+  assert.equal(page.data.rooms[0].id, 50)
+  assert.equal(page.data.rooms.find(row => row.id === 80).peer.nickname, '账号暂不可用')
+  assert.ok(!page.data.rooms.some(row => [65, 41].includes(row.id)))
+  assert.ok(page.data.rooms.some(row => row.id === 42))
+  page.stop()
+})
+
+test('a failed later refresh page leaves the complete previous list and pagination cursor intact', async () => {
+  const f = conversationFixture(manyRooms()), { page, server } = f
+  page.onShow(); await settle(); await page.onReachBottom()
+  const before = plain(page.data), boundary = plain(page._windowEnd)
+  server.rows.push(room(101))
+  server.request = (pathname, reply) => pathname.includes('?') ? Promise.reject({ detail: '临时网络失败' }) : Promise.resolve(reply())
+  await page.load()
+  assert.deepEqual(plain(page.data.rooms), before.rooms)
+  assert.equal(page.data.cursor, before.cursor)
+  assert.equal(page.data.more, before.more)
+  assert.deepEqual(plain(page._windowEnd), boundary)
+  assert.equal(page.data.error, '临时网络失败')
+  server.request = null; await page.retry()
+  assert.equal(page.data.rooms[0].id, 101)
+  assert.equal(page.data.error, '')
+  page.stop()
+})
+
+test('many realtime events during a paged refresh coalesce into one follow-up without shrinking its window', async () => {
+  const f = conversationFixture(manyRooms()), { page, server } = f, pending = deferred()
+  page.onShow(); await settle(); await page.onReachBottom()
+  let waiting = true
+  server.rows.push(room(101))
+  server.request = (_pathname, reply) => { if (waiting) { waiting = false; return pending.promise }; return Promise.resolve(reply()) }
+  const socket = f.state.sockets[0]
+  socket.callbacks.message({ data: '{"type":"ready"}' }); await settle()
+  for (let i = 0; i < 4; i++) socket.callbacks.message({ data: '{"type":"dirty","conversation_id":80}' })
+  assert.equal(server.calls.length, 3)
+  pending.resolve(listResult(server.rows.slice().sort((a, b) => b.id - a.id).slice(0, 30),
+    Buffer.from(JSON.stringify([false, room(1).updated_at, 72])).toString('base64url')))
+  await settle(); await settle()
+  assert.equal(server.calls.filter(pathname => pathname === '/conversations').length, 3, 'initial, active refresh and one follow-up')
+  assert.equal(page.data.rooms.length, 90)
+  assert.ok(page.data.rooms.some(row => row.id === 41))
+  page.stop()
+})
+
+test('background refresh is bounded when arrivals exceed a page; explicit pull refresh restarts from the first page', async () => {
+  const f = conversationFixture(manyRooms()), { page, server } = f
+  page.onShow(); await settle(); await page.onReachBottom()
+  const before = plain(page.data)
+  server.rows.push(...manyRooms(70, 170))
+  await page.load()
+  assert.equal(server.calls.length, 5, 'two loaded pages plus at most three refresh requests')
+  assert.deepEqual(plain(page.data.rooms), before.rooms)
+  assert.equal(page.data.cursor, before.cursor)
+  assert.match(page.data.error, /下拉刷新/)
+  await page.onPullDownRefresh()
+  assert.equal(page.data.rooms.length, 30)
+  assert.equal(page.data.rooms[0].id, 170)
+  assert.equal(page.data.error, '')
+  assert.equal(page._loadedPages, 1)
+  page.stop()
+})
+
+test('a malformed or repeated next cursor cannot loop or replace the retained list with an incomplete prefix', async () => {
+  const f = conversationFixture(manyRooms()), { page, server } = f
+  page.onShow(); await settle(); await page.onReachBottom()
+  const before = plain(page.data), top = server.rows.slice(0, 30)
+  server.request = () => Promise.resolve(listResult(top, 'repeated-cursor'))
+  await page.load()
+  assert.equal(server.calls.length, 4)
+  assert.deepEqual(plain(page.data.rooms), before.rooms)
+  assert.equal(page.data.cursor, before.cursor)
+  assert.match(page.data.error, /分页异常/)
+  server.request = () => Promise.resolve({ items: top, has_more: true, next_cursor: null })
+  await page.load()
+  assert.equal(page.data.cursor, before.cursor)
+  assert.match(page.data.error, /分页异常/)
+  page.stop()
+})
+
+test('returning to the list keeps its loaded window and ignores a hidden in-flight refresh', async () => {
+  const f = conversationFixture(manyRooms()), { page, server } = f, pending = deferred()
+  page.onShow(); await settle(); await page.onReachBottom()
+  const before = plain(page.data)
+  server.request = () => pending.promise
+  const refresh = page.load(); await settle(); page.onHide()
+  server.request = null; page.onShow(); await settle()
+  assert.deepEqual(plain(page.data.rooms), before.rooms)
+  assert.equal(page.data.cursor, before.cursor)
+  pending.resolve(listResult([room(999)])); await refresh
+  assert.deepEqual(plain(page.data.rooms), before.rooms)
+  assert.equal(page.data.cursor, before.cursor)
+  page.stop()
+})
+
+test('account changes midway through a later refresh page clear the whole window and ignore stale responses', async () => {
+  const f = conversationFixture(manyRooms()), { page, server } = f, pending = deferred()
+  page.onShow(); await settle(); await page.onReachBottom()
+  server.request = (pathname, reply) => pathname.includes('?') ? pending.promise : Promise.resolve(reply())
+  const refresh = page.load(); await settle()
+  server.request = null; server.rows = [room(2)]
+  f.state.storage.set('token', 'account-b'); f.client.account(); await settle()
+  assert.equal(page.data.rooms.length, 1)
+  assert.equal(page.data.rooms[0].id, 2)
+  pending.resolve(listResult([room(80)])); await refresh
+  assert.equal(page.data.rooms.length, 1)
+  assert.equal(page.data.rooms[0].id, 2)
+  assert.equal(page.data.more, false)
+  assert.equal(page._loadedPages, 1)
+  page.stop()
+})
+
+function rowPositions(page) {
+  return page.data.rooms.map((row, i) => ({ dataset: { id: row.id }, top: 300 + i * 100 - page._scrollTop, bottom: 400 + i * 100 - page._scrollTop }))
+}
+test('a background insertion preserves the visible conversation offset rather than scrolling to the top', async () => {
+  const f = conversationFixture(manyRooms(), { measure: rowPositions }), { page, server } = f
+  page.onShow(); await settle(); await page.onReachBottom()
+  page.onPageScroll({ scrollTop: 1800 })
+  server.rows.push(room(101))
+  await page.load()
+  assert.deepEqual(plain(f.state.scrolls), [{ scrollTop: 1900, duration: 0 }])
+  assert.equal(rowPositions(page).find(row => row.dataset.id === 85).top, 0)
+  page.stop()
+})
+
+test('a user scroll during anchor measurement prevents a delayed refresh from moving them back', async () => {
+  const measured = deferred(); let pause = false
+  const f = conversationFixture(manyRooms(), { measure: page => pause ? measured.promise : rowPositions(page) }), { page, server } = f
+  page.onShow(); await settle(); await page.onReachBottom()
+  page.onPageScroll({ scrollTop: 1800 }); pause = true
+  const oldRects = rowPositions(page)
+  server.rows.push(room(101))
+  const refresh = page.load(); await settle()
+  page.onPageScroll({ scrollTop: 2300 }); measured.resolve(oldRects)
+  await refresh
+  assert.equal(page.data.rooms[0].id, 101)
+  assert.equal(page._scrollTop, 2300)
+  assert.equal(f.state.scrolls.length, 0)
   page.stop()
 })
 
@@ -400,6 +613,34 @@ test('search de-duplicates pending identical terms and ignores old results after
   assert.equal(page.data.people[0].id, 2)
   await page.search(); assert.equal(searches, 2, 'completed identical result is reused')
   page.closeSearch(); assert.equal(page.data.people.length, 0)
+  page.stop()
+})
+
+test('returning during a pending search cancels its loading state, permits retry and retains completed results', async () => {
+  const old = deferred(), fresh = deferred(); let searches = 0
+  const f = fixture({ request: pageRequest(pathname => pathname.startsWith('/contacts')
+    ? (++searches === 1 ? old.promise : fresh.promise) : Promise.resolve(listResult([]))) })
+  const page = f.screen('pages/chats/chats.js')
+  page.onShow(); await settle()
+  page.input({ detail: { value: '未完成查找' } })
+  const first = page.search(); await settle()
+  assert.equal(page.data.searching, true)
+  page.onHide(); page.onShow(); await settle()
+  assert.equal(page.data.searching, false)
+  assert.equal(page.data.searched, false)
+  assert.equal(page.data.keyword, '未完成查找')
+  const second = page.search(); await settle()
+  assert.equal(searches, 2)
+  old.resolve({ items: [{ id: 1 }] }); await first
+  assert.equal(page.data.searching, true, 'old completion cannot stop a fresh search')
+  assert.equal(page.data.people.length, 0)
+  fresh.resolve({ items: [{ id: 2 }] }); await second
+  page.onHide(); page.onShow(); await settle()
+  assert.equal(page.data.searching, false)
+  assert.equal(page.data.searched, true)
+  assert.equal(page.data.people[0].id, 2, 'completed search results remain available on ordinary return')
+  await page.search()
+  assert.equal(searches, 2)
   page.stop()
 })
 

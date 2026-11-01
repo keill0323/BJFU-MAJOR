@@ -49,6 +49,21 @@ function loadAdminPage(context) {
   return page
 }
 
+test('rank upload has time for local OCR and keeps the original multipart field', async () => {
+  const { api, wx } = loadApi({})
+  const uploads = []
+  wx.uploadFile = options => {
+    uploads.push(options)
+    options.success({ statusCode: 200, data: '{"need_review":true}' })
+  }
+  await api.uploadRank('/rank-original.png')
+  await api.uploadVerify('/verify.png')
+  assert.equal(uploads[0].name, 'file')
+  assert.equal(uploads[0].filePath, '/rank-original.png')
+  assert.equal(uploads[0].timeout, 240000)
+  assert.equal(uploads[1].timeout, 60000)
+})
+
 test('team registration approval sends the match and team IDs to the batch endpoint', async () => {
   const { api, calls } = loadApi({ statusCode: 200, data: { message: '审核通过', data: { approved: 5 } } })
   const result = await api.approveTeamRegistration(8, 12)

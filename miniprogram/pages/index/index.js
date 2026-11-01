@@ -4,26 +4,44 @@ Page({
   data: {
     matches: [], keyword: '', groups: [], total: 0, registeringCount: 0, inProgressCount: 0,
     activeFilter: 'all', loading: true, loadError: false, user: null,
-    personalNotice: null, personalNoticeError: false, personalNoticeLoading: false,
+    personalNotice: null, personalNoticeError: false, personalNoticeLoading: false, assistantEnabled: false,
+    assistantState: 'checking', assistantStatusLabel: '查询状态中',
     filters: [{ value: 'all', label: '全部' }, { value: 'registering', label: '报名中' }, { value: 'in_progress', label: '进行中' }, { value: 'finished', label: '已结束' }],
     shortcuts: [
       { title: '我的队伍', icon: 'team', url: '/pages/team/team' },
       { title: '招募大厅', icon: 'team', url: '/pages/recruitment/recruitment' },
       { title: '所有队伍', icon: 'grid', url: '/pages/teams/teams' },
       { title: '名人堂', icon: 'honor', url: '/pages/hall/hall' },
-      { title: '消息', icon: 'mail', url: '/pages/messages/messages' },
+      { title: '系统通知', icon: 'mail', url: '/pages/messages/messages' },
       { title: '认证中心', icon: 'shield', url: '/pages/verify/verify' }
     ]
   },
   onLoad() { this.loadMatches() },
   onShow() {
     this.loadPersonalNotices()
+    this.loadAssistantStatus()
     // 导航栏提供同一份用户信息，首页不额外请求 /me。
     const nav = this.selectComponent('#main-nav')
     if (nav) nav.loadUser()
   },
   onUserChange(e) { this.setData({ user: e.detail.user || null }) },
-  onUnload() { this._noticeRequest = (this._noticeRequest || 0) + 1 },
+  onUnload() { this._noticeRequest = (this._noticeRequest || 0) + 1; this._assistantRequest = (this._assistantRequest || 0) + 1 },
+  async loadAssistantStatus() {
+    const id = this._assistantRequest = (this._assistantRequest || 0) + 1
+    this.setData({ assistantEnabled: false, assistantState: 'checking', assistantStatusLabel: '查询状态中' })
+    try {
+      const status = await api.getAssistantStatus()
+      if (id !== this._assistantRequest) return
+      const enabled = status.enabled === true
+      const available = enabled && status.available === true
+      this.setData({ assistantEnabled: enabled, assistantState: available ? 'ready' : 'unavailable',
+        assistantStatusLabel: available ? '可以使用' : enabled ? '服务暂不可用' : '暂未开放' })
+    } catch (error) {
+      if (id === this._assistantRequest) this.setData({ assistantEnabled: false, assistantState: 'unavailable',
+        assistantStatusLabel: Number(error && error.statusCode) === 404 ? '待服务更新' : '暂时无法连接' })
+    }
+  },
+  goAssistant() { wx.navigateTo({ url: '/pages/assistant/assistant' }) },
   async loadPersonalNotices() {
     const id = this._noticeRequest = (this._noticeRequest || 0) + 1
     const token = wx.getStorageSync('token') || ''
@@ -41,7 +59,7 @@ Page({
   goNotice(e) { wx.navigateTo({ url: '/pages/messages/messages?section=' + (e.currentTarget.dataset.section || '') }) },
   async onPullDownRefresh() {
     const nav = this.selectComponent('#main-nav')
-    await Promise.all([this.loadMatches(), this.loadPersonalNotices(), nav ? nav.loadUser() : Promise.resolve()])
+    await Promise.all([this.loadMatches(), this.loadPersonalNotices(), this.loadAssistantStatus(), nav ? nav.loadUser() : Promise.resolve()])
     wx.stopPullDownRefresh()
   },
   async loadMatches() {
@@ -88,7 +106,7 @@ Page({
   },
   groupMatches(list, filter) {
     const titles = { registering: '正在招募', in_progress: '正在开赛', draft: '即将登场', finished: '往期赛事' }
-    return ['registering', 'in_progress', 'draft', 'finished']
+    return ['in_progress', 'registering', 'draft', 'finished']
       .filter(s => (!filter || filter === 'all' || s === filter) && list.some(m => m.status === s))
       .map(s => ({ status: s, title: titles[s], matches: list.filter(m => m.status === s) }))
   },

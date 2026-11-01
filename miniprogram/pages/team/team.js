@@ -7,6 +7,10 @@
 const api = require('../../utils/api.js')
 const { showImageError } = require('../../utils/image-upload.js')
 const { rankDisplay } = require('../../utils/rank.js')
+function wechatSubscriptions(scene) {
+  try { const flow = require('../../utils/wechat-subscriptions.js'); return scene ? flow.prompt(scene) : flow.prefetch() }
+  catch (_) { return Promise.resolve({ status: 'unavailable' }) }
+}
 Page({
   data: {
   loading: true,
@@ -19,6 +23,7 @@ Page({
     createTeamError: '',
     isCaptain: false,   // 我是不是队长
     members: [],        // 我的队伍成员
+    expandedMemberId: null,
     applications: [],   // 待审核的入队申请（队长可见）
     teams: [],          // 全部队伍列表（没队伍时浏览）
     applyMessage: '',   // 申请留言
@@ -38,7 +43,16 @@ Page({
     rankApplications: []   // 我的段位申请
   },
 
-  goRecruitment() { wx.navigateTo({ url: '/pages/recruitment/recruitment' }) },
+  goRecruitment(e) {
+    const tab = e && e.currentTarget && e.currentTarget.dataset.tab
+    const target = ['players', 'posts', 'publish'].includes(tab) ? tab : 'posts'
+    wx.navigateTo({ url: '/pages/recruitment/recruitment?tab=' + target })
+  },
+  showApplications() { wx.pageScrollTo({ selector: '#team-applications', duration: 250, offsetTop: -90 }) },
+  toggleMember(e) {
+    const id = Number(e.currentTarget.dataset.id)
+    if (this.data.members.some(member => member.user_id === id)) this.setData({ expandedMemberId: this.data.expandedMemberId === id ? null : id })
+  },
   goMessages() { wx.navigateTo({ url: '/pages/messages/messages' }) },
 
   onLoad(options) {
@@ -56,6 +70,7 @@ Page({
 
   // 每次进入页面刷新
   async onShow() {
+    wechatSubscriptions().catch(() => {})
     await this.refreshAll()
   },
 
@@ -232,13 +247,16 @@ Page({
   async pullPlayer(e) {
     const userId = e.currentTarget.dataset.uid
     const name = e.currentTarget.dataset.name || '该玩家'
+    const token = wx.getStorageSync('token') || '', teamId = this.data.myTeam && this.data.myTeam.id
     wx.showModal({
       title: '确认邀请',
       content: `邀请 ${name} 加入你的队伍?`,
       success: async (res) => {
-        if (!res.confirm) return
+        if (!res.confirm || token !== (wx.getStorageSync('token') || '')) return
         try {
-          await api.invitePlayer(this.data.myTeam.id, userId)
+          await wechatSubscriptions('captain_recruitment').catch(() => {})
+          if (token !== (wx.getStorageSync('token') || '') || this._unloaded || !teamId || !this.data.myTeam || teamId !== this.data.myTeam.id) return
+          await api.invitePlayer(teamId, userId)
           wx.showToast({ title: '邀请已发送', icon: 'success' })
         } catch (err) {
           wx.showToast({ title: err.detail || '失败', icon: 'error' })
@@ -523,17 +541,20 @@ Page({
     if (this._applying) return
     const teamId = e.currentTarget.dataset.id
     const teamName = e.currentTarget.dataset.name || '该队伍'
+    const token = wx.getStorageSync('token') || ''
     wx.showModal({
       title: '申请加入 ' + teamName,
       editable: true,
       placeholderText: '自我介绍（选填，最多 200 字）：位置、在线时段、组队期望',
       confirmText: '提交申请',
       success: async r => {
-        if (!r.confirm || this._applying) return
+        if (!r.confirm || this._applying || token !== (wx.getStorageSync('token') || '')) return
         const message = (r.content || '').trim()
         if (message.length > 200) { wx.showToast({ title: '自我介绍最多 200 字', icon: 'none' }); return }
         this._applying = true
         try {
+          await wechatSubscriptions('personal_registration').catch(() => {})
+          if (token !== (wx.getStorageSync('token') || '') || this._unloaded) return
           await api.applyJoin(teamId, message)
           wx.showToast({ title: '已提交申请，等待队长处理', icon: 'none' })
         } catch (err) { wx.showToast({ title: err.detail || '申请失败', icon: 'none' }) }

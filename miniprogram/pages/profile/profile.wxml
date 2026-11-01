@@ -13,7 +13,7 @@
   </view>
   <block wx:else>
     <view class="profile-hero">
-      <view class="profile-hero-top"><text class="eyebrow">YOUR PLAYER CARD</text><text class="player-id">NO. {{user.id}}</text></view>
+      <view class="profile-hero-top"><text class="eyebrow">选手资料</text><text class="player-id">平台 ID {{user.id}}</text></view>
       <view class="profile-identity">
         <view class="avatar"><image class="avatar-img" src="{{user.avatar_full || '/images/icons/gamepad.svg'}}" mode="aspectFill"/></view>
         <view class="hero-info">
@@ -31,17 +31,11 @@
       </view>
     </view>
 
-    <view class="quick-links">
-      <view class="quick-link" bindtap="goTeam"><image src="/images/brand/team.svg"/><text>我的队伍</text></view>
-      <view class="quick-link" bindtap="goVerify"><image src="/images/brand/shield.svg"/><text>参赛认证</text></view>
-      <view class="quick-link" bindtap="goMessages"><image src="/images/brand/mail.svg"/><text>我的消息</text></view>
-    </view>
+
 
     <view class="card info-card">
-      <view class="section-head"><view><text class="eyebrow">PLAYER INFO</text><text class="section-title">个人资料</text></view><text wx:if="{{!editMode}}" class="text-action" bindtap="enableEdit">编辑资料</text><text wx:else class="text-action muted" bindtap="cancelEdit">取消</text></view>
+      <view class="section-head"><view><text class="section-title">资料管理</text></view><text wx:if="{{!editMode}}" class="text-action" bindtap="enableEdit">编辑资料</text><text wx:else class="text-action muted" bindtap="cancelEdit">取消</text></view>
       <block wx:if="{{!editMode}}">
-        <view class="info-row"><text class="info-label">昵称</text><text class="info-value">{{user.nickname || '未设置'}}</text></view>
-        <view class="info-row"><text class="info-label">游戏 ID</text><text class="info-value">{{user.game_id || '未设置'}}</text></view>
         <view class="info-row"><text class="info-label">学号</text><text class="info-value">{{user.student_id || '待在校认证'}}</text></view>
         <view class="info-row"><text class="info-label">账户角色</text><text class="info-value">{{user.role === 'admin' ? '管理员' : user.role === 'reviewer' ? '审核员' : '普通用户'}}</text></view>
       </block>
@@ -54,6 +48,13 @@
         <view class="btn-primary {{saving ? 'is-busy' : ''}}" bindtap="saveProfile">{{saving ? '保存中…' : '保存资料'}}</view>
       </view>
     </view>
+    <view class="quick-links">
+      <view class="quick-link" bindtap="goTeam"><image src="/images/brand/team.svg"/><text>我的队伍</text></view>
+      <view class="quick-link" bindtap="goVerify"><image src="/images/brand/shield.svg"/><text>参赛认证</text></view>
+      <view class="quick-link" bindtap="goMessages"><image src="/images/brand/mail.svg"/><text>系统通知</text></view>
+    </view>
+
+    <text class="privacy-caption">学号不向其他选手公开</text>
     <view class="card account-menu">
       <view wx:if="{{isManager}}" class="menu-entry" bindtap="goAdmin"><view class="menu-name"><image src="/images/icons/settings.svg"/><text>赛事管理</text></view><image class="menu-arrow" src="/images/icons/chevron-right.svg"/></view>
       <view class="menu-entry" bindtap="goRules"><view class="menu-name"><image src="/images/icons/check-circle.svg"/><text>参赛须知与隐私政策</text></view><image class="menu-arrow" src="/images/icons/chevron-right.svg"/></view>

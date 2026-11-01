@@ -12,8 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.match import MatchCreateRequest, MatchInfo, MatchDetailInfo, RoundInfo, RoundUpdateRequest, MatchStatusUpdateRequest, MatchAdminDetail, StageWindowInfo, StageWindowUpdate, RoundScheduleRequest, RoundScheduleActionRequest, RegistrationWindowUpdateRequest
-from app.models.match import MatchStatus
+from app.schemas.match import MatchCreateRequest, MatchInfo, MatchDetailInfo, RoundInfo, RoundUpdateRequest, MatchStatusUpdateRequest, MatchAdminDetail, StageWindowInfo, StageWindowUpdate, AdminRoundScheduleRequest, RegistrationWindowUpdateRequest
+from app.models.match import MatchStatus, StageStatus, TeamProgress
 from app.services import match_service
 from app.services.visibility_service import public_match_detail, public_rounds
 from app.services.auth_service import get_current_user, require_admin
@@ -375,22 +375,47 @@ def seed_and_group(match_id: int,
     }}
 
 
+def _challenger_round_robin(db: Session, match_id: int, group_name: str) -> str:
+    """只允许真实、仍处于挑战者阶段的小组生成双循环；与编排操作共用赛事锁。"""
+    if not group_name.strip():
+        raise HTTPException(status_code=400, detail="请指定已分组的挑战者小组")
+    match_service._lock_match(db, match_id)
+    progresses = db.query(TeamProgress).filter(
+        TeamProgress.match_id == match_id,
+        TeamProgress.group_name == group_name,
+    ).populate_existing().with_for_update().all()
+    if not progresses or any(p.stage != StageStatus.CHALLENGER for p in progresses):
+        raise HTTPException(status_code=400, detail="该组不是当前挑战者小组，请核对分组及赛事阶段")
+    return "double"
+
+
 @router.post("/{match_id}/auto-matches/double")
 def auto_double_matches(match_id: int,
-                        group_name: str,
+                        group_name: str = Query(..., min_length=1, max_length=20),
                         db=Depends(get_db),
                         admin=Depends(require_admin)
 ):
-    """为小组生成双循环对阵"""
+    """挑战者小组赛为双循环 BO1，其他阶段不能通过此入口生成双循环。"""
+    if group_name in ("附加赛", "上区", "下区", "淘汰赛"):
+        raise HTTPException(status_code=400, detail="只有挑战者小组赛采用双循环 BO1")
+    mode = _challenger_round_robin(db, match_id, group_name)
     match_service.auto_generate_group_matches(db, match_id, group_name)
-    return {"message": "对阵生成完成"}
+    return {"message": "对阵生成完成", "round_robin": mode}
 
 
 @router.post("/{match_id}/auto-matches/single")
-def auto_single_matches(match_id: int, group_name: str, db=Depends(get_db), admin=Depends(require_admin)):
-    """为小组生成单循环对阵"""
-    match_service.auto_generate_single_round_matches(db, match_id, group_name)
-    return {"message": "对阵生成完成"}
+def auto_single_matches(match_id: int, group_name: str = Query(..., min_length=1, max_length=20),
+                        db=Depends(get_db), admin=Depends(require_admin)):
+    """兼容旧客户端：挑战者组仍生成双循环，附加赛及传奇分区保持单循环 BO1。"""
+    if group_name == "淘汰赛":
+        raise HTTPException(status_code=400, detail="淘汰赛采用 BO3，请使用淘汰赛编排入口")
+    if group_name in ("附加赛", "上区", "下区"):
+        match_service.auto_generate_single_round_matches(db, match_id, group_name)
+        mode = "single"
+    else:
+        mode = _challenger_round_robin(db, match_id, group_name)
+        match_service.auto_generate_group_matches(db, match_id, group_name)
+    return {"message": "对阵生成完成", "round_robin": mode}
 
 
 @router.post("/{match_id}/finish-group")
@@ -460,7 +485,7 @@ def remove_team_from_match(
     return {"message": "已移除该队伍"}
 
 
-# ===== 阶段时间窗口 + 对阵时间协商 =====
+# ===== 阶段参考窗口 + 管理员逐场排期 =====
 
 @router.put("/{match_id}/stage-windows/{group_name}", response_model=StageWindowInfo)
 def set_stage_window(
@@ -470,7 +495,7 @@ def set_stage_window(
     db: Session = Depends(get_db),
     admin = Depends(require_admin),
 ):
-    """管理员设置某阶段的时间窗口（限定时段）"""
+    """管理员设置阶段参考窗口，不覆盖已安排的逐场时间。"""
     return match_service.set_stage_window(
         db, match_id, group_name, request.window_start, request.window_end
     )
@@ -486,34 +511,41 @@ def get_stage_windows(
     return match_service.get_stage_windows(db, match_id)
 
 
-@router.put("/rounds/{round_id}/schedule", response_model=RoundInfo)
+@router.put("/rounds/{round_id}/admin-schedule", response_model=RoundInfo)
+def admin_schedule_round(
+    round_id: int,
+    request: AdminRoundScheduleRequest,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin),
+):
+    """管理员统一安排或取消比赛时间，expected_time 防止覆盖他人的新排期。"""
+    return match_service.admin_schedule_round(
+        db, round_id, admin, request.scheduled_time, request.expected_time,
+    )
+
+
+@router.put("/rounds/{round_id}/schedule")
 def schedule_round(
     round_id: int,
-    request: RoundScheduleRequest,
-    db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    """队长提交/修改约定比赛时间"""
-    return match_service.schedule_round(db, round_id, current_user.id, request.scheduled_time)
+    """关闭旧客户端的队长约赛入口。"""
+    raise HTTPException(410, "队长约定比赛时间功能已停用，比赛时间由管理员统一安排，请刷新赛事页面")
 
 
-@router.post("/rounds/{round_id}/schedule/confirm", response_model=RoundInfo)
+@router.post("/rounds/{round_id}/schedule/confirm")
 def confirm_round_schedule(
     round_id: int,
-    request: RoundScheduleActionRequest,
-    db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    """队长确认约定比赛时间（带 expected_time 防竞态）"""
-    return match_service.confirm_round_schedule(db, round_id, current_user.id, request.expected_time)
+    """关闭旧客户端的队长确认入口。"""
+    raise HTTPException(410, "队长约定比赛时间功能已停用，比赛时间由管理员统一安排，请刷新赛事页面")
 
 
-@router.post("/rounds/{round_id}/schedule/reject", response_model=RoundInfo)
+@router.post("/rounds/{round_id}/schedule/reject")
 def reject_round_schedule(
     round_id: int,
-    request: RoundScheduleActionRequest,
-    db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    """队长拒绝约定比赛时间（作废提议，带 expected_time 防竞态）"""
-    return match_service.reject_round_schedule(db, round_id, current_user.id, request.expected_time)
+    """关闭旧客户端的队长拒绝入口。"""
+    raise HTTPException(410, "队长约定比赛时间功能已停用，比赛时间由管理员统一安排，请刷新赛事页面")

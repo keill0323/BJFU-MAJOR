@@ -20,6 +20,11 @@ try:
         "SECRET_KEY": "isolated-regression-test-key",
         "AI_REVIEW_ENABLED": "false",
         "AI_API_KEY": "",
+        "ASSISTANT_ENABLED": "false",
+        "ASSISTANT_EXTERNAL_ENABLED": "false",
+        "ASSISTANT_TOOL_MODEL_VERIFIED": "false",
+        "ASSISTANT_SUMMARY_ENABLED": "false",
+        "ASSISTANT_API_KEY": "",
         "WX_MOCK_LOGIN": "true",
         "UPLOAD_DIR": _test_directory.name,
     }):

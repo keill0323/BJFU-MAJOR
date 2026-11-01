@@ -4,7 +4,7 @@ Author: keill
 Since: 2026-7-22
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
@@ -55,11 +55,13 @@ class AdminUpdateUserRequest(BaseModel):
     verify_image: Optional[str] = None   # 传空字符串表示清除截图
     verify_reject_reason: Optional[str] = None   # 认证驳回原因（传空字符串表示清除）
     expected_verify_image: Optional[str] = None   # 人工审核时校验仍为当前查看的凭证
+    audit_reason: Optional[str] = Field(default=None, max_length=500)
 
 
 class RecognizeStudentIdRequest(BaseModel):
     """识别管理员当前查看的认证凭证，防止旧图片结果覆盖新提交。"""
     expected_verify_image: str
+    audit_reason: Optional[str] = Field(default=None, max_length=500)
 
 
 class RecognizeStudentIdResponse(BaseModel):
@@ -73,6 +75,7 @@ class RecognizeStudentIdResponse(BaseModel):
 class UpdateRoleRequest(BaseModel):
     """修改用户角色请求"""
     role: str
+    audit_reason: Optional[str] = Field(default=None, max_length=500)
 
 
 class TokenResponse(BaseModel):

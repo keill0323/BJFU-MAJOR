@@ -53,10 +53,19 @@ function applyDetail(page, value, captain = false) {
 }
 
 function render(page, section) {
-  const source = section === 'registration'
-    ? template.split('<!-- 报名区 -->')[1].split('<!-- 阶段 tab -->')[0]
-    : template
-  const tree = parseWxml(source)
+  const tree = parseWxml(template)
+  if (section === 'registration') {
+    function findRegistration(nodes) {
+      for (const node of nodes) {
+        if ((node.attrs && node.attrs.class || '').split(/\s+/).includes('register-card')) return node
+        const nested = node.children && findRegistration(node.children)
+        if (nested) return nested
+      }
+    }
+    const registration = findRegistration(tree.children)
+    assert.ok(registration, 'the real template must contain the registration card')
+    tree.children = [registration]
+  }
   tree.scope = page.data
   return createRenderer({})(tree)
 }

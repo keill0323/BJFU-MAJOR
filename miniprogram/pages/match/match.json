@@ -1,5 +1,9 @@
 {
   "navigationBarTitleText": "赛事详情",
-  "usingComponents": { "event-return": "/components/event-return/event-return" },
+  "usingComponents": {
+    "event-return": "/components/event-return/event-return",
+    "player-stats": "/components/player-stats/player-stats",
+    "subscribe-notice": "/components/subscribe-notice/subscribe-notice"
+  },
   "enablePullDownRefresh": true
 }

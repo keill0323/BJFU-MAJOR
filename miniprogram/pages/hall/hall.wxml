@@ -1,13 +1,13 @@
 <nav-drawer title="名人堂"></nav-drawer>
 <view class="hall-page">
-  <view class="page-heading"><text class="eyebrow">THE HALL OF FAME</text><text class="page-title">让每一份荣耀，被记住。</text><text class="page-caption">从并肩夺冠，到攀登巅峰。</text></view>
+  <view class="page-heading"><text class="page-title">名人堂</text><text class="page-caption">历届赛事冠军 · 平台认证段位榜</text></view>
   <view class="hall-tabs"><view wx:for="{{tabs}}" wx:key="value" class="hall-tab {{activeTab === item.value ? 'active' : ''}}" bindtap="switchTab" data-tab="{{item.value}}" role="button" aria-label="{{item.title}}">{{item.title}}</view></view>
 
   <block wx:if="{{activeTab === 'champions'}}">
-    <view class="board-heading"><view><text class="board-title">冠军档案</text><text class="board-subtitle">每一届，都有属于他们的高光。</text></view><text wx:if="{{champions.attempted && !champions.error}}" class="total-count">{{champions.total}} 届</text></view>
+    <view class="board-heading"><view><text class="board-title">冠军档案</text><text class="board-subtitle">记录每届冠军与夺冠阵容</text></view><text wx:if="{{champions.attempted && !champions.error}}" class="total-count">{{champions.total}} 届</text></view>
     <block wx:for="{{champions.items}}" wx:key="match_id">
       <view class="champion-card">
-        <view class="champion-ribbon"><view class="ribbon-label"><image src="/images/brand/cup.svg" mode="aspectFit"/><text>CHAMPIONS</text></view><text class="event-date">{{item.eventLabel}}</text></view>
+        <view class="champion-ribbon"><view class="ribbon-label"><image src="/images/brand/cup.svg" mode="aspectFit"/><text>赛事冠军</text></view><text class="event-date">{{item.eventLabel}}</text></view>
         <view class="champion-main"><view class="champion-emblem"><image wx:if="{{item.logoFull}}" src="{{item.logoFull}}" mode="aspectFill"/><text wx:else>{{item.initial}}</text></view><view class="champion-identity"><text class="honor-label">赛事冠军</text><text class="champion-name">{{item.champion_name}}</text><text class="event-type">{{item.typeLabel}}</text></view></view>
         <text class="event-name">{{item.match_name}}</text>
         <text wx:if="{{item.sourceLabel}}" class="archive-source">{{item.sourceLabel}}</text>
@@ -28,7 +28,7 @@
   </block>
 
   <block wx:else>
-    <view class="rank-spotlight" wx:if="{{highestPlayer}}"><view class="spotlight-copy"><text class="spotlight-kicker">THE HIGHEST RANK</text><text class="spotlight-title">{{highestPlayer.badge.label}}</text><text class="spotlight-caption">当前平台最高段位</text><view class="spotlight-player"><text>领衔选手</text><text class="spotlight-name">{{highestPlayer.nickname}}</text><text wx:if="{{highestPlayer.tied}}" class="spotlight-tied">并列</text></view></view><image class="spotlight-badge" src="{{highestPlayer.badge.icon}}" mode="aspectFit"/></view>
+    <view class="rank-spotlight" wx:if="{{highestPlayer}}"><view class="spotlight-copy"><text class="spotlight-title">{{highestPlayer.badge.label}}</text><text class="spotlight-caption">当前平台最高段位</text><view class="spotlight-player"><text>领衔选手</text><text class="spotlight-name">{{highestPlayer.nickname}}</text><text wx:if="{{highestPlayer.tied}}" class="spotlight-tied">并列</text></view></view><image class="spotlight-badge" src="{{highestPlayer.badge.icon}}" mode="aspectFit"/></view>
     <view class="board-heading"><view><text class="board-title">选手段位榜</text><text class="board-subtitle">按已认证段位排序 · S 段按星数排序</text></view><text wx:if="{{players.attempted && !players.error}}" class="total-count">{{players.total}} 人</text></view>
     <view wx:if="{{players.items.length > 0}}" class="ranking-card">
       <view class="ranking-head"><text>名次 / 选手</text><text>已认证段位</text></view>

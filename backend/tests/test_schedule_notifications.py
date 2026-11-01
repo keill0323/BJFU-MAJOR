@@ -112,13 +112,13 @@ class ScheduleNotificationTests(DatabaseTestCase):
         matches.reject_round_schedule(self.db, self.round.id, self.second.captain_id, self.time)
         self.assertEqual(self.inbox(self.first.captain_id)["items"][0]["kind"], "cancelled")
 
-    def test_window_change_notifies_both_captains_but_preserves_finished_rounds(self):
+    def test_reference_window_change_preserves_pending_and_finished_rounds_without_notices(self):
         self.submit()
+        before = self.db.query(ScheduleNotification).count()
         matches.set_stage_window(self.db, self.match.id, "淘汰赛", self.time + timedelta(hours=2), self.time + timedelta(hours=4))
-        for user_id in (self.first.captain_id, self.second.captain_id):
-            self.assertEqual(self.inbox(user_id)["items"][0]["kind"], "window_changed")
-        self.assertIsNone(self.round.scheduled_time)
-        self.round.scheduled_time = self.time
+        self.assertEqual(self.round.scheduled_time, self.time)
+        self.assertTrue(self.round.team1_confirmed)
+        self.assertEqual(self.db.query(ScheduleNotification).count(), before)
         self.round.status = RoundStatus.FINISHED
         self.db.commit()
         before = self.db.query(ScheduleNotification).count()
@@ -140,11 +140,11 @@ class ScheduleNotificationTests(DatabaseTestCase):
         self.assertFalse(self.round.team1_confirmed)
         self.assertEqual(self.db.query(ScheduleNotification).count(), 0)
 
-    def test_window_notice_failure_rolls_back_window_and_all_cancellations(self):
+    def test_window_commit_failure_rolls_back_reference_window_without_changing_rounds(self):
         self.submit()
         window = self.db.query(StageWindow).one()
         previous = window.window_start
-        with patch.object(notices, "notify_schedule", side_effect=RuntimeError("unavailable")):
+        with patch.object(self.db, "commit", side_effect=RuntimeError("unavailable")):
             with self.assertRaises(RuntimeError):
                 matches.set_stage_window(self.db, self.match.id, "淘汰赛", self.time + timedelta(hours=2), self.time + timedelta(hours=4))
         self.db.expire_all()

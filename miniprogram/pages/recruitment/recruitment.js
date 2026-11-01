@@ -1,9 +1,14 @@
 const api = require('../../utils/api.js')
 const { rankDisplay } = require('../../utils/rank.js')
 
+function wechatSubscriptions(scene) {
+  try { const flow = require('../../utils/wechat-subscriptions.js'); return scene ? flow.prompt(scene) : flow.prefetch() }
+  catch (_) { return Promise.resolve({ status: 'unavailable' }) }
+}
+
 Page({
   data: { tab: 'players', players: [], playersFailed: false, playersMore: false, playersCursor: null,
-    keyword: '', query: '', inviting: null,
+    keyword: '', query: '', inviting: null, expandedPlayerId: null, expandedPostId: null, appliedTeamIds: [],
     rankFilter: '', identityFilter: '', rankIndex: 0, identityIndex: 0,
     rankOptions: [{ value: '', label: '全部段位' },
       ...['D', 'C', 'C+', 'C++', 'B', 'B+', 'B++', 'A', 'A+', 'A++'].map(value => ({ value, label: value })),
@@ -15,7 +20,11 @@ Page({
     playersLoading: true, playersLoadingMore: false, playersError: '',
     posts: [], mine: null, myTeam: null, token: '', loading: true, failed: false, accountFailed: false,
     more: false, cursor: null, loadingMore: false, editing: false, draft: '', saving: false, applying: null },
-  onShow() { this._chatVisible = true; this._chatGeneration = (this._chatGeneration || 0) + 1; this.load() },
+  onLoad(options = {}) {
+    if (['players', 'posts', 'publish'].includes(options.tab)) this.setData({ tab: options.tab === 'publish' ? 'posts' : options.tab })
+    this._openPublish = options.tab === 'publish'
+  },
+  onShow() { this._chatVisible = true; this._chatGeneration = (this._chatGeneration || 0) + 1; wechatSubscriptions().catch(() => {}); this.load() },
   onHide() { this.stopContact() },
   onUnload() { this.stopContact(); this._requestId = (this._requestId || 0) + 1; this._playersRequestId = (this._playersRequestId || 0) + 1 },
   onPullDownRefresh() { return this.load().finally(() => wx.stopPullDownRefresh()) },
@@ -37,20 +46,32 @@ Page({
     const generation = this._chatGeneration, token = wx.getStorageSync('token') || ''
     const attempt = this._contactAttempt = {}
     const isCurrent = () => this._chatVisible && generation === this._chatGeneration && token === (wx.getStorageSync('token') || '')
-    try { await require('../../utils/chat-client.js').contact(id, source, card, isCurrent) }
+    try {
+      await wechatSubscriptions(this.data.mine && this.data.mine.can_publish && source === 'user' ? 'captain_recruitment' : 'personal_registration').catch(() => {})
+      if (!isCurrent()) return
+      await require('../../utils/chat-client.js').contact(id, source, card, isCurrent)
+    }
     finally { if (this._contactAttempt === attempt) this._contactAttempt = null }
   },
   decorate(items) { return items.map(p => Object.assign({}, p, {
+    applied: this.data.appliedTeamIds.includes(Number(p.team_id)),
+    descriptionLong: String(p.content || '').length > 60 || String(p.content || '').split('\n').length > 3,
     initial: (p.team_name || '队').slice(0, 1), timeText: String(p.updated_at || '').replace('T', ' ').slice(0, 16),
     logoFull: p.logo ? (/^https?:\/\//.test(p.logo) ? p.logo : api.BASE + p.logo) : ''
   })) },
   decoratePlayers(items) { return items.map(p => Object.assign({}, p, {
+    descriptionLong: String(p.user_description || '').length > 60 || String(p.user_description || '').split('\n').length > 3,
     displayName: p.nickname || p.game_id || '选手' + p.id, displayRank: rankDisplay(p.rank) || '段位待认证',
     identityText: !p.is_verified ? '身份待确认 · 学籍未认证' : p.identity === 'new_student' ? '新生' : p.identity === 'senior' ? '老生' : '新老生身份待确认',
     initial: (p.nickname || p.game_id || '选手').slice(0, 1),
     avatarFull: p.avatar ? (/^https?:\/\//.test(p.avatar) ? p.avatar : api.BASE + p.avatar) : ''
   })) },
   switchTab(e) { if (['players', 'posts'].includes(e.currentTarget.dataset.tab)) this.setData({ tab: e.currentTarget.dataset.tab }) },
+  toggleDescription(e) {
+    const { kind, id } = e.currentTarget.dataset
+    const field = kind === 'player' ? 'expandedPlayerId' : kind === 'post' ? 'expandedPostId' : ''
+    if (field) this.setData({ [field]: this.data[field] === Number(id) ? null : Number(id) })
+  },
   onKeyword(e) { this.setData({ keyword: e.detail.value }) },
   searchPlayers() { this.setData({ query: this.data.keyword.trim() }); return this.loadPlayers() },
   onRankFilter(e) { return this.changePlayerFilter('rank', e.detail.value) },
@@ -93,8 +114,9 @@ Page({
   async load() {
     const id = this._requestId = (this._requestId || 0) + 1
     const token = wx.getStorageSync('token') || ''
+    if (this.data.token !== token) this.setData({ appliedTeamIds: [], expandedPlayerId: null, expandedPostId: null })
     this.setData({ token, loading: true, failed: false, accountFailed: false, loadingMore: false,
-      mine: null, myTeam: null, editing: false })
+      mine: null, myTeam: null, editing: false, applying: null })
     const results = await Promise.allSettled([api.getRecruitmentPosts(), token ? api.getMyRecruitment() : null, token ? api.getMyTeam() : null,
       this.loadPlayers()])
     if (!this.current(id, token)) return
@@ -106,6 +128,10 @@ Page({
     if (results[1].status === 'fulfilled') update.mine = results[1].value
     if (results[2].status === 'fulfilled') update.myTeam = results[2].value
     this.setData(update)
+    if (this._openPublish && !update.accountFailed) {
+      this._openPublish = false
+      if (this.data.mine && this.data.mine.can_publish) this.edit()
+    }
   },
   async loadMore() {
     if (this.data.tab === 'players') return this.loadMorePlayers()
@@ -143,21 +169,28 @@ Page({
     wx.showModal({ title: '邀请 ' + player.displayName, content: '邀请这位选手加入「' + this.data.mine.team_name + '」？', success: async r => {
       if (!r.confirm || this.data.inviting || token !== wx.getStorageSync('token')) return
       this.setData({ inviting: player.id })
-      try { await api.invitePlayer(teamId, player.id); wx.showToast({ title: '邀请已发送，等待对方同意', icon: 'none' }) }
+      try {
+        await wechatSubscriptions('captain_recruitment').catch(() => {})
+        if (token !== (wx.getStorageSync('token') || '')) return
+        await api.invitePlayer(teamId, player.id); wx.showToast({ title: '邀请已发送，等待对方同意', icon: 'none' })
+      }
       catch (err) { wx.showToast({ title: err.detail || '邀请失败', icon: 'none' }) }
       finally { this.setData({ inviting: null }) }
     } })
   },
-  edit() { this.setData({ editing: true, draft: this.data.mine.content || '' }) },
+  edit() { if (this.data.mine && this.data.mine.can_publish && !this.data.accountFailed) this.setData({ editing: true, draft: this.data.mine.content || '' }) },
   cancelEdit() { if (!this.data.saving) this.setData({ editing: false }) },
   onDraft(e) { this.setData({ draft: e.detail.value }) },
   async save() {
     if (this.data.saving || !this.data.mine) return
     const content = this.data.draft.trim()
+    const teamId = this.data.mine.team_id, token = wx.getStorageSync('token') || ''
     if (!content) { wx.showToast({ title: '请填写招募内容', icon: 'none' }); return }
     this.setData({ saving: true })
     try {
-      await api.saveRecruitment(this.data.mine.team_id, content)
+      await wechatSubscriptions('captain_recruitment').catch(() => {})
+      if (token !== (wx.getStorageSync('token') || '') || !this.data.mine || this.data.mine.team_id !== teamId) return
+      await api.saveRecruitment(teamId, content)
       wx.showToast({ title: '招募已发布', icon: 'success' })
       await this.load()
     } catch (err) { wx.showToast({ title: err.detail || '发布失败', icon: 'none' }) }
@@ -177,16 +210,26 @@ Page({
     if (!this.data.token) { this.goLogin(); return }
     if (this.data.myTeam || this.data.accountFailed || this.data.applying) return
     const teamId = Number(e.currentTarget.dataset.id)
+    if (this.data.appliedTeamIds.includes(teamId)) return
     const post = this.data.posts.find(p => p.team_id === teamId)
     if (!post) return
+    const token = this.data.token, request = this._requestId
+    const usable = () => this.current(request, token) && this._chatVisible !== false
     wx.showModal({ title: '申请加入 ' + post.team_name, editable: true, placeholderText: '自我介绍（选填，最多 200 字）：位置、在线时段、组队期望', success: async r => {
-      if (!r.confirm || this.data.applying) return
+      if (!r.confirm || this.data.applying || !usable()) return
       const message = (r.content || '').trim()
       if (message.length > 200) { wx.showToast({ title: '自我介绍最多 200 字', icon: 'none' }); return }
       this.setData({ applying: teamId })
-      try { await api.applyJoin(teamId, message); wx.showToast({ title: '已申请，等待队长处理', icon: 'none' }) }
-      catch (err) { wx.showToast({ title: err.detail || '申请失败', icon: 'none' }) }
-      finally { this.setData({ applying: null }) }
+      try {
+        await wechatSubscriptions('personal_registration').catch(() => {})
+        if (!usable()) return
+        await api.applyJoin(teamId, message)
+        if (!usable()) return
+        this.setData({ appliedTeamIds: this.data.appliedTeamIds.concat(teamId), posts: this.data.posts.map(item => item.team_id === teamId ? Object.assign({}, item, { applied: true }) : item) })
+        wx.showToast({ title: '已申请，等待队长处理', icon: 'none' })
+      }
+      catch (err) { if (usable()) wx.showToast({ title: err.detail || '申请失败', icon: 'none' }) }
+      finally { if (usable()) this.setData({ applying: null }) }
     } })
   },
   goTeam() { wx.navigateTo({ url: '/pages/team/team' }) },

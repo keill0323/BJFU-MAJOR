@@ -1,7 +1,7 @@
 <!-- 管理工作台 -->
 <event-return />
 <view class="page">
-  <view class="workbench-head">
+  <view class="workbench-head {{tab !== 'overview' ? 'workbench-head-compact' : ''}}">
     <view class="workbench-copy"><text class="workbench-kicker">MAJOR · MANAGEMENT</text><text class="workbench-title">管理工作台</text><text class="workbench-caption">{{user.role === 'reviewer' ? '审核员' : '管理员'}} · 待办优先，有序办赛</text></view>
     <view class="workbench-total"><text class="workbench-number">{{todos && !todoError ? todos.total : '—'}}</text><text>{{todoError ? '暂未更新' : '待处理'}}</text></view>
   </view>
@@ -15,9 +15,8 @@
     <view wx:if="{{todoError}}" class="notice unavailable-notice"><view><text class="notice-title">待办状态暂时不可用</text><text class="notice-copy">{{todoErrorText}}</text><text wx:if="{{todos}}" class="notice-copy">下方保留上次记录，请刷新确认最新待办。</text></view><view class="text-action" bindtap="retryTodos">{{todoLoading ? '重试中…' : '重试'}}</view></view>
     <view wx:elif="{{todoLoading}}" class="sync-state">正在更新待办…</view>
 
-    <view wx:if="{{tab !== 'overview' && todoItems.length && !todoError}}" class="card pending-shortcuts">
-      <view class="queue-heading"><text class="section-title">需要你审核</text><view class="text-action" bindtap="switchTab" data-tab="overview">查看全部待办 ›</view></view>
-      <view class="pending-shortcut-list"><view wx:for="{{todoItems}}" wx:key="key" class="pending-shortcut" bindtap="openTodo" data-tab="{{item.tab}}" aria-role="button"><text>{{item.title}}</text><text class="pending-shortcut-count">{{item.count}} {{item.unit}} ›</text></view></view>
+    <view wx:if="{{tab !== 'overview' && todoItems.length && !todoError}}" class="admin-pending-summary" bindtap="switchTab" data-tab="overview">
+      <text>需要你审核 · {{todos.total}} 项</text><text>查看全部待办 ›</text>
     </view>
 
     <view wx:if="{{tab === 'overview'}}">
@@ -33,12 +32,12 @@
     <block wx:if="{{tab === 'overview' || tab === 'matches'}}">
       <view wx:if="{{todos && todos.registration_matches.length}}" class="card registration-queue">
         <view class="queue-heading"><text class="section-title">待审核赛事报名</text><text class="section-caption">按赛事处理</text></view>
-        <view wx:for="{{todos.registration_matches}}" wx:key="match_id" class="queue-row" bindtap="goMDetail" data-id="{{item.match_id}}" aria-role="button"><view class="queue-copy"><text class="queue-name">{{item.match_name}}</text><text class="queue-caption">点击审核报名，通过后进入待分组名单</text></view><text class="queue-count">{{item.count}} 队待审</text><text class="queue-arrow">›</text></view>
+        <view wx:for="{{todos.registration_matches}}" wx:key="match_id" class="queue-row" bindtap="goMDetail" data-id="{{item.match_id}}" data-tab="teams" aria-role="button"><view class="queue-copy"><text class="queue-name">{{item.match_name}}</text><text class="queue-caption">点击审核报名，通过后进入待分组名单</text></view><text class="queue-count">{{item.count}} 队待审</text><text class="queue-arrow">›</text></view>
       </view>
       <view wx:if="{{todos && todos.blocked_registration_matches.length}}" class="card blocked-queue">
         <view class="queue-heading"><text class="section-title">已锁定赛事的历史报名</text><text class="section-caption">不计入待办</text></view>
         <text class="blocked-explanation">这些赛事已分组或生成对阵，无法继续审核报名。原记录保留，可进入详情核对。</text>
-        <view wx:for="{{todos.blocked_registration_matches}}" wx:key="match_id" class="queue-row" bindtap="goMDetail" data-id="{{item.match_id}}" aria-role="button"><view class="queue-copy"><text class="queue-name">{{item.match_name}}</text><text class="queue-caption">查看历史报名记录</text></view><text class="queue-count">{{item.count}} 队</text><text class="queue-arrow">›</text></view>
+        <view wx:for="{{todos.blocked_registration_matches}}" wx:key="match_id" class="queue-row" bindtap="goMDetail" data-id="{{item.match_id}}" data-tab="teams" aria-role="button"><view class="queue-copy"><text class="queue-name">{{item.match_name}}</text><text class="queue-caption">查看历史报名记录</text></view><text class="queue-count">{{item.count}} 队</text><text class="queue-arrow">›</text></view>
       </view>
     </block>
     <view wx:if="{{tab === 'overview'}}">
@@ -82,10 +81,7 @@
       </view>
       <view class="user-actions">
         <button wx:if="{{item.verify_image && !item.student_id}}" class="btn-outline small-btn student-id-action" catchtap="recognizeStudentId" data-id="{{item.id}}" data-source="users" loading="{{studentIdDrafts[item.id].recognizing}}" disabled="{{studentIdDrafts[item.id].recognizing || studentIdDrafts[item.id].saving}}">{{studentIdDrafts[item.id].recognizing ? '正在识别' : studentIdDrafts[item.id].open ? '重新识别学号' : '识别学号'}}</button>
-        <view class="btn-outline small-btn" catchtap="setStudentId" data-id="{{item.id}}">设学号</view>
-        <view class="btn-outline small-btn" catchtap="setRank" data-id="{{item.id}}">设段位</view>
-        <view class="btn-outline small-btn" catchtap="setIdentity" data-id="{{item.id}}">设身份</view>
-        <view wx:if="{{user.role === 'admin'}}" class="btn-outline small-btn" catchtap="setRole" data-id="{{item.id}}">修改权限</view>
+        <button class="btn-outline small-btn" catchtap="showUserActions" data-id="{{item.id}}">资料操作 ···</button>
       </view>
     </view>
 
@@ -102,6 +98,8 @@
       </view>
       <text class="user-name">{{item.nickname || '未设昵称'}} {{item.game_id ? '(' + item.game_id + ')' : ''}}</text>
       <text class="user-meta">学号: {{item.student_id || '未填写'}} | 提交: {{item.created_at || '-'}}</text>
+      <button class="review-toggle" bindtap="toggleReview" data-kind="verify" data-id="{{item.id}}">{{expandedVerifyId === item.id ? '收起审核资料' : '展开凭证并审核'}} <text>⌄</text></button>
+      <view wx:if="{{expandedVerifyId === item.id}}" class="review-expanded">
       <!-- AI 审核建议（含置信度，辅助管理员决策） -->
       <view wx:if="{{item.ai_review_status}}" class="ai-suggest {{item.ai_review_class}}">
         <view class="ai-suggest-top">
@@ -122,6 +120,7 @@
         <button class="btn-primary small-btn student-id-action" bindtap="verifyPass" data-id="{{item.id}}" loading="{{studentIdDrafts[item.id].saving}}" disabled="{{studentIdDrafts[item.id].saving || studentIdDrafts[item.id].recognizing}}">{{studentIdDrafts[item.id].saving ? '正在提交' : '确认并通过'}}</button>
         <button class="btn-danger small-btn student-id-action" bindtap="verifyReject" data-id="{{item.id}}" disabled="{{studentIdDrafts[item.id].saving || studentIdDrafts[item.id].recognizing}}">驳回</button>
       </view>
+      </view>
     </view>
   </view>
 
@@ -135,18 +134,22 @@
       </view>
       <text class="user-name">{{item.nickname || '未设昵称'}} {{item.game_id ? '(' + item.game_id + ')' : ''}}</text>
       <text class="user-meta">当前段位: {{item.current_rank || '未认证'}} → AI 识别: {{item.display_ai_rank}}（置信度 {{item.ai_conf_text}}）</text>
+      <button class="review-toggle" bindtap="toggleReview" data-kind="rankapps" data-id="{{item.id}}">{{expandedRankId === item.id ? '收起审核资料' : '展开凭证并审核'}} <text>⌄</text></button>
+      <view wx:if="{{expandedRankId === item.id}}" class="review-expanded">
       <text wx:if="{{item.ai_reason}}" class="user-meta">AI 判断：{{item.ai_reason}}</text>
       <image wx:if="{{item.rank_image_full}}" class="verify-shot" src="{{item.rank_image_full}}" mode="aspectFit" bindtap="previewRankShot" data-url="{{item.rank_image_full}}"/>
       <view class="user-actions">
         <view class="btn-primary small-btn" bindtap="approveRankApp" data-id="{{item.id}}" data-rank="{{item.ai_rank}}">通过</view>
         <view class="btn-danger small-btn" bindtap="rejectRankApp" data-id="{{item.id}}">驳回</view>
       </view>
+      </view>
     </view>
   </view>
 
   <!-- ===== 队伍管理 ===== -->
   <view wx:if="{{tab === 'teams'}}">
-    <view wx:for="{{teams}}" wx:key="id" class="card team-card" bindtap="showTeamDetail" data-id="{{item.id}}">
+    <view class="card admin-list-tools"><input class="input" placeholder="搜索队名、队长或 ID" value="{{teamKeyword}}" data-kind="teams" bindinput="onListKeyword"/><view class="admin-status-filters"><button wx:for="{{teamFilterOptions}}" wx:key="id" class="admin-status-filter {{teamFilter === item.id ? 'selected' : ''}}" data-kind="teams" data-filter="{{item.id}}" bindtap="setListFilter">{{item.label}}</button></view><text class="section-caption">{{visibleTeams.length}} / {{teams.length}} 支队伍</text></view>
+    <view wx:for="{{visibleTeams}}" wx:key="id" class="card team-card" bindtap="showTeamDetail" data-id="{{item.id}}">
       <view class="team-top">
         <text class="team-name">{{item.name}}</text>
         <text class="tag {{item.status === 'pending' ? 'tag-orange' : item.status === 'approved' ? 'tag-green' : 'tag-red'}}">{{item.status === 'pending' ? '待审核' : item.status === 'approved' ? '已通过' : '已驳回'}}</text>
@@ -158,17 +161,20 @@
       </view>
       <view class="user-actions team-card-footer">
         <view class="team-profile-entry" catchtap="showTeamDetail" data-id="{{item.id}}">查看资料与阵容 <text>›</text></view>
-        <view class="btn-danger small-btn" catchtap="deleteTeam" data-id="{{item.id}}">删除</view>
+        <button class="admin-more" catchtap="showTeamActions" data-id="{{item.id}}">更多 ···</button>
       </view>
     </view>
     <view wx:if="{{teams.length === 0 && listReady.teams && !listLoading.teams && !listErrors.teams}}" class="empty">暂无队伍</view>
+    <view wx:elif="{{teams.length && !visibleTeams.length}}" class="empty">没有符合条件的队伍，请调整关键词或状态</view>
   </view>
 
   <!-- ===== 赛事管理 ===== -->
   <view wx:if="{{tab === 'matches'}}">
     <view class="section-heading"><view><text class="section-title">赛事管理</text><text class="section-caption">选择赛事处理报名与赛程</text></view><view class="text-action" bindtap="toggleCreateMatch">{{showCreateMatch ? '收起新建' : '+ 新建赛事'}}</view></view>
 
-    <view wx:for="{{matches}}" wx:key="id" class="card match-card" bindtap="goMDetail" data-id="{{item.id}}">
+    <view class="card admin-list-tools"><input class="input" placeholder="搜索赛事名称或 ID" value="{{matchKeyword}}" data-kind="matches" bindinput="onListKeyword"/><view class="admin-status-filters"><button wx:for="{{matchFilterOptions}}" wx:key="id" class="admin-status-filter {{matchFilter === item.id ? 'selected' : ''}}" data-kind="matches" data-filter="{{item.id}}" bindtap="setListFilter">{{item.label}}</button></view><text class="section-caption">{{visibleMatches.length}} / {{matches.length}} 场赛事</text></view>
+
+    <view wx:for="{{visibleMatches}}" wx:key="id" class="card match-card" bindtap="goMDetail" data-id="{{item.id}}">
       <view class="team-top">
         <text class="team-name">{{item.name}}</text>
         <text class="tag {{item.status === 'registering' ? 'tag-green' : item.status === 'in_progress' ? 'tag-blue' : item.status === 'finished' ? 'tag-gray' : 'tag-orange'}}">{{item.statusText}}</text>
@@ -179,6 +185,7 @@
       </view>
     </view>
     <view wx:if="{{matches.length === 0 && listReady.matches && !listLoading.matches && !listErrors.matches}}" class="empty">暂无赛事</view>
+    <view wx:elif="{{matches.length && !visibleMatches.length}}" class="empty">没有符合条件的赛事，请调整关键词或状态</view>
     <!-- 创建赛事 -->
     <view wx:if="{{showCreateMatch}}" id="create-match-form" class="card create-card">
       <text class="section-title">新建赛事</text>
@@ -219,7 +226,7 @@
 
   <!-- 用户详情弹层 -->
   <view wx:if="{{showUserDetailPanel}}" class="mask" bindtap="closeUserDetail">
-    <view class="detail-panel" catchtap="noop">
+    <scroll-view scroll-y="{{true}}" class="detail-panel" catchtap="noop">
       <view class="detail-header">
         <text class="section-title">用户详情</text>
         <text class="detail-close" bindtap="closeUserDetail">✕</text>
@@ -233,7 +240,7 @@
         <image wx:if="{{detailUser.avatar_full}}" class="detail-avatar" src="{{detailUser.avatar_full}}" mode="aspectFill"/>
         <image wx:if="{{detailUser.verify_image_full}}" class="verify-shot" src="{{detailUser.verify_image_full}}" mode="aspectFit" bindtap="previewVerify" data-url="{{detailUser.verify_image_full}}"/>
       </view>
-    </view>
+    </scroll-view>
   </view>
 
   <!-- 与赛事管理共用的队伍资料 -->

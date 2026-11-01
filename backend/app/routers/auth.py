@@ -6,7 +6,7 @@ Since: 2026-7-24
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -100,6 +100,8 @@ def admin_update_user(
         verify_image=request.verify_image,
         verify_reject_reason=request.verify_reject_reason,
         expected_verify_image=request.expected_verify_image,
+        operator=admin,
+        audit_reason=request.audit_reason,
     )
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -114,7 +116,9 @@ def recognize_student_id(
     admin = Depends(require_admin),
 ):
     """重新识别当前凭证中的学号，人工确认前不改实际学号或认证状态。"""
-    return auth_service.recognize_student_id(db, user_id, request.expected_verify_image)
+    return auth_service.recognize_student_id(
+        db, user_id, request.expected_verify_image, operator=admin, audit_reason=request.audit_reason,
+    )
 
 
 @router.put("/admin/users/{user_id}/role")
@@ -126,7 +130,8 @@ def update_user_role(
 ):
     """修改用户角色（仅超级管理员；reviewer 无此权限，防止权限复制）"""
     try:
-        return auth_service.update_user_role(db, user_id, request.role, admin)
+        return auth_service.update_user_role(db, user_id, request.role, admin,
+                                            audit_reason=request.audit_reason)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -218,11 +223,13 @@ def admin_rank_applications(
 def admin_approve_rank_application(
     app_id: int,
     rank: Optional[str] = None,
+    audit_reason: Optional[str] = Query(default=None, max_length=500),
     db: Session = Depends(get_db),
     admin = Depends(require_admin),
 ):
     """审批通过段位更新申请（可手动指定段位覆盖 AI 结果）"""
-    app = auth_service.approve_rank_application(db, app_id, rank)
+    app = auth_service.approve_rank_application(db, app_id, rank, operator=admin,
+                                               audit_reason=audit_reason)
     if not app:
         raise HTTPException(status_code=404, detail="申请不存在")
     return app
@@ -232,11 +239,13 @@ def admin_approve_rank_application(
 def admin_reject_rank_application(
     app_id: int,
     reject_reason: Optional[str] = None,
+    audit_reason: Optional[str] = Query(default=None, max_length=500),
     db: Session = Depends(get_db),
     admin = Depends(require_admin),
 ):
     """驳回段位更新申请（可填写驳回原因）"""
-    app = auth_service.reject_rank_application(db, app_id, reject_reason)
+    app = auth_service.reject_rank_application(db, app_id, reject_reason, operator=admin,
+                                              audit_reason=audit_reason)
     if not app:
         raise HTTPException(status_code=404, detail="申请不存在")
     return app

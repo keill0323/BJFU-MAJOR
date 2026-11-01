@@ -1,0 +1,37 @@
+<view class="assistant-shell" style="height: {{windowHeight - keyboardHeight}}px">
+  <nav-drawer title="赛事助手"/>
+  <view class="assistant-workspace">
+    <view class="assistant-heading"><text class="assistant-title">赛事助手</text><button size="mini" class="new-conversation" bindtap="newConversation" disabled="{{sending || confirming}}">新对话</button></view>
+    <view wx:if="{{context.match_id || context.team_id || context.player_id || context.stats_player_key}}" class="context-tags">
+      <view wx:if="{{context.match_id}}" bindtap="clearContext" data-kind="match"><text>{{contextLabels.match}}</text><text>×</text></view>
+      <view wx:if="{{context.team_id}}" bindtap="clearContext" data-kind="team"><text>{{contextLabels.team}}</text><text>×</text></view>
+      <view wx:if="{{context.player_id}}" bindtap="clearContext" data-kind="player"><text>{{contextLabels.player}}</text><text>×</text></view>
+      <view wx:if="{{context.stats_player_key}}" bindtap="clearContext" data-kind="stats_player"><text>{{contextLabels.stats_player}}</text><text>×</text></view>
+    </view>
+    <scroll-view class="assistant-history" scroll-y scroll-into-view="{{scrollTarget}}" scroll-with-animation>
+      <view wx:if="{{loading}}" class="assistant-state">正在连接…</view>
+      <view wx:elif="{{statusError}}" class="assistant-state"><text>{{statusError}}</text><button size="mini" bindtap="loadStatus">重试</button></view>
+      <view wx:elif="{{!enabled || !available}}" class="assistant-state"><text>{{reason}}</text><button size="mini" bindtap="loadStatus">刷新状态</button></view>
+      <view wx:elif="{{!logged}}" class="assistant-state"><text>登录后继续交流</text><button size="mini" bindtap="goLogin">微信登录</button></view>
+      <view wx:if="{{!messages.length}}" class="assistant-welcome">
+        <text class="welcome-title">今天想了解什么？</text><text class="welcome-note">直接提问，或试试下面的问题。</text>
+        <view class="suggestions"><button wx:for="{{suggestions}}" wx:key="*this" bindtap="askSuggestion" data-index="{{index}}">{{item}} <text>↗</text></button></view>
+        <text class="privacy-note">请勿发送学号、凭据或认证图片。材料请从认证卡片进入原认证页提交；问答与必要公开赛事资料由智谱文本模型处理。</text>
+      </view>
+      <view wx:for="{{messages}}" wx:key="id" wx:for-item="message" class="assistant-message {{message.role}}">
+        <text class="message-speaker">{{message.role === 'user' ? '你' : '赛事助手'}}</text><text wx:if="{{message.content}}" class="message-content" selectable>{{message.content}}</text>
+        <view wx:for="{{message.cards}}" wx:key="key" wx:for-item="card" wx:for-index="cardIndex" class="result-card">
+          <text class="result-title">{{card.title}}</text><text wx:if="{{card.summary}}" class="result-summary" selectable>{{card.summary}}</text>
+          <view wx:for="{{card.items}}" wx:key="key" wx:for-item="row" wx:for-index="itemIndex" class="result-row">
+            <view class="result-row-heading"><text class="result-row-title">{{row.title}}</text><text wx:if="{{row.badge}}" class="result-badge">{{row.badge}}</text></view>
+            <text wx:if="{{row.subtitle}}" class="result-subtitle">{{row.subtitle}}</text><text wx:if="{{row.detail}}" class="result-detail" selectable>{{row.detail}}</text>
+            <view wx:if="{{row.action || row.selectKind}}" class="result-actions"><button wx:if="{{row.selectKind}}" size="mini" bindtap="selectCardItem" data-message="{{message.id}}" data-card="{{cardIndex}}" data-item="{{itemIndex}}">作为查询对象</button><button wx:if="{{row.action}}" size="mini" bindtap="openCardItem" data-message="{{message.id}}" data-card="{{cardIndex}}" data-item="{{itemIndex}}">{{row.actionLabel}} ›</button></view>
+          </view>
+          <block wx:if="{{card.confirmActionId}}"><text class="confirmation-note">确认后提交报名申请，是否通过以结果卡片为准。</text><text wx:if="{{card.confirmationHint}}" class="confirmation-hint">{{card.confirmationHint}}</text><button class="assistant-primary confirm-registration" bindtap="confirmRegistration" data-message="{{message.id}}" data-card="{{cardIndex}}" disabled="{{sending || confirming || card.confirmed || card.confirmBlocked}}" loading="{{confirming === card.confirmActionId}}">{{card.confirmLabel}}</button></block>
+        </view>
+      </view>
+      <view wx:if="{{sending}}" class="assistant-working">正在查询…</view><view wx:if="{{requestError}}" class="assistant-error"><text>{{requestError}}</text><button wx:if="{{retryAvailable}}" size="mini" bindtap="retryMessage" disabled="{{sending}}">获取这条问题的结果</button></view><view id="{{endAnchor}}" class="history-end"></view>
+    </scroll-view>
+    <view class="assistant-composer"><view class="composer-row"><textarea value="{{draft}}" bindinput="onDraft" bindconfirm="send" bindkeyboardheightchange="onKeyboard" placeholder="问赛事、报名或认证…" maxlength="1000" auto-height adjust-position="{{false}}" confirm-type="send" show-confirm-bar="{{false}}" disabled="{{sending || confirming || !available}}"/><button size="mini" class="send-button" bindtap="send" disabled="{{sending || confirming || !draft || !available}}" loading="{{sending}}">发送</button></view></view>
+  </view>
+</view>

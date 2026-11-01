@@ -632,16 +632,17 @@ def _check_registration_time(match: Optional[Match]) -> None:
         raise HTTPException(status_code=400, detail="报名已截止")
 
 
-def _check_match_registerable(db: Session, match: Optional[Match]) -> None:
+def _check_match_registerable(db: Session, match: Optional[Match], *, for_update: bool = True) -> None:
     """队伍报名前置校验：赛事存在 + 报名中 + 报名时间窗 + 容量未满。"""
     _check_registration_time(match)
     # 容量校验：已报名队伍数（去重，排除已驳回）达到上限则拒绝
     if match.max_teams:
-        team_ids = db.query(Registration.team_id).filter(
+        query = db.query(Registration.team_id).filter(
             Registration.match_id == match.id,
             Registration.team_id.isnot(None),
             Registration.status != RegistrationStatus.REJECTED,
-        ).with_for_update().all()
+        )
+        team_ids = (query.with_for_update() if for_update else query).all()
         count = len({team_id for (team_id,) in team_ids})
         if count >= match.max_teams:
             raise HTTPException(status_code=400, detail=f"报名队伍已满（{match.max_teams}/{match.max_teams}），无法报名")
@@ -656,20 +657,22 @@ def _registration_member_label(user: Optional[User], user_id: int) -> str:
     return f"用户{user_id}"
 
 
-def _validate_team_registration(db: Session, match: Match, team_id: int) -> list:
-    """报名和审批共用当前阵容资格检查；调用方须先锁定赛事和队伍。"""
+def _validate_team_registration(db: Session, match: Match, team_id: int, *, for_update: bool = True) -> list:
+    """报名、审批和只读诊断共享资格规则；写入路径须先锁定赛事。"""
     from app.models.team import TeamMember, TeamStatus
     from app.services.auth_service import effective_identity, student_id_review_hint
-    team = lock_row(db, Team, team_id)
+    team = (lock_row(db, Team, team_id) if for_update else
+            db.query(Team).filter(Team.id == team_id).populate_existing().first())
     if not team:
         raise HTTPException(status_code=404, detail="队伍不存在")
     if team.status != TeamStatus.APPROVED:
         raise HTTPException(status_code=400, detail="队伍尚未通过审核")
-    members = db.query(TeamMember).filter(TeamMember.team_id == team_id).populate_existing().with_for_update().all()
+    query = db.query(TeamMember).filter(TeamMember.team_id == team_id).populate_existing()
+    members = (query.with_for_update() if for_update else query).all()
     if not members:
         raise HTTPException(status_code=400, detail="队伍没有成员，无法报名")
-    users = {u.id: u for u in db.query(User).filter(User.id.in_([m.user_id for m in members]))
-             .populate_existing().with_for_update().all()}
+    query = db.query(User).filter(User.id.in_([m.user_id for m in members])).populate_existing()
+    users = {u.id: u for u in (query.with_for_update() if for_update else query).all()}
 
     # 校验：所有队员（含队长）必须完成学籍认证
     unverified = []
@@ -719,7 +722,7 @@ def _validate_team_registration(db: Session, match: Match, team_id: int) -> list
     return members
 
 
-def register_team(db: Session, match_id: int, team_id: int) -> list:
+def register_team(db: Session, match_id: int, team_id: int, *, commit: bool = True) -> list:
     """整队报名统一待审，个人报名升级也不能替代队伍参赛审核。"""
     from app.services import team_service
     match = _lock_match(db, match_id)
@@ -752,51 +755,56 @@ def register_team(db: Session, match_id: int, team_id: int) -> list:
         registrations.append(reg)
     try:
         team_service.recalc_team_rating(db, team_id, commit=False)
-        db.commit()
+        db.commit() if commit else db.flush()
     except IntegrityError:
         # 并发重复报名触发 (match_id, user_id) 唯一约束
         db.rollback()
         raise HTTPException(status_code=400, detail="该队伍已报名此赛事，请勿重复报名")
-    for reg in registrations:
-        db.refresh(reg)
+    if commit:
+        for reg in registrations:
+            db.refresh(reg)
     return registrations
 
 
-def register_user(db: Session, match_id: int, user_id: int) -> Registration:
-    """个人报名
-
-    个人报名只需「学籍认证 + 段位认证」两个判断，直接通过（APPROVED），
-    无需管理员额外审核；报名即出现在人才市场，方便队长查看并邀请入队。
-    """
+def _validate_user_registration(db: Session, match_id: int, user_id: int, *, for_update: bool = True):
+    """共享个人报名资格判断；只读调用不加锁、不创建报名或提交事务。"""
     from app.models.team import TeamMember
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).populate_existing().first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-
-    # 已在队伍中的用户不能个人报名（应由队长发起队伍报名）
-    in_team = db.query(TeamMember).filter(TeamMember.user_id == user_id).first()
-    if in_team:
+    if db.query(TeamMember).filter(TeamMember.user_id == user_id).first():
         raise HTTPException(status_code=400, detail="你已在队伍中，请由队长发起队伍报名")
-
-    # 赛事状态 / 报名时间窗校验（个人报名不占队伍容量名额）
-    match = _lock_match(db, match_id)
+    match = (_lock_match(db, match_id) if for_update else
+             db.query(Match).filter(Match.id == match_id).populate_existing().first())
     _check_registration_time(match)
-
-    # 个人报名的两个判断：学籍认证 + 段位认证
+    if for_update:
+        # After the match lock, use a current read rather than a MySQL
+        # REPEATABLE READ snapshot created by earlier request authentication.
+        user = db.query(User).filter(User.id == user_id).populate_existing().with_for_update().first()
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        if db.query(TeamMember).filter(TeamMember.user_id == user_id).with_for_update().first():
+            raise HTTPException(status_code=400, detail="你已在队伍中，请由队长发起队伍报名")
     if not user.is_verified:
         from app.services.auth_service import student_id_review_hint
         raise HTTPException(status_code=400, detail=student_id_review_hint(user) or "未完成学籍认证，无法报名")
     if not user.rank:
         raise HTTPException(status_code=400, detail="未完成段位认证（上传段位截图），无法报名")
-
-    # 检查是否已报名该赛事（无论个人还是随队伍）
-    existing = db.query(Registration).filter(
-        Registration.match_id == match_id,
-        Registration.user_id == user_id,
-    ).first()
-    if existing:
+    existing = db.query(Registration).filter(Registration.match_id == match_id,
+                                               Registration.user_id == user_id)
+    if (existing.with_for_update() if for_update else existing).first():
         raise HTTPException(status_code=400, detail="你已报名该赛事，请勿重复报名")
+    return match, user
+
+
+def register_user(db: Session, match_id: int, user_id: int, *, commit: bool = True) -> Registration:
+    """个人报名
+
+    个人报名只需「学籍认证 + 段位认证」两个判断，直接通过（APPROVED），
+    无需管理员额外审核；报名即出现在人才市场，方便队长查看并邀请入队。
+    """
+    _validate_user_registration(db, match_id, user_id)
     reg = Registration(
         match_id=match_id,
         user_id=user_id,
@@ -804,11 +812,12 @@ def register_user(db: Session, match_id: int, user_id: int) -> Registration:
     )
     db.add(reg)
     try:
-        db.commit()
+        db.commit() if commit else db.flush()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="你已报名该赛事，请勿重复报名")
-    db.refresh(reg)
+    if commit:
+        db.refresh(reg)
     return reg
 
 
@@ -1135,7 +1144,7 @@ def finish_legend_stage(db: Session, match_id: int) -> dict:
 
 
 def generate_knockout(db: Session, match_id: int) -> dict:
-    """生成6强淘汰赛1/4决赛：每区第1轮空，第2 vs 第3（各1场）"""
+    """生成6强淘汰赛：各区第1轮空，上2对下3、下2对上3。"""
     _lock_match(db, match_id)
     qualifiers = db.query(TeamProgress).filter(
         TeamProgress.match_id == match_id,
@@ -1160,16 +1169,16 @@ def generate_knockout(db: Session, match_id: int) -> dict:
         MatchRound.match_id == match_id
     ).order_by(MatchRound.round_number.desc()).first()
     round_num = (max_round.round_number + 1) if max_round else 1
-    # 1/4决赛：上2v上3、下2v下3（顺序固定：第一场上区，第二场下区）
-    add_round(db, match_id, round_num, z1[1].team_id, z1[2].team_id, "淘汰赛", commit=False)
+    # 首轮交叉；场序固定，后续上1接第二场胜者、下1接第一场胜者。
+    add_round(db, match_id, round_num, z1[1].team_id, z2[2].team_id, "淘汰赛", commit=False)
     round_num += 1
-    add_round(db, match_id, round_num, z2[1].team_id, z2[2].team_id, "淘汰赛", commit=False)
+    add_round(db, match_id, round_num, z2[1].team_id, z1[2].team_id, "淘汰赛", commit=False)
     db.commit()
     return {"knockout_teams": [p.team_id for p in seeds], "added_rounds": 2}
 
 
 def advance_knockout(db: Session, match_id: int) -> dict:
-    """推进淘汰赛：1/4打完→半决赛（交叉），半决赛打完→决赛"""
+    """推进淘汰赛：上1接首轮第二场胜者、下1接第一场胜者，再晋级决赛。"""
     _lock_match(db, match_id)
     ko_rounds = db.query(MatchRound).filter(
         MatchRound.match_id == match_id,
@@ -1190,9 +1199,9 @@ def advance_knockout(db: Session, match_id: int) -> dict:
     round_num = (max_round.round_number + 1) if max_round else 1
     added = 0
     if len(ko_rounds) == 2:
-        # 1/4打完 → 半决赛（交叉：上1 vs 下区胜者，下1 vs 上区胜者）
-        upper_winner = finished[0].winner_id   # 第1场=上区1/4
-        lower_winner = finished[1].winner_id   # 第2场=下区1/4
+        # 首轮双方来自不同分区，按固定场序晋级，不按胜者原分区换位。
+        first_quarter_winner = finished[0].winner_id
+        second_quarter_winner = finished[1].winner_id
         q = db.query(TeamProgress).filter(
             TeamProgress.match_id == match_id,
             TeamProgress.stage == StageStatus.PLAYOFF
@@ -1202,9 +1211,9 @@ def advance_knockout(db: Session, match_id: int) -> dict:
         lower_first = next((p for p in q if p.group_name == "下区" and p.seed == 2), None)
         if upper_first is None or lower_first is None:
             raise HTTPException(status_code=400, detail="找不到上下区第1名队伍，请先「生成淘汰赛」")
-        add_round(db, match_id, round_num, upper_first.team_id, lower_winner, "淘汰赛", commit=False)
+        add_round(db, match_id, round_num, upper_first.team_id, second_quarter_winner, "淘汰赛", commit=False)
         round_num += 1
-        add_round(db, match_id, round_num, lower_first.team_id, upper_winner, "淘汰赛", commit=False)
+        add_round(db, match_id, round_num, lower_first.team_id, first_quarter_winner, "淘汰赛", commit=False)
         round_num += 1
         added = 2
     elif len(ko_rounds) == 4:
@@ -1283,12 +1292,66 @@ def _commit_schedule_events(db: Session, events):
         raise
 
 
+def admin_schedule_round(db: Session, round_id: int, admin: User,
+                         scheduled_time: Optional[datetime], expected_time: Optional[datetime]) -> dict:
+    """管理员逐场排期，时间、双方通知和审计在同一事务内提交。"""
+    from app.services import admin_audit_service as audit
+    from app.services.notification_service import notify_schedule
+
+    try:
+        actor = audit.resolve_actor(db, admin)
+        if actor is None:
+            raise HTTPException(403, "无权执行管理员操作")
+        scheduled_time = _registration_local_time(scheduled_time)
+        expected_time = _registration_local_time(expected_time)
+        match_round = _lock_scheduling_round(db, round_id)
+        if match_round.status != RoundStatus.PENDING:
+            raise HTTPException(400, "该对阵已开始或已结束，不能修改比赛时间")
+        if not match_round.team1_id or not match_round.team2_id:
+            raise HTTPException(400, "该对阵存在轮空，无需安排比赛时间")
+        if match_round.team1_id == match_round.team2_id:
+            raise HTTPException(400, "对阵双方不能为同一队伍，请先修正对阵")
+        previous = match_round.scheduled_time
+        confirmed = scheduled_time is not None
+        # 网络重试（包括首次保存后仍带 expected_time=null）不能重复发通知或审计。
+        if (previous == scheduled_time and
+                bool(match_round.team1_confirmed) == confirmed and
+                bool(match_round.team2_confirmed) == confirmed):
+            return _round_to_dict(db, match_round)
+        if previous != expected_time:
+            raise HTTPException(409, "比赛时间已被修改，请刷新后重新安排")
+        if scheduled_time is not None and scheduled_time <= _registration_now():
+            raise HTTPException(400, "比赛时间必须晚于当前时间")
+        before = {"scheduled_time": previous,
+                  "team1_confirmed": bool(match_round.team1_confirmed),
+                  "team2_confirmed": bool(match_round.team2_confirmed)}
+        match_round.scheduled_time = scheduled_time
+        match_round.team1_confirmed = confirmed
+        match_round.team2_confirmed = confirmed
+        after = {"scheduled_time": scheduled_time,
+                 "team1_confirmed": confirmed, "team2_confirmed": confirmed}
+        kind = ("admin_cancelled" if scheduled_time is None else
+                "admin_rescheduled" if previous is not None else "admin_scheduled")
+        # 取消通知保留被取消的原时间；现有通知表的时间字段无需迁移为可空。
+        recipients = notify_schedule(db, match_round, kind,
+                                     scheduled_time if scheduled_time is not None else previous, actor.id)
+        for captain_id in sorted(recipients):
+            audit.record_round_schedule(db, actor, captain_id, match_round.match_id,
+                                        match_round.id, before, after)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(match_round)
+    return _round_to_dict(db, match_round)
+
+
 def set_stage_window(db: Session, match_id: int, group_name: str,
                      window_start: datetime, window_end: datetime) -> StageWindow:
     """设置/更新某阶段（group_name）的时间窗口（幂等 upsert）
 
     同一赛事同一阶段只有一个窗口，重复设置会覆盖旧值。
-    窗口变更后，落在新窗口之外的已有约定时间会被作废。
+    窗口仅作为管理员编排参考，不改动已经安排的逐场时间。
     """
     _lock_match(db, match_id)
     window_start = _registration_local_time(window_start)
@@ -1311,26 +1374,7 @@ def set_stage_window(db: Session, match_id: int, group_name: str,
         )
         db.add(window)
     db.flush()
-    # 窗口变更后：作废落在新窗口之外的已有约定时间
-    affected_rounds = (
-        db.query(MatchRound)
-        .filter(
-            MatchRound.match_id == match_id,
-            MatchRound.group_name == group_name,
-            MatchRound.scheduled_time.isnot(None),
-            MatchRound.status == RoundStatus.PENDING,
-        )
-        .populate_existing().with_for_update().all()
-    )
-    events = []
-    for r in affected_rounds:
-        st = _strip_tz(r.scheduled_time)
-        if st < window_start or st > window_end:
-            events.append((r, "window_changed", r.scheduled_time, None))
-            r.scheduled_time = None
-            r.team1_confirmed = False
-            r.team2_confirmed = False
-    _commit_schedule_events(db, events)
+    _commit_schedule_events(db, [])
     db.refresh(window)
     return window
 

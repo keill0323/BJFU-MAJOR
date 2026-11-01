@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 const test = require('node:test')
+const { parseWxml, createRenderer } = require('../../tools/preview-miniprogram.js')
 
 const root = path.resolve(__dirname, '../..')
 
@@ -46,16 +47,22 @@ function loadPage(relativePath, apiMethods, options = {}) {
   return { page, calls }
 }
 
-// Evaluate the actual WXML conditional chain, so changing JS alone cannot make
-// the registration test pass while the template still hides the button.
-function visibleRegistrationBranch(data) {
+// Render the actual card and its conditional chain without depending on comment markers.
+function visibleRegistrationHtml(data) {
   const wxml = fs.readFileSync(path.join(root, 'miniprogram/pages/match/match.wxml'), 'utf8')
-  const block = wxml.match(/<!-- 报名区 -->([\s\S]*?)<!-- 阶段 tab -->/)[1]
-  const branches = [...block.matchAll(/<(?:view|text) wx:(if|elif|else)(?:="\{\{([^"\n]+)\}\}")?([^>]*)>/g)]
-  for (const branch of branches) {
-    if (branch[1] === 'else' || vm.runInNewContext(branch[2], data)) return branch[3]
+  const tree = parseWxml(wxml)
+  function findRegistration(nodes) {
+    for (const node of nodes) {
+      if ((node.attrs && node.attrs.class || '').split(/\s+/).includes('register-card')) return node
+      const nested = node.children && findRegistration(node.children)
+      if (nested) return nested
+    }
   }
-  throw new Error('No registration branch rendered')
+  const registration = findRegistration(tree.children)
+  assert.ok(registration, 'the actual template must contain the registration card')
+  tree.children = [registration]
+  tree.scope = data
+  return createRenderer({})(tree)
 }
 
 test('a captain can upgrade personal registration to team registration through the visible button', async () => {
@@ -74,33 +81,49 @@ test('a captain can upgrade personal registration to team registration through t
 
   await page.loadMyStatus()
   assert.equal(page.data.isCaptain, true)
-  assert.match(visibleRegistrationBranch(page.data), /bindtap="handleRegister"/)
+  assert.match(visibleRegistrationHtml(page.data), /class="btn-primary">队伍报名<\/div>/)
   await page.handleRegister()
   await Promise.all(calls.modalWork)
 
   assert.deepEqual(submitted, [[8, 10]])
   assert.equal(page.data.canRegisterTeam, false)
-  assert.match(visibleRegistrationBranch(page.data), /class="register-done"/)
+  assert.match(visibleRegistrationHtml(page.data), /class="register-done"/)
 })
 
 test('team members cannot submit team registration and closed matches hide the captain action', async () => {
   let currentUserId = 2
   let registered = false
   const { page } = loadPage('miniprogram/pages/match/match.js', {
-    getMyRegistration: async () => ({ registered, registration: registered ? { team_id: null } : null }),
+    getMyRegistration: async () => ({ registered, registration: registered ? { team_id: null, status: 'approved' } : null }),
     getMyTeam: async () => ({ id: 10, captain_id: 1 }),
     getMe: async () => ({ id: currentUserId })
   })
   page.data.match = { id: 8, status: 'registering' }
   await page.loadMyStatus()
   assert.equal(page.data.canRegisterTeam, false)
-  assert.match(visibleRegistrationBranch(page.data), /class="register-disabled"/)
+  assert.match(visibleRegistrationHtml(page.data), /class="register-disabled"/)
 
   currentUserId = 1
   registered = true
   await page.loadMyStatus()
   page.data.match.status = 'finished'
-  assert.match(visibleRegistrationBranch(page.data), /class="register-done"/)
+  assert.equal(visibleRegistrationHtml(page.data), '', 'closed events hide the obsolete registration card')
+  assert.equal(page.data.registered, true)
+  assert.deepEqual(page.data.myReg, { team_id: null, status: 'approved' }, 'hiding the card preserves the registration data')
+})
+
+test('closed events retain pending and rejected registration feedback without reopening registration actions', () => {
+  for (const matchStatus of ['in_progress', 'finished']) {
+    for (const registrationStatus of ['pending', 'rejected']) {
+      const { page } = loadPage('miniprogram/pages/match/match.js', {})
+      page.setData({ match: { id: 8, status: matchStatus }, registered: true,
+        myReg: { team_id: 10, status: registrationStatus }, canRegisterTeam: false })
+      const html = visibleRegistrationHtml(page.data)
+      assert.match(html, registrationStatus === 'pending' ? /报名待审核/ : /报名未通过/)
+      assert.doesNotMatch(html, /class="btn-primary"/)
+      assert.equal(page.data.myReg.status, registrationStatus)
+    }
+  }
 })
 
 test('saved stage windows render and populate edits before any rounds exist', async () => {
@@ -170,6 +193,102 @@ test('first-time rank review gives an actionable pending-review message and refr
   assert.match(calls.modals[0].content, /消息页查看审核结果/)
   assert.equal(page.data.user.id, 1)
   assert.equal(page.data.uploading, false)
+})
+
+test('rank upload shows local detector failure while keeping manual review available', async () => {
+  const { page, calls } = loadPage('miniprogram/pages/verify/verify.js', {
+    uploadRank: async () => ({ rank: null, need_review: true,
+      rank_detection: { state: 'error' }, reason: '权重 SHA256 不匹配，已拒绝加载' }),
+    getMe: async () => ({ id: 1, rank: null })
+  })
+  await page.uploadRankWithPath('local-test-image.jpg')
+  assert.match(calls.modals[0].content, /SHA256 不匹配/)
+  assert.match(calls.modals[0].content, /等待管理员审核/)
+})
+
+for (const result of [
+  { rank: null, reason: '截图中没有历史段位，请上传 PC 页面截图。' },
+  { rank: 'A+', reason: '两路识别结果不同，需要管理员复核。' }
+]) {
+  test('rank review displays the server reason without detector metadata, candidate: ' + result.rank, async () => {
+    const { page, calls } = loadPage('miniprogram/pages/verify/verify.js', {
+      uploadRank: async () => ({ ...result, auto_applied: false, need_review: true }),
+      getMe: async () => ({ id: 1, rank: null })
+    })
+    await page.uploadRankWithPath('local-test-image.jpg')
+    assert.ok(calls.modals[0].content.includes(result.reason))
+    assert.doesNotMatch(calls.modals[0].content, /。。/)
+    assert.match(calls.modals[0].content, /消息页查看审核结果/)
+    if (result.rank) assert.match(calls.modals[0].content, /AI 识别为 A\+/)
+    assert.equal(page.data.uploading, false)
+  })
+}
+
+test('rank review prefers public feedback over a technical legacy reason', async () => {
+  const { page, calls } = loadPage('miniprogram/pages/verify/verify.js', {
+    uploadRank: async () => ({ rank: null, need_review: true, reason: 'rank_label_invalid',
+      rank_feedback: { message: '  手机界面暂不支持自动认证，已转人工审核。  ' } }),
+    getMe: async () => ({ id: 1, rank: null })
+  })
+  await page.uploadRankWithPath('local-test-image.jpg')
+  assert.match(calls.modals[0].content, /手机界面暂不支持自动认证/)
+  assert.doesNotMatch(calls.modals[0].content, /rank_label_invalid|。。|  手机/)
+})
+
+test('blank or malformed public rank feedback falls back to the existing reason', async () => {
+  for (const message of ['  ', null, 42]) {
+    const { page, calls } = loadPage('miniprogram/pages/verify/verify.js', {
+      uploadRank: async () => ({ need_review: true, reason: '本次识别未能确认历史段位。',
+        rank_feedback: { message } }),
+      getMe: async () => ({ id: 1, rank: null })
+    })
+    await page.uploadRankWithPath('local-test-image.jpg')
+    assert.match(calls.modals[0].content, /本次识别未能确认历史段位。/)
+    assert.doesNotMatch(calls.modals[0].content, /undefined|null|。。/)
+  }
+})
+
+test('an automatically applied rank shows success and refreshes without a review modal', async () => {
+  const { page, calls } = loadPage('miniprogram/pages/verify/verify.js', {
+    uploadRank: async () => ({ rank: 'S0', auto_applied: true, need_review: false }),
+    getMe: async () => ({ id: 1, rank: 'S0' })
+  })
+  await page.uploadRankWithPath('local-test-image.jpg')
+  assert.equal(calls.toasts[0].title, '识别成功：S0')
+  assert.equal(calls.modals.length, 0)
+  assert.equal(page.data.user.rank, 'S0')
+  assert.equal(page.data.uploading, false)
+})
+
+test('school verification retains its existing upload feedback and does not use rank feedback', async () => {
+  const uploaded = []
+  const { page, calls } = loadPage('miniprogram/pages/verify/verify.js', {
+    uploadVerify: async image => {
+      uploaded.push(image)
+      return { rank_feedback: { message: '段位字段不应影响在校认证' } }
+    },
+    getMe: async () => ({ id: 1, rank: null, is_verified: false })
+  })
+  page.uploadWithPath('compressed-school-image.jpg')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(uploaded, ['compressed-school-image.jpg'])
+  assert.equal(calls.toasts[0].title, '上传成功，等待审核')
+  assert.equal(calls.modals.length, 0)
+  assert.equal(page.data.user.is_verified, false)
+  assert.equal(page.data.uploading, false)
+})
+
+test('rank upload instructions distinguish PC history screenshots from manual mobile review', () => {
+  const { page } = loadPage('miniprogram/pages/verify/verify.js', {})
+  page.setData({ token: 'test-token', user: { rank: null, is_verified: false } })
+  const tree = parseWxml(fs.readFileSync(path.join(root, 'miniprogram/pages/verify/verify.wxml'), 'utf8'))
+  tree.scope = page.data
+  const html = createRenderer({})(tree)
+  assert.match(html, /PC 页面 → 天梯历史最高段位/)
+  assert.match(html, /PC 页面 → 生涯数据 → 最佳赛季/)
+  assert.match(html, /手机界面截图暂不支持自动认证，将转人工审核/)
+  assert.doesNotMatch(html, /当前赛季段位/)
+  assert.match(html, /上传学信网、教务系统或校园卡截图，需清晰显示姓名、学号和学校名称/)
 })
 
 for (const relativePath of ['miniprogram/pages/match/match.js', 'miniprogram/pages/admin/mdetail/mdetail.js']) {

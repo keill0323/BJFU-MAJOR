@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.user import User, UserRole, RankApplication
 from app.database import get_db
-from app.services import team_service
+from app.services import admin_audit_service, team_service
 from app.services.locking import lock_row
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -60,8 +60,8 @@ def _rank_rating(rank: str) -> Optional[int]:
             n = int(rank[1:])
         except ValueError:
             return None
-        if 1 <= n <= 50:
-            return round(40 + (n - 1) * 60 / 49)
+        if 0 <= n <= 50:
+            return round(40 + (max(n, 1) - 1) * 60 / 49)
     return None
 
 
@@ -241,8 +241,11 @@ def apply_verify_result(db: Session, user_id: int, image_url: str, result) -> Op
     return user
 
 
-def recognize_student_id(db: Session, user_id: int, expected_verify_image: str) -> dict:
+def recognize_student_id(db: Session, user_id: int, expected_verify_image: str, *,
+                         operator: Optional[User] = None, audit_reason: Optional[str] = None) -> dict:
     """管理员重读既有凭证，只保存待确认学号，不改变人工审核结论。"""
+    audit_actor = admin_audit_service.resolve_actor(db, operator)
+    audit_reason = admin_audit_service.normalize_reason(audit_reason, "user.student_id.recognize")
     from app.services import ai_review_service
 
     user = get_user_by_id(db, user_id)
@@ -270,11 +273,18 @@ def recognize_student_id(db: Session, user_id: int, expected_verify_image: str) 
         result = ai_review_service.validate_verify_result(ai_review_service.review_image(str(image_path)))
     except Exception:
         raise HTTPException(status_code=502, detail="学号识别暂时失败，请重试或对照图片填写") from None
+    # 外部识图期间若操作者已撤权，不保存迟到结果。
+    audit_actor = admin_audit_service.resolve_actor(db, operator)
     user = _lock_user(db, user_id)
     if (not user or user.verify_image != image_url
             or (user.student_id, user.is_verified, user.ai_review_status) != snapshot):
         raise HTTPException(status_code=409, detail="认证资料或审核状态已更新，请刷新后重新核对")
+    before = {"ai_student_id": user.ai_student_id}
     user.ai_student_id = result["student_id"]
+    admin_audit_service.record_change(
+        db, audit_actor, user_id, "user.student_id.recognize", before,
+        {"ai_student_id": user.ai_student_id}, reason=audit_reason,
+    )
     db.commit()
     return {"student_id": result["student_id"], "confidence": result["confidence"],
             "reason": result["reason"], "verify_image": image_url}
@@ -297,13 +307,18 @@ def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = Non
                       rank: Optional[str] = None, individual_rating: Optional[int] = None,
                       identity: Optional[str] = None, verify_image: Optional[str] = None,
                       verify_reject_reason: Optional[str] = None,
-                      expected_verify_image: Optional[str] = None) -> Optional[User]:
+                      expected_verify_image: Optional[str] = None, *,
+                      operator: Optional[User] = None, audit_reason: Optional[str] = None) -> Optional[User]:
     """管理员修改用户资料（学号、审核状态、段位、身份等）"""
     from app.services.ai_review_service import normalize_rank, normalize_student_id
     from sqlalchemy.exc import IntegrityError
 
+    audit_actor = admin_audit_service.resolve_actor(db, operator)
+    audit_reason = admin_audit_service.normalize_reason(audit_reason, "user.update")
     user = _lock_user(db, user_id)
     if user:
+        before = admin_audit_service.user_snapshot(user)
+        previous_verify_image = user.verify_image
         if expected_verify_image is not None and user.verify_image != expected_verify_image:
             raise HTTPException(status_code=409, detail="认证图片已更新，请刷新后重新核对")
         if student_id is not None:
@@ -341,6 +356,14 @@ def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = Non
             user.verify_image = verify_image or None   # 空字符串表示清除截图
         if verify_reject_reason is not None:
             user.verify_reject_reason = verify_reject_reason or None   # 空字符串表示清除驳回原因
+        after = admin_audit_service.user_snapshot(user)
+        if user.verify_image != previous_verify_image:
+            # 即使替换前后都有图片，也记录替换动作，绝不保存 URL 或哈希。
+            before["verify_image_changed"] = False
+            after["verify_image_changed"] = True
+        admin_audit_service.record_change(
+            db, audit_actor, user_id, "user.update", before, after, reason=audit_reason,
+        )
         try:
             db.commit()
         except IntegrityError:
@@ -352,21 +375,28 @@ def admin_update_user(db: Session, user_id: int, student_id: Optional[str] = Non
     return user
 
 
-def update_user_role(db: Session, user_id: int, role: str, operator: User) -> Optional[User]:
+def update_user_role(db: Session, user_id: int, role: str, operator: User, *,
+                     audit_reason: Optional[str] = None) -> Optional[User]:
     """修改用户角色（仅 admin 可调用，路由层已用 require_admin_only 拦截）
 
     注意：审核员（reviewer）不再能修改角色，
     防止审核员互相提升/复制权限（安全审查 #8）。
     """
-    target = get_user_by_id(db,user_id)
+    # 先核对动作前的权限，使管理员自降权也能留下原操作者角色。
+    audit_actor = admin_audit_service.resolve_actor(db, operator, admin_only=True)
+    if audit_actor is None:
+        raise HTTPException(status_code=403, detail="无权执行管理员操作")
+    audit_reason = admin_audit_service.normalize_reason(audit_reason, "user.role.update")
+    target = _lock_user(db, user_id)
     if not target:
         return None
 
-    # 防御：即使被绕过 require_admin_only，也拒绝非 admin 操作者
-    if operator.role != UserRole.ADMIN:
-        raise ValueError("仅管理员可以修改用户角色")
-
+    before = {"role": target.role.value}
     target.role = UserRole(role)
+    admin_audit_service.record_change(
+        db, audit_actor, user_id, "user.role.update", before, {"role": target.role.value},
+        reason=audit_reason,
+    )
     db.commit()
     db.refresh(target)
     return target
@@ -459,7 +489,9 @@ def get_my_rank_applications(db: Session, user_id: int) -> list:
     )
 
 
-def approve_rank_application(db: Session, app_id: int, rank: Optional[str] = None) -> Optional[RankApplication]:
+def approve_rank_application(db: Session, app_id: int, rank: Optional[str] = None, *,
+                             operator: Optional[User] = None,
+                             audit_reason: Optional[str] = None) -> Optional[RankApplication]:
     """审批通过段位更新申请：更新用户段位 + 同步水平分
 
     rank 为管理员手动指定的段位（AI 识别错误时可覆盖），不传则用 AI 识别结果。
@@ -467,6 +499,8 @@ def approve_rank_application(db: Session, app_id: int, rank: Optional[str] = Non
     """
     from app.services.ai_review_service import normalize_rank
 
+    audit_actor = admin_audit_service.resolve_actor(db, operator)
+    audit_reason = admin_audit_service.normalize_reason(audit_reason, "rank_application.approve")
     app = db.query(RankApplication).filter(RankApplication.id == app_id).first()
     if not app:
         return None
@@ -480,19 +514,30 @@ def approve_rank_application(db: Session, app_id: int, rank: Optional[str] = Non
         normalized = normalize_rank(final_rank)
         if not normalized:
             raise HTTPException(status_code=400, detail="请指定有效段位后再通过审核")
+        before = {"rank": user.rank, "individual_rating": user.individual_rating,
+                  "application_status": app.status}
         if app.rank_image:
             user.rank_image = app.rank_image
         user.rank = normalized
         user.individual_rating = _rank_rating(normalized)
         app.status = "approved"
+        admin_audit_service.record_change(
+            db, audit_actor, app.user_id, "rank_application.approve", before,
+            {"rank": user.rank, "individual_rating": user.individual_rating,
+             "application_status": app.status}, reason=audit_reason, application_id=app.id,
+        )
         db.commit()
         db.refresh(app)
         team_service.recalc_user_team_rating(db, app.user_id)  # 用户段位/评分变动时，重新计算其所在队伍的 rating
     return app
 
 
-def reject_rank_application(db: Session, app_id: int, reject_reason: Optional[str] = None) -> Optional[RankApplication]:
+def reject_rank_application(db: Session, app_id: int, reject_reason: Optional[str] = None, *,
+                            operator: Optional[User] = None,
+                            audit_reason: Optional[str] = None) -> Optional[RankApplication]:
     """驳回段位更新申请（可填写驳回原因）"""
+    audit_actor = admin_audit_service.resolve_actor(db, operator)
+    audit_reason = admin_audit_service.normalize_reason(audit_reason, "rank_application.reject")
     app = db.query(RankApplication).filter(RankApplication.id == app_id).first()
     if not app:
         return None
@@ -500,9 +545,15 @@ def reject_rank_application(db: Session, app_id: int, reject_reason: Optional[st
     app = (db.query(RankApplication).filter(RankApplication.id == app_id)
            .populate_existing().with_for_update().first())
     if app.status == "pending":
+        before = {"application_status": app.status, "reject_reason": app.reject_reason}
         app.status = "rejected"
         if reject_reason:
             app.reject_reason = reject_reason
+        admin_audit_service.record_change(
+            db, audit_actor, app.user_id, "rank_application.reject", before,
+            {"application_status": app.status, "reject_reason": app.reject_reason},
+            reason=audit_reason, application_id=app.id,
+        )
         db.commit()
         db.refresh(app)
     return app

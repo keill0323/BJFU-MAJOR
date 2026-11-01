@@ -93,7 +93,7 @@ for (const admin of [false, true]) {
       require(name) {
         if (name.endsWith('/tournament.js')) return require(path.resolve(path.dirname(file), name))
         return new Proxy({}, { get(_, key) { if (key === 'adminMatchDetail') return async () => detail; throw Error('Unexpected API: ' + String(key)) } })
-      }, wx: { showModal: value => { throw Error(JSON.stringify(value)) } } }, { filename: file })
+      }, wx: { getStorageSync: () => '', showModal: value => { throw Error(JSON.stringify(value)) } } }, { filename: file })
     page.data = clone(page.data)
     page.setData = values => Object.assign(page.data, clone(values))
     if (admin) { page.data.matchId = 7; await page.load() }

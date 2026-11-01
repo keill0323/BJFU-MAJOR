@@ -150,3 +150,9 @@ class RoundScheduleRequest(BaseModel):
 class RoundScheduleActionRequest(BaseModel):
     """确认/拒绝约定时间请求（带客户端所见的提议时间，用于防竞态）"""
     expected_time: Optional[datetime] = None
+
+
+class AdminRoundScheduleRequest(BaseModel):
+    """管理员统一排期；两字段必须传入，null 用于清空/表示原先未排期。"""
+    scheduled_time: Optional[datetime]
+    expected_time: Optional[datetime]

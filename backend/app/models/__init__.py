@@ -12,5 +12,10 @@ from app.models.match import Match, MatchRound, TeamProgress, Registration, Stag
 from app.models.hall import ChampionSnapshot
 from app.models.notification import ScheduleNotification
 from app.models.admin_notice import AdminNoticeBatch, AdminNotice
+from app.models.admin_audit import AdminAudit
 from app.models.recruitment import RecruitmentPost, WechatSubscription, WechatOutbox
 from app.models.chat import ChatConversation, ChatMember, ChatMessage, ChatEvent, ChatBlock, ChatReport, ChatSanction, ChatAudit
+from app.models.player_stats import PlayerStatsMap, PlayerMapStats
+from app.models.assistant_session import AssistantConversation, AssistantTurn, AssistantToolTrace, AssistantKnowledgeRevision
+from app.models.assistant_action import AssistantAction
+from app.models.assistant_summary import AssistantSummary

@@ -1,37 +1,37 @@
 .page { padding-bottom: calc(30rpx + env(safe-area-inset-bottom)); color: #102a43; }
-.profile-hero { margin: 28rpx 24rpx 22rpx; padding: 30rpx; background: linear-gradient(130deg, #e2f4f1 0%, #f2f9f8 62%, #fff 100%); border: 1rpx solid #d8e9e9; border-radius: 32rpx; }
-.profile-hero-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30rpx; gap: 16rpx; }
-.eyebrow { display: block; font-size: 18rpx; font-weight: 700; letter-spacing: 3rpx; color: #087f8c; }
-.player-id { color: #6c8592; font-size: 20rpx; letter-spacing: 1rpx; }
+.profile-hero { margin: 20rpx 24rpx; padding: 24rpx; background: linear-gradient(130deg, #e2f4f1 0%, #f2f9f8 62%, #fff 100%); border: 1rpx solid #d8e9e9; border-radius: 24rpx; }
+.profile-hero-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18rpx; gap: 16rpx; }
+.eyebrow { display: block; font-size: 22rpx; font-weight: 700; letter-spacing: 3rpx; color: #087f8c; }
+.player-id { color: #6c8592; font-size: 22rpx; letter-spacing: 1rpx; }
 .profile-identity { display: flex; align-items: center; gap: 24rpx; }
-.avatar { flex-shrink: 0; width: 116rpx; height: 116rpx; padding: 6rpx; border: 2rpx solid #a3d5cf; background: #fff; border-radius: 36rpx; }
+.avatar { flex-shrink: 0; width: 88rpx; height: 88rpx; padding: 6rpx; border: 2rpx solid #a3d5cf; background: #fff; border-radius: 36rpx; }
 .avatar-img { width: 100%; height: 100%; border-radius: 28rpx; background: #e8f4f3; }
 .hero-info { min-width: 0; flex: 1; }
-.hero-name { display: block; font-size: 38rpx; line-height: 1.3; font-weight: 750; word-break: break-all; }
+.hero-name { display: block; font-size: 32rpx; line-height: 1.3; font-weight: 750; word-break: break-all; }
 .hero-game { display: block; color: #637b8e; font-size: 22rpx; margin-top: 10rpx; line-height: 1.6; word-break: break-all; }
 .hero-badges { display: flex; gap: 10rpx; flex-wrap: wrap; margin-top: 14rpx; }
-.hero-badge { color: #637b8e; background: rgba(255,255,255,.8); border-radius: 8rpx; padding: 6rpx 10rpx; font-size: 19rpx; }
+.hero-badge { color: #637b8e; background: rgba(255,255,255,.8); border-radius: 8rpx; padding: 6rpx 10rpx; font-size: 22rpx; }
 .hero-badge-ok { color: #167c61; background: #dcefe6; }
 .hero-badge-pending { color: #906c2a; background: #fbf1dd; }
-.hero-stats { display: flex; margin-top: 30rpx; padding-top: 24rpx; border-top: 1rpx solid #d4e6e5; }
+.hero-stats { display: flex; margin-top: 20rpx; padding-top: 18rpx; border-top: 1rpx solid #d4e6e5; }
 .hero-stat { width: 50%; min-width: 0; }
 .hero-stat + .hero-stat { padding-left: 28rpx; border-left: 1rpx solid #d4e6e5; }
 .profile-rank-stat { display: flex; align-items: center; gap: 12rpx; width: 64%; box-sizing: border-box; padding-right: 16rpx; }
 .profile-rank-stat + .hero-stat { width: 36%; box-sizing: border-box; padding-left: 20rpx; }
-.profile-rank-icon { display: block; flex-shrink: 0; width: 78rpx; height: 92rpx; }.profile-rank-copy { flex: 1; min-width: 0; }
-.stat-label { display: block; font-size: 21rpx; color: #637b8e; margin-bottom: 10rpx; }
+.profile-rank-icon { display: block; flex-shrink: 0; width: 56rpx; height: 66rpx; }.profile-rank-copy { flex: 1; min-width: 0; }
+.stat-label { display: block; font-size: 22rpx; color: #637b8e; margin-bottom: 10rpx; }
 .stat-value { display: block; font-size: 28rpx; font-weight: 700; line-height: 1.4; word-break: break-all; }
 .stat-score { font-size: 36rpx; font-weight: 750; color: #087f8c; line-height: 1; }
-.stat-unit { font-size: 21rpx; color: #637b8e; }
+.stat-unit { font-size: 22rpx; color: #637b8e; }
 .quick-links { display: flex; margin: 0 24rpx 24rpx; gap: 16rpx; }
-.quick-link { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10rpx; flex-direction: column; padding: 24rpx 8rpx; border: 1rpx solid #e2ebf0; border-radius: 22rpx; background: #fff; font-size: 24rpx; font-weight: 650; }
+.quick-link { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10rpx; flex-direction: column; padding: 18rpx 8rpx; border: 1rpx solid #e2ebf0; border-radius: 22rpx; background: #fff; font-size: 24rpx; font-weight: 650; }
 .quick-link image { width: 40rpx; height: 40rpx; }
-.info-card { margin: 24rpx; padding: 30rpx; border-radius: 28rpx; }
+.info-card { margin: 20rpx 24rpx; padding: 24rpx; border-radius: 24rpx; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; margin-bottom: 16rpx; }
-.section-title { display: block; font-size: 32rpx; font-weight: 750; margin-top: 10rpx; }
+.section-title { display: block; font-size: 30rpx; font-weight: 750; margin-top: 0; }
 .text-action { color: #087f8c; font-size: 24rpx; font-weight: 650; padding: 12rpx 0 12rpx 16rpx; flex-shrink: 0; }
 .muted { color: #637b8e; }
-.info-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 32rpx; padding: 25rpx 0; border-bottom: 1rpx solid #edf2f5; }
+.info-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 32rpx; padding: 20rpx 0; border-bottom: 1rpx solid #edf2f5; }
 .info-row:last-child { border-bottom: 0; padding-bottom: 4rpx; }
 .info-label { color: #637b8e; font-size: 25rpx; flex-shrink: 0; line-height: 1.6; }
 .info-value { min-width: 0; text-align: right; color: #102a43; font-size: 26rpx; line-height: 1.6; font-weight: 550; word-break: break-all; }
@@ -43,16 +43,18 @@
 .field-label { display: block; font-size: 24rpx; font-weight: 600; margin-bottom: 12rpx; }
 .input { box-sizing: border-box; margin-bottom: 26rpx; min-height: 88rpx; }
 .account-menu { margin: 24rpx; padding: 4rpx 26rpx; border-radius: 26rpx; }
-.menu-entry { display: flex; align-items: center; justify-content: space-between; padding: 25rpx 0; border-bottom: 1rpx solid #edf2f5; gap: 20rpx; }
+.menu-entry { display: flex; align-items: center; justify-content: space-between; padding: 20rpx 0; border-bottom: 1rpx solid #edf2f5; gap: 20rpx; }
 .menu-entry:last-child { border-bottom: 0; }
 .menu-name { display: flex; align-items: center; gap: 18rpx; font-size: 26rpx; }
 .menu-name image { width: 34rpx; height: 34rpx; flex-shrink: 0; }
 .menu-arrow { width: 28rpx; height: 28rpx; flex-shrink: 0; }
 .logout-btn { margin: 32rpx 24rpx 20rpx; text-align: center; padding: 20rpx; color: #637b8e; font-size: 25rpx; }
-.page-footer { display: block; text-align: center; color: #8a9ba7; font-size: 20rpx; letter-spacing: 2rpx; }
+.page-footer { display: block; text-align: center; color: #8a9ba7; font-size: 22rpx; letter-spacing: 2rpx; }
 .guest-card { margin: 32rpx 24rpx; padding: 48rpx 32rpx; text-align: center; }
 .guest-avatar { width: 100rpx; height: 100rpx; border-radius: 30rpx; background: #e3f2f0; display: flex; align-items: center; justify-content: center; margin: 0 auto 30rpx; }
 .guest-avatar image { width: 56rpx; height: 56rpx; }
 .guest-title { display: block; font-size: 34rpx; font-weight: 700; line-height: 1.5; }
 .guest-copy { display: block; margin: 18rpx 0 32rpx; color: #637b8e; font-size: 25rpx; line-height: 1.8; }
 .is-busy { opacity: .65; }
+
+.privacy-caption { display: block; margin: 0 28rpx; color: #62798c; font-size: 22rpx; }

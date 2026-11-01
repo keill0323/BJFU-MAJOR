@@ -115,7 +115,9 @@ test('member cards render the real plus and high-S badges with full names and ga
   }
   const html = render(instance)
   assert.ok(html.includes(longName))
-  assert.match(html, /游戏 ID：Game_0/)
+  assert.doesNotMatch(html, /游戏 ID：Game_0/)
+  instance.toggleMember({ currentTarget: { dataset: { id: 1 } } })
+  assert.match(render(instance), /游戏 ID：Game_0/)
   assert.match(html, /金S10星/)
   assert.match(html, /钻S25星/)
   assert.match(html, /魔王S50星/)
@@ -144,6 +146,7 @@ test('missing roster details and an empty team have explicit placeholders instea
   assert.equal(instance.data.team.ranked_count, 0)
   assert.equal(instance.data.team.display_rating, 0)
   assert.equal(instance.data.team.captain_name, '暂未设置')
+  instance.toggleMember({ currentTarget: { dataset: { id: 8 } } })
   let html = render(instance)
   assert.match(html, /未命名队伍/)
   assert.match(html, /玩家8/)

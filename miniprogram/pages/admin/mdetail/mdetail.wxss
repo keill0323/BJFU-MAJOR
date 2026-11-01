@@ -10,13 +10,34 @@
 .admin-hero .btn-outline { color: #d5efed; border-color: rgba(191,228,227,.35); background: rgba(255,255,255,.06); }
 .header-actions { display: flex; gap: 12rpx; flex-wrap: wrap; }
 .tab { padding: 20rpx 0; }
-.round-row > .detail-tags { justify-content: space-between; border-top: 1rpx solid #e2ebf0; padding: 16rpx 20rpx; background: #f3f7fa; }
+.round-row > .detail-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 12rpx; justify-content: space-between; border-top: 1rpx solid #e2ebf0; padding: 16rpx 20rpx; background: #f3f7fa; }
 .team-row:active { background: #f3f7fa; }
 .small-btn, .op-btns .small-btn { font-size: 23rpx; padding: 16rpx 20rpx; border-radius: 14rpx; }
 .op-btns { display: flex; flex-wrap: wrap; gap: 12rpx; margin-top: 24rpx; padding-top: 24rpx; border-top: 1rpx solid #e2ebf0; }
 .op-btns > view { flex: 1; min-width: 220rpx; text-align: center; }
 .hint-bar { background: #fcf5e7; color: #946821; border-radius: 18rpx; padding: 20rpx; font-size: 23rpx; line-height: 1.7; margin-bottom: 20rpx; }
-.history-panel, .score-panel { width: 100%; max-height: 82vh; box-sizing: border-box; overflow-y: auto; background: #fff; border-radius: 32rpx 32rpx 0 0; padding: 32rpx 28rpx calc(32rpx + env(safe-area-inset-bottom)); }
+.history-panel { width: 100%; max-height: 82vh; box-sizing: border-box; overflow-y: auto; background: #fff; border-radius: 32rpx 32rpx 0 0; padding: 32rpx 28rpx calc(32rpx + env(safe-area-inset-bottom)); }
+/* Stage lists grow with the page: native swiper defaults otherwise clip later games. */
+.admin-stage-content, .admin-round-list { height: auto; overflow: visible; }
+.score-backdrop { position: absolute; inset: 0; }
+.score-panel { position: relative; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #fff; border-radius: 32rpx 32rpx 0 0; }
+.score-heading { flex-shrink: 0; padding: 26rpx 28rpx 18rpx; border-bottom: 1rpx solid #e2ebf0; }
+.score-heading .section-title { margin: 0; }
+.score-form-scroll { flex: 1; height: 0; min-height: 0; width: 100%; }
+.score-form-content { padding: 22rpx 28rpx 32rpx; }
+.score-match-label { display: block; color: #087782; font-size: 22rpx; line-height: 1.6; }
+.score-team-names { display: block; margin: 10rpx 0 16rpx; color: #102a43; font-size: 28rpx; font-weight: 650; line-height: 1.6; word-break: break-all; }
+.score-panel .score-footer { flex-shrink: 0; margin: 0; padding: 18rpx 28rpx calc(18rpx + env(safe-area-inset-bottom)); border-top: 1rpx solid #e2ebf0; background: #fff; }
+.score-panel.keyboard-open .score-footer { padding-bottom: 18rpx; }
+.score-footer button { margin: 0; min-height: 88rpx; }
+.score-panel-compact .score-heading { display: none; }
+.score-panel.score-panel-compact .score-footer { padding-top: 10rpx; padding-bottom: 10rpx; }
+.admin-round-time { display: block; padding: 0 20rpx 18rpx; color: #62798c; font-size: 23rpx; line-height: 1.7; }
+.admin-round-schedule-panel { height: 76vh; max-height: 620px; }
+.admin-current-time { display: block; margin: 20rpx 0; padding: 16rpx; border-radius: 12rpx; color: #087782; background: #eaf6f5; font-size: 24rpx; line-height: 1.7; }
+.schedule-refresh { margin: 16rpx 0 0; }
+.schedule-clear { margin: 18rpx 0 0; padding: 16rpx; color: #b44848; font-size: 24rpx; line-height: 1.7; background: #fff4f2; border-radius: 14rpx; }
+.schedule-clear::after { border: none; }
 .history-row { background: #f3f7fa; border-radius: 18rpx; padding: 22rpx; margin-bottom: 14rpx; display: flex; flex-direction: column; gap: 6rpx; }
 .score-input { box-sizing: border-box; margin: 20rpx 0; background: #f3f7fa; border: 1rpx solid #e2ebf0; border-radius: 16rpx; padding: 22rpx 20rpx; font-size: 30rpx; color: #102a43; height: 86rpx; }
 .bo3-row { display: flex; align-items: center; gap: 14rpx; margin: 20rpx 0; }
@@ -42,3 +63,35 @@
 .waiting-card > .detail-header .section-title { margin: 0; }
 .waiting-card > .team-meta { margin-top: 18rpx; }
 .grouping-entry { margin-top: 20rpx; text-align: center; }
+
+/* 比赛日视图与管理操作独立命名，避免影响用户端共享对阵样式。 */
+.admin-phase-tabs .tab { padding: 16rpx 0; font-size: 24rpx; }
+.admin-list-heading, .admin-fold-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.admin-list-heading .section-title, .admin-fold-heading .section-title { margin: 0; }
+.admin-fold-heading { color: #087782; font-size: 24rpx; min-height: 80rpx; }
+.admin-fold-heading > text:last-child { flex-shrink: 0; }
+.flow-heading { border-top: 1rpx solid #e2ebf0; margin-top: 14rpx; padding-top: 14rpx; }
+.admin-filter-row { display: flex; gap: 12rpx; flex-wrap: wrap; margin: 18rpx 0; }
+.admin-filter { margin: 0; padding: 14rpx 18rpx; min-height: 76rpx; line-height: 1.6; background: #f3f7fa; color: #526d82; border-radius: 12rpx; font-size: 24rpx; }
+.admin-filter.selected { background: #e1f2ee; color: #087782; font-weight: 650; }
+.admin-filter::after, .admin-reset::after { border: 0; }
+.admin-date-row { display: flex; align-items: center; gap: 14rpx; margin-bottom: 18rpx; }
+.admin-date-row picker { flex: 1; }
+.admin-date-picker { padding: 18rpx; border: 1rpx solid #cedee5; border-radius: 12rpx; color: #304d64; font-size: 26rpx; }
+.admin-reset { margin: 0; padding: 18rpx 4rpx; color: #087782; background: transparent; font-size: 24rpx; line-height: 1.6; }
+.admin-day-round { padding: 26rpx 0; border-top: 1rpx solid #e2ebf0; }
+.admin-round-heading { display: flex; justify-content: space-between; align-items: center; gap: 12rpx; }
+.admin-day-state { font-size: 24rpx; color: #986821; }
+.admin-day-state.done { color: #62798c; }
+.admin-day-time { display: block; margin: 14rpx 0 18rpx; color: #62798c; font-size: 24rpx; line-height: 1.7; }
+.admin-day-duel { display: flex; align-items: center; gap: 16rpx; }
+.admin-day-duel > text { flex: 1; min-width: 0; color: #102a43; font-size: 28rpx; font-weight: 600; line-height: 1.6; word-break: break-all; }
+.admin-day-duel > text:last-child { text-align: right; }
+.admin-day-duel > .admin-day-score { flex: none; width: 110rpx; text-align: center; font-size: 30rpx; color: #087782; }
+.admin-day-actions { display: flex; gap: 14rpx; margin-top: 22rpx; }
+.admin-day-actions > button { flex: 1; margin: 0; font-size: 26rpx; min-height: 88rpx; }
+.admin-sheet-scroll { height: 76vh; }
+.team-meta, .hint-bar, .small-btn, .op-btns .small-btn { font-size: 24rpx; }
+.admin-kicker { font-size: 22rpx; }
+.admin-stage-content .vteam-name { font-size: 28rpx; }
+[hidden] { display: none !important; }

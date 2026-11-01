@@ -1,0 +1,42 @@
+<view class="player-stats">
+  <view class="stats-heading">
+    <view><text class="stats-title">选手数据</text><text class="stats-source">来源：{{sourceLabel}}</text></view>
+    <button class="stats-refresh" bindtap="reloadStats" disabled="{{loading || loadingMore}}">刷新</button>
+  </view>
+  <view class="stats-coverage"><text>已同步 {{mapCountText}} 张地图</text><text>{{playerCountText}} 名选手</text></view>
+  <text wx:if="{{updatedText}}" class="stats-updated">同步于 {{updatedText}}（{{updatedZone}}）</text>
+  <view class="stats-search">
+    <input class="stats-search-input" value="{{searchDraft}}" bindinput="onSearchInput" bindconfirm="submitSearch" confirm-type="search" maxlength="80" placeholder="搜索选手或队伍" aria-label="搜索选手或队伍" />
+    <button class="stats-search-button" bindtap="submitSearch">搜索</button>
+    <button wx:if="{{keyword || searchDraft}}" class="stats-clear" bindtap="clearSearch">清除</button>
+  </view>
+  <view wx:if="{{loading}}" class="stats-state">正在加载选手数据…</view>
+  <view wx:elif="{{error}}" class="stats-state"><text>{{error}}</text><button class="stats-retry" bindtap="reloadStats">重新加载</button></view>
+  <view wx:elif="{{!rows.length}}" class="stats-state"><text>{{keyword ? '没有找到相关选手，请换个关键词' : '暂无已同步的选手数据'}}</text></view>
+  <block wx:else>
+    <view class="stats-results-heading"><text>{{keyword ? '搜索结果' : '赛事选手榜'}} · {{total}} 人</text><text>左右滑动查看指标 →</text></view>
+    <scroll-view scroll-x class="stats-table-scroll" enhanced show-scrollbar="{{true}}">
+      <view class="stats-table">
+        <view class="stats-row stats-table-head">
+          <view class="stats-person">选手 / 队伍</view><text class="stats-maps">图数</text><text class="stats-kda">K / D / A</text><text class="stats-kd">KD</text><text class="stats-adr">ADR≈</text><text class="stats-rating">完美 Rating均值</text>
+        </view>
+        <view wx:for="{{rows}}" wx:key="key" class="stats-row" aria-label="{{item.nickname}}，{{item.team_names}}，{{item.kda_text}}">
+          <view class="stats-person"><text class="stats-nickname" user-select>{{item.nickname}}</text><text class="stats-team" user-select>{{item.team_names}}</text></view>
+          <text class="stats-maps">{{item.maps_text}}</text><text class="stats-kda">{{item.kda_text}}</text><text class="stats-kd">{{item.kd_text}}</text><text class="stats-adr">{{item.adr_text}}</text><text class="stats-rating">{{item.rating_text}}</text>
+        </view>
+      </view>
+    </scroll-view>
+    <view wx:if="{{moreError}}" class="stats-more-error"><text>{{moreError}}</text><button class="stats-retry" bindtap="loadMore">重试加载更多</button></view>
+    <button wx:elif="{{hasMore}}" class="stats-load-more" loading="{{loadingMore}}" disabled="{{loadingMore}}" bindtap="loadMore">{{loadingMore ? '加载中…' : '加载更多选手'}}</button>
+    <text wx:else class="stats-end">已加载 {{rows.length}} 名选手</text>
+  </block>
+  <view class="stats-method">
+    <button class="stats-method-toggle" bindtap="toggleMethod">统计口径 <text>{{showMethod ? '收起 −' : '展开 +'}}</text></button>
+    <view wx:if="{{showMethod}}" class="stats-method-copy">
+      <text>仅覆盖本届赛事已同步的地图，不代表选手全部历史战绩。</text>
+      <text>K / D / A 为击杀 / 死亡 / 助攻累计；死亡为0或数据缺失时，KD显示 —。</text>
+      <text>ADR 为按逐图回合数加权的近似值；Rating 为完美赛事平台逐图 Rating 的均值，并非其他平台评分。</text>
+      <text wx:for="{{notices}}" wx:key="*this">{{item}}</text>
+    </view>
+  </view>
+</view>

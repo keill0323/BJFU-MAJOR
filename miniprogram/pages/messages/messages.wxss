@@ -137,3 +137,9 @@
 .application-actions { display: flex; justify-content: flex-end; gap: 18rpx; margin-top: 18rpx; }.application-actions button { margin: 0; line-height: 1.5; }.application-actions button::after { border: none; }
 
 .applicant-profile { display: flex; gap: 16rpx; align-items: center; margin: 18rpx 0; }.applicant-avatar { width: 72rpx; height: 72rpx; border-radius: 16rpx; flex-shrink: 0; }.applicant-copy { flex: 1; min-width: 0; }.applicant-game { display: block; color: #486579; font-size: 24rpx; overflow-wrap: anywhere; }.applicant-tags { display: flex; flex-wrap: wrap; gap: 10rpx; margin-top: 12rpx; }.applicant-tags text { color: #16616c; background: #eaf6f5; border-radius: 8rpx; padding: 4rpx 10rpx; font-size: 21rpx; }.applicant-description { display: block; font-size: 24rpx; color: #526e82; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 14rpx; }
+
+.message-filters { display:flex; gap:8rpx; padding:8rpx; margin:20rpx 28rpx; border-radius:18rpx; background:#e5eef2; }
+.message-filter { flex:1; padding:18rpx 8rpx; border-radius:12rpx; text-align:center; font-size:26rpx; color:#486579; }
+.message-filter.active { color:#087580; background:white; font-weight:700; }
+.msg-sub, .applicant-tags text { font-size:24rpx; }
+.page-intro { padding-top:24rpx; padding-bottom:0; }

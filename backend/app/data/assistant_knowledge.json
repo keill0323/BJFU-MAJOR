@@ -1,0 +1,127 @@
+{
+  "version": "repository-rules-20261101.1",
+  "maintainer": "项目维护者（后续发布由管理员账号留痕）",
+  "source_policy": "只整理现有公开参赛须知及本次明确产品选择；未核实其线上发布版本。不含本届完整奖金表/淘汰赛正式细则，缺项须明确未知。",
+  "entries": [
+    {
+      "id": "student-eligibility",
+      "title": "参赛身份与认证",
+      "text": "赛事仅限北京林业大学在校学生参加。报名需完成学信网或校园卡资料认证及段位认证，实际资格与阻碍由报名工具实时查询。不要在助手对话中提供学号、认证截图或登录凭据。",
+      "keywords": [
+        "报名",
+        "身份",
+        "认证",
+        "资格",
+        "学生"
+      ],
+      "scope_match_id": null,
+      "status": "active",
+      "effective_from": null,
+      "effective_until": null,
+      "source": {
+        "title": "参赛须知（仓库公开页面）",
+        "reference": "miniprogram/pages/rules/rules.wxml",
+        "version": "9cd8e81775b4fa03"
+      }
+    },
+    {
+      "id": "single-team",
+      "title": "个人报名与队伍",
+      "text": "同一时间只能加入一支队伍。已入队用户应由队长发起队伍报名。报名或审核是否完成请查询当前状态，助手对话不能代替用户点击确认。",
+      "keywords": [
+        "个人报名",
+        "队伍",
+        "队长",
+        "申请",
+        "审核"
+      ],
+      "scope_match_id": null,
+      "status": "active",
+      "effective_from": null,
+      "effective_until": null,
+      "source": {
+        "title": "参赛须知（仓库公开页面）",
+        "reference": "miniprogram/pages/rules/rules.wxml",
+        "version": "9cd8e81775b4fa03"
+      }
+    },
+    {
+      "id": "freshman-rule",
+      "title": "新生赛与研究生认证",
+      "text": "参赛须知要求新生赛队伍至少3名新生。新老生以当前认证状态和实时资格校验为准。研究生一年级、博士一年级的新生身份需联系管理员人工认证；助手不读取或修改学号。",
+      "keywords": [
+        "新生",
+        "老生",
+        "研究生",
+        "硕士",
+        "博士",
+        "三名",
+        "3名"
+      ],
+      "scope_match_id": null,
+      "status": "active",
+      "effective_from": null,
+      "effective_until": null,
+      "source": {
+        "title": "参赛须知（仓库公开页面）",
+        "reference": "miniprogram/pages/rules/rules.wxml",
+        "version": "9cd8e81775b4fa03"
+      }
+    },
+    {
+      "id": "contact-help",
+      "title": "公开管理员支持",
+      "text": "参赛须知公开了管理员支持入口，用于报名、研究生身份认证和个人信息处理咨询。可点击参赛须知查看；其他管理员账号的角色不代表其个人联系信息允许公开。",
+      "keywords": [
+        "管理员",
+        "联系",
+        "帮助",
+        "隐私"
+      ],
+      "scope_match_id": null,
+      "status": "active",
+      "effective_from": null,
+      "effective_until": null,
+      "source": {
+        "title": "参赛须知（仓库公开页面）",
+        "reference": "miniprogram/pages/rules/rules.wxml",
+        "version": "9cd8e81775b4fa03"
+      }
+    },
+    {
+      "id": "notifications",
+      "title": "微信提醒与站内通知",
+      "text": "微信一次性订阅需要本人主动同意；队长不能替队员订阅。拒绝订阅不影响合法报名或招募操作，但可能错过微信提醒，仍可在站内查看。发送是否成功与是否已经提交报名是两回事。",
+      "keywords": [
+        "订阅",
+        "通知",
+        "微信",
+        "消息"
+      ],
+      "scope_match_id": null,
+      "status": "active",
+      "effective_from": null,
+      "effective_until": null,
+      "source": {
+        "title": "维护者确认的通知交互要求",
+        "reference": "项目总结与踩坑记录.md",
+        "version": "assistant-notification-20261101"
+      }
+    }
+  ],
+  "public_admin_contacts": [
+    {
+      "name": "赛事管理员支持",
+      "responsibilities": [
+        "研究生、博士一年级身份人工认证",
+        "报名与个人信息咨询"
+      ],
+      "contact_kind": "rules_page",
+      "source": {
+        "title": "参赛须知（仓库公开页面）",
+        "reference": "miniprogram/pages/rules/rules.wxml",
+        "version": "9cd8e81775b4fa03"
+      }
+    }
+  ]
+}

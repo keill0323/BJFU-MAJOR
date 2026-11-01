@@ -3,3 +3,4 @@
 .copy { display: block; margin-top: 8rpx; font-size: 24rpx; color: #496c78; line-height: 1.7; }
 .subscribe-button { margin: 20rpx 0 0; padding: 16rpx 22rpx; font-size: 26rpx; line-height: 1.5; background: #087f8c; color: #fff; border-radius: 16rpx; }
 .subscribe-button::after { border: none; }
+.usage-note { display:block; margin-top:12rpx; color:#886332; font-size:24rpx; line-height:1.7; }

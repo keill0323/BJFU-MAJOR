@@ -1,15 +1,18 @@
 <view class="page">
   <nav-drawer id="main-nav" title="北林 MAJOR" show-admin-notice="{{true}}" bind:userchange="onUserChange"></nav-drawer>
   <view class="home-content">
+    <view class="assistant-entry" bindtap="goAssistant" aria-role="button" aria-label="打开赛事助手">
+      <view class="assistant-entry-heading"><text class="assistant-entry-title">赛事助手</text><text class="assistant-status assistant-status-{{assistantState}}">{{assistantStatusLabel}}</text></view>
+      <text class="assistant-entry-caption">对阵、比分、选手数据，一处查询</text>
+      <view class="assistant-entry-foot"><text class="assistant-entry-hint">报名咨询 · 寻找队友</text><view class="assistant-entry-action">进入助手 <text>↗</text></view></view>
+    </view>
     <view class="player-card">
-      <image class="hero-mark" src="/images/brand/forest-crest.svg" mode="aspectFit"/>
-      <view class="hero-topline"><text class="hero-eyebrow">BJFU · CAMPUS COUNTER-STRIKE</text><view class="hero-live-dot"></view></view>
       <view wx:if="{{user}}" class="player-identity" bindtap="goIdentity">
         <image wx:if="{{user.avatar_full}}" class="player-avatar" src="{{user.avatar_full}}" mode="aspectFill"/>
         <view wx:else class="player-avatar avatar-fallback"><image src="/images/brand/forest-crest.svg" mode="aspectFit"/></view>
         <view class="player-copy"><text class="player-name">{{user.nickname || '北林选手'}}</text><text class="player-state">{{user.is_verified ? '在校认证已通过' : '完成认证，准备上场'}}</text></view><text class="player-arrow">›</text>
       </view>
-      <view wx:else class="guest-copy"><text class="hero-title">为下一场，集结。</text><text class="hero-sub">你的队伍，你的主场。</text></view>
+      <view wx:else class="guest-copy"><text class="hero-title">北林 CS2 赛事</text><text class="hero-sub">登录后查看队伍、接收通知</text></view>
       <view wx:if="{{user}}" class="player-bottom">
         <view class="hero-rank-detail">
           <image class="hero-rank-icon" src="{{user.rank_badge.icon}}" mode="aspectFit" aria-label="{{user.rank_badge.label}}"/>
@@ -17,26 +20,21 @@
         </view>
         <view class="hero-rating"><text class="hero-metric-label">个人水平分</text><text class="hero-number">{{user.rank ? user.individual_rating : '—'}}</text></view>
       </view>
-      <view wx:else class="hero-bottom"><view class="hero-join" bindtap="goIdentity">登录，开启参赛之旅 <text>↗</text></view><text class="hero-note">北京林业大学 · CS2 校赛</text></view>
+      <view wx:else class="hero-bottom"><view class="hero-join" bindtap="goIdentity">微信登录 <text>↗</text></view><text class="hero-note">北京林业大学 · CS2 校赛</text></view>
     </view>
     <view wx:if="{{personalNotice.total > 0 || personalNoticeError}}" class="personal-notice">
-      <view class="personal-notice-head"><text>与你有关的消息</text><text wx:if="{{personalNotice.total > 0}}" class="personal-badge">{{personalNotice.total}} 条</text></view>
+      <view class="personal-notice-head" bindtap="goNotice" data-section=""><text>系统通知</text><text wx:if="{{personalNotice.total > 0}}" class="personal-badge">{{personalNotice.total}} 条 · 查看全部 ›</text></view>
       <view wx:if="{{personalNoticeError}}" class="personal-retry" bindtap="loadPersonalNotices">消息状态加载失败 · 点击重试</view>
       <block wx:else>
         <view wx:if="{{personalNotice.admin_notice_count}}" class="personal-task admin-inbox-task" bindtap="goNotice" data-section="admin"><view><text>管理员通知 <text class="personal-count">{{personalNotice.admin_notice_count}}</text></text><text class="admin-notice-preview">{{personalNotice.admin_notice_title}}</text></view><text class="personal-link">查看未读 ›</text></view>
-        <view wx:if="{{personalNotice.invitation_count}}" class="personal-task" bindtap="goNotice" data-section="invitations"><text>入队邀请 <text class="personal-count">{{personalNotice.invitation_count}}</text></text><text class="personal-link">查看邀请 ›</text></view>
-        <view wx:if="{{personalNotice.application_count}}" class="personal-task" bindtap="goNotice" data-section="applications"><text>入队申请 <text class="personal-count">{{personalNotice.application_count}}</text></text><text class="personal-link">去处理 ›</text></view>
-        <view wx:if="{{personalNotice.schedule_count}}" class="personal-task" bindtap="goNotice" data-section="schedules"><text>约赛通知 <text class="personal-count">{{personalNotice.schedule_count}}</text></text><text class="personal-link">查看未读 ›</text></view>
+        <view wx:elif="{{personalNotice.application_count}}" class="personal-task" bindtap="goNotice" data-section="applications"><text>入队申请 <text class="personal-count">{{personalNotice.application_count}}</text></text><text class="personal-link">去处理 ›</text></view>
+        <view wx:elif="{{personalNotice.invitation_count}}" class="personal-task" bindtap="goNotice" data-section="invitations"><text>入队邀请 <text class="personal-count">{{personalNotice.invitation_count}}</text></text><text class="personal-link">查看邀请 ›</text></view>
+        <view wx:elif="{{personalNotice.schedule_count}}" class="personal-task" bindtap="goNotice" data-section="schedules"><text>赛程通知 <text class="personal-count">{{personalNotice.schedule_count}}</text></text><text class="personal-link">查看未读 ›</text></view>
       </block>
     </view>
     <chat-entry></chat-entry>
-    <view class="shortcut-grid">
-      <view wx:for="{{shortcuts}}" wx:key="url" class="shortcut" bindtap="goShortcut" data-url="{{item.url}}" aria-role="button" aria-label="{{item.title}}">
-        <view class="shortcut-icon"><image src="/images/brand/{{item.icon}}.svg" mode="aspectFit"/></view>
-        <text>{{item.title}}</text>
-      </view>
-    </view>
-    <view class="section-heading"><view><text class="section-kicker">THE COMPETITION</text><text class="section-title">赛事中心</text></view><view class="rules-link" bindtap="showRules">参赛须知 <text>↗</text></view></view>
+    <view class="home-quick-links"><view bindtap="goShortcut" data-url="/pages/team/team">我的队伍 <text>›</text></view><view bindtap="goShortcut" data-url="/pages/recruitment/recruitment">招募大厅 <text>›</text></view></view>
+    <view class="section-heading"><view><text class="section-title">赛事</text></view><view class="rules-link" bindtap="showRules">参赛须知 <text>↗</text></view></view>
     <view class="search-bar"><image class="search-ic" src="/images/icons/search.svg"/><input class="search-input" placeholder="搜索你想参加的赛事" placeholder-class="search-placeholder" value="{{keyword}}" bindinput="onSearchInput" bindconfirm="onSearch" confirm-type="search"/><view wx:if="{{keyword}}" class="clear-search" bindtap="clearSearch" aria-label="清除搜索">×</view><view class="search-submit" bindtap="onSearch">搜索</view></view>
     <view class="filter-row"><view wx:for="{{filters}}" wx:key="value" class="filter {{activeFilter === item.value ? 'active' : ''}}" bindtap="setFilter" data-value="{{item.value}}">{{item.label}}</view></view>
     <view wx:if="{{loadError}}" class="list-notice"><text>赛事暂时未能加载</text><view bindtap="loadMatches">点击重试 ↻</view></view>
@@ -52,6 +50,13 @@
       </block>
       <view wx:if="{{groups.length === 0}}" class="empty"><view class="empty-symbol"><image src="/images/brand/cup.svg"/></view><text class="empty-title">{{keyword ? '没有找到相关赛事' : '这个赛区，静待开场'}}</text><text class="empty-sub">{{keyword ? '试试其他关键词，或查看全部赛事' : '暂时没有符合筛选条件的赛事'}}</text><view class="empty-reset" bindtap="clearSearch">查看全部赛事</view></view>
     </block>
+    <view class="more-heading">更多功能</view>
+    <view class="shortcut-grid">
+      <view wx:for="{{shortcuts}}" wx:key="url" class="shortcut" bindtap="goShortcut" data-url="{{item.url}}" aria-role="button" aria-label="{{item.title}}">
+        <view class="shortcut-icon"><image src="/images/brand/{{item.icon}}.svg" mode="aspectFit"/></view>
+        <text>{{item.title}}</text>
+      </view>
+    </view>
     <view class="home-footer"><view></view><text>BJFU MAJOR · 让热爱上场</text><view></view></view>
   </view>
 </view>

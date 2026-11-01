@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 const test = require('node:test')
+const { parseWxml, createRenderer } = require('../../tools/preview-miniprogram.js')
 
 function loadPage() {
   let page
@@ -15,7 +16,7 @@ function loadPage() {
       assert.equal(name, '../../utils/api.js')
       return new Proxy({}, { get() { throw new Error('Unexpected API call in data formatting') } })
     },
-    wx: {},
+    wx: { getStorageSync: () => '' },
     console
   }, { filename: file })
   page.data = JSON.parse(JSON.stringify(page.data))
@@ -25,37 +26,53 @@ function loadPage() {
 }
 
 function makeRound(id, groupName) {
-  return { id, group_name: groupName, round_number: id, team1_id: id * 2, team2_id: id * 2 + 1, status: 'pending' }
+  return { id, group_name: groupName, round_number: id, team1_id: id * 2, team2_id: id * 2 + 1,
+    team1_name: `${groupName}场次${id}甲队`, team2_name: `${groupName}场次${id}乙队`, status: 'pending' }
+}
+
+function scorecardNames(html) {
+  return [...html.matchAll(/<span class="vteam-name(?: [^"]*)?">([^<]*)<\/span>/g)].map(match => match[1])
 }
 
 function renderChallengerStages(data) {
   const template = fs.readFileSync(path.resolve(__dirname, '../../miniprogram/pages/match/match.wxml'), 'utf8')
-  const section = template.split('<!-- ===== 挑战者组 tab ===== -->')[1].split('<!-- ===== 传奇组 tab ===== -->')[0]
-  const tabs = section.match(/<view class="stage-tabs">([\s\S]*?)<\/view>\s*<\/view>/)[1]
-  const loop = tabs.match(/wx:for="\{\{(.+?)\}\}"/)[1]
-  const label = tabs.match(/bindtap="switchChallengerStage">([\s\S]*)$/)[1]
-  const panelLoop = section.match(/<swiper-item wx:for="\{\{(.+?)\}\}"/)[1]
-  const panelConditions = [...section.matchAll(/<block wx:(?:if|elif)="\{\{(.+?)\}\}">/g)].map(match => match[1])
+  function renderStage(challengerStage) {
+    const page = loadPage()
+    page.setData({ ...data, match: { id: 8, name: '分组布局回归', status: 'in_progress', statusText: '进行中', max_teams: 20, team_size: 6 } })
+    page.selectChallengerStage(challengerStage)
+    page.switchTab({ currentTarget: { dataset: { tab: 'challenger' } } })
+    const tree = parseWxml(template)
+    tree.scope = page.data
+    return { html: createRenderer({})(tree), stages: page.data.matchupStages }
+  }
+  const rendered = renderStage(data.challengerStage)
   return {
-    labels: vm.runInNewContext(loop, data).map((item, index) =>
-      label.replace(/\{\{(.+?)\}\}/g, (_, expression) => vm.runInNewContext(expression, { ...data, item, index }))),
-    // Each rendered panel must choose exactly one real WXML branch by stage type.
-    branches: vm.runInNewContext(panelLoop, data).map((item, index) =>
-      panelConditions.map(expression => Boolean(vm.runInNewContext(expression, { ...data, item, index }))))
+    html: rendered.html,
+    labels: rendered.stages.map(stage => stage.label),
+    // Test visible scorecards, independently of whether the panel uses a swiper or plain views.
+    panels: data.challengerSwiper.map((_, index) => renderStage(index).html)
   }
 }
 
 for (const groupNames of [['A', 'B', 'C'], ['A', 'B', 'C', 'D']]) {
   test(`${groupNames.length} actual challenger groups render without unused fixed groups`, () => {
     const page = loadPage()
-    page.buildData({ teams: [], rounds: groupNames.map((name, i) => makeRound(i + 1, name)) }, null, false)
+    const rounds = groupNames.map((name, i) => makeRound(i + 1, name))
+    if (groupNames.length === 3) rounds.push(makeRound(10, '附加赛'))
+    page.buildData({ teams: [], rounds }, null, false)
     assert.deepEqual(Object.keys(page.data.challengerSwiper[0].groups), groupNames)
     assert.equal(page.data.challengerSwiper[0].count, groupNames.length)
     assert.equal(page.data.groupCount, groupNames.length)
     assert.equal(page.data.hasPlayoffStage, groupNames.length === 3)
     const rendered = renderChallengerStages(page.data)
-    assert.deepEqual(rendered.labels, groupNames.length === 3 ? ['小组赛', '附加赛'] : ['小组赛'])
-    assert.deepEqual(rendered.branches, groupNames.length === 3 ? [[true, false], [false, true]] : [[true, false]])
+    assert.deepEqual(rendered.labels, groupNames.length === 3 ? ['全部阶段', '挑战者小组赛', '附加赛', '传奇组', '淘汰赛'] : ['全部阶段', '挑战者小组赛', '传奇组', '淘汰赛'])
+    assert.match(rendered.html, /挑战者小组赛/)
+    for (const [i, name] of groupNames.entries()) {
+      assert.ok(scorecardNames(rendered.panels[0]).includes(`${name}场次${i + 1}甲队`))
+      if (rendered.panels[1]) assert.ok(!scorecardNames(rendered.panels[1]).includes(`${name}场次${i + 1}甲队`))
+    }
+    assert.ok(!scorecardNames(rendered.panels[0]).includes('附加赛场次10甲队'))
+    if (groupNames.length === 3) assert.ok(scorecardNames(rendered.panels[1]).includes('附加赛场次10甲队'))
   })
 }
 
@@ -104,7 +121,7 @@ test('team assignments and historical rounds are combined without counting a gro
     rounds: [makeRound(1, '松林')]
   }, null, false)
   assert.equal(page.data.groupCount, 3)
-  assert.deepEqual(renderChallengerStages(page.data).labels, ['小组赛', '附加赛'])
+  assert.deepEqual(renderChallengerStages(page.data).labels, ['全部阶段', '挑战者小组赛', '附加赛', '传奇组', '淘汰赛'])
   page.buildData({
     teams: [{ team_id: 1, group_name: '上区', stage: 'legend' }],
     rounds: ['松林', '竹林', '银杏', '上区'].map((name, i) => makeRound(i + 1, name))
@@ -117,7 +134,9 @@ test('four groups assigned before any rounds have no playoff tab', () => {
   const page = loadPage()
   page.buildData({ teams: ['A', 'B', 'C', 'D'].map((name, i) => ({ team_id: i + 1, group_name: name, stage: 'challenger' })), rounds: [] }, null, false)
   assert.equal(page.data.groupCount, 4)
-  assert.deepEqual(renderChallengerStages(page.data).labels, ['小组赛'])
+  const rendered = renderChallengerStages(page.data)
+  assert.deepEqual(rendered.labels, ['全部阶段', '挑战者小组赛', '传奇组', '淘汰赛'])
+  assert.match(rendered.html, /挑战者小组赛/)
 })
 
 test('an ungrouped event never displays a speculative playoff stage', () => {
@@ -125,7 +144,9 @@ test('an ungrouped event never displays a speculative playoff stage', () => {
   page.buildData({ teams: [{ team_id: 1, group_name: null, stage: 'challenger' }], rounds: [] }, null, false)
   assert.equal(page.data.groupCount, 0)
   assert.equal(page.data.hasPlayoffStage, false)
-  assert.deepEqual(renderChallengerStages(page.data).labels, ['小组赛'])
+  const rendered = renderChallengerStages(page.data)
+  assert.deepEqual(rendered.labels, ['全部阶段', '挑战者小组赛', '传奇组', '淘汰赛'])
+  assert.match(rendered.html, /挑战者小组赛/)
 })
 
 test('four-group events hide old playoff tabs without deleting the historical rounds', () => {
@@ -135,7 +156,10 @@ test('four-group events hide old playoff tabs without deleting the historical ro
   page.buildData(detail, null, false)
   assert.equal(page.data.groupCount, 4)
   assert.equal(page.data.hasPlayoffStage, false)
-  assert.deepEqual(renderChallengerStages(page.data).labels, ['小组赛'])
+  const rendered = renderChallengerStages(page.data)
+  assert.deepEqual(rendered.labels, ['全部阶段', '挑战者小组赛', '传奇组', '淘汰赛'])
+  assert.match(rendered.html, /挑战者小组赛/)
+  assert.ok(!scorecardNames(rendered.panels[0]).includes('附加赛场次5甲队'))
   assert.equal(page.data.challengerSwiper.some(item => item.type === 'playoff'), false)
   assert.equal(page.data.roundCount, 5)
   assert.equal(JSON.stringify(detail.rounds), originalRounds)
@@ -146,7 +170,7 @@ test('an old event with unknown original groups can still display its recorded p
   page.buildData({ teams: [], rounds: [makeRound(5, '附加赛')] }, null, false)
   assert.equal(page.data.groupCount, 0)
   assert.equal(page.data.hasPlayoffStage, true)
-  assert.deepEqual(renderChallengerStages(page.data).labels, ['小组赛', '附加赛'])
+  assert.deepEqual(renderChallengerStages(page.data).labels, ['全部阶段', '挑战者小组赛', '附加赛', '传奇组', '淘汰赛'])
   assert.deepEqual(page.data.challengerSwiper.find(item => item.type === 'playoff').rounds.map(r => r.id), [5])
 })
 
@@ -164,4 +188,27 @@ test('refreshing or receiving stale swiper events cannot select a removed playof
     page.onChallengerSwiper({ detail: { current } })
     assert.equal(page.data.challengerStage, 0)
   }
+})
+
+test('the playoff stage uses single round-robin and preserves the previous group filter on return', () => {
+  const page = loadPage()
+  page.buildData({ teams: [], rounds: ['A', 'B', 'C'].map((name, i) => makeRound(i + 1, name)).concat(makeRound(10, '附加赛')) }, null, false)
+  page.selectChallengerGroup({ currentTarget: { dataset: { group: 'A' } } })
+  const selectedGroup = renderChallengerStages(page.data).html
+  assert.match(selectedGroup, /挑战者小组赛 · 双循环 BO1/)
+  assert.deepEqual(scorecardNames(selectedGroup), ['A场次1甲队', 'A场次1乙队'])
+  assert.doesNotMatch(selectedGroup, /group-member-name/)
+
+  page.switchChallengerStage({ currentTarget: { dataset: { idx: '1' } } })
+  const playoff = renderChallengerStages(page.data).html
+  assert.match(playoff, /附加赛 · 单循环 BO1/)
+  assert.doesNotMatch(playoff, /双循环|每个对手交手两次|group-member-name|group-filters/)
+  assert.deepEqual(scorecardNames(playoff), ['附加赛场次10甲队', '附加赛场次10乙队'])
+
+  page.switchChallengerStage({ currentTarget: { dataset: { idx: '0' } } })
+  const restored = renderChallengerStages(page.data).html
+  assert.equal(page.data.selectedChallengerGroup, 'A')
+  assert.deepEqual(scorecardNames(restored), ['A场次1甲队', 'A场次1乙队'])
+  assert.match(restored, /class="matchup-field-value">A组<\/span>/)
+  assert.match(restored, /挑战者小组赛 · 双循环 BO1/)
 })

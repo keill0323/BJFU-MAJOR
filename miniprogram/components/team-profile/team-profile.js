@@ -96,7 +96,7 @@ Component({
       observer() { this.loadTeam() }
     }
   },
-  data: { loading: true, error: '', team: null, members: [], loggedIn: false, contacting: false },
+  data: { loading: true, error: '', team: null, members: [], loggedIn: false, contacting: false, expandedMemberId: null },
   lifetimes: {
     created() { this._generation = 0; this._detached = false },
     attached() { if (this._requestedTeamId === undefined) this.loadTeam() },
@@ -111,6 +111,10 @@ Component({
     show() { if (!this.data.team) this.loadTeam() }
   },
   methods: {
+    toggleMember(e) {
+      const id = positiveId(e.currentTarget.dataset.id)
+      if (id && this.data.members.some(member => member.user_id === id)) this.setData({ expandedMemberId: this.data.expandedMemberId === id ? null : id })
+    },
     contactCaptain() {
       if (!this.data.team) return
       return this.startContact(this.data.team.id, 'team', true)
@@ -138,7 +142,7 @@ Component({
       const token = wx.getStorageSync('token')
       const generation = this._generation = (this._generation || 0) + 1
       this._requestedTeamId = teamId
-      this.setData({ loading: !!teamId, error: teamId ? '' : '未选择队伍，请关闭后重新打开', team: null, members: [], loggedIn: !!token })
+      this.setData({ loading: !!teamId, error: teamId ? '' : '未选择队伍，请关闭后重新打开', team: null, members: [], loggedIn: !!token, expandedMemberId: null })
       if (!teamId) return
       const isCurrent = () => !this._detached && generation === this._generation && teamId === positiveId(this.data.teamId) && token === wx.getStorageSync('token')
       try {

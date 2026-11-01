@@ -11,11 +11,20 @@ Page({
     matchId: null,
     match: null,
     tab: 'teams',           // teams / challenger / legend / knockout
+    roundFilter: 'all',
+    roundDate: '',
+    roundGroup: '',
+    roundGroups: [],
+    filteredRounds: [],
+    roundFilterOptions: [{ id: 'all', label: '全部' }, { id: 'today', label: '今天' }, { id: 'pending', label: '待录分' }, { id: 'unscheduled', label: '未排期' }],
+    roundCounts: { all: 0, today: 0, pending: 0, unscheduled: 0 },
+    expandedSections: {},
     // 队伍
     teams: [],
     waitingTeams: [],
     rosterLocked: false,
     groupingBusy: false,
+    generatingMatches: false,
     legendTeams: [],        // 传奇组（含直升+晋级）
     challengerTeams: [],    // 挑战者组（小组赛阶段）
     playoffTeams: [],       // 淘汰赛（6强）
@@ -27,7 +36,7 @@ Page({
     knockoutRounds: [],
     knockoutGroups: [],     // 淘汰赛对阵按轮次分组（1/4决赛/半决赛/决赛）
     knockoutHint: '',       // 淘汰赛流程提示
-    // 可滑动区块（swiper）
+    // 阶段分页数据，列表随页面滚动，不使用限高 swiper。
     challengerSwiper: [],
     legendSwiper: [],
     challengerStage: 0,
@@ -46,6 +55,24 @@ Page({
     showScoreInput: false,
     scoreRoundId: null,
     scoreInput: '',
+    scoreSaving: false,
+    scoreKeyboardHeight: 0,
+    scorePanelHeight: 400,
+    scoreFocusId: '',
+    scoreTeam1Name: '',
+    scoreTeam2Name: '',
+    scoreMatchLabel: '',
+    // 管理员逐场排期；提交时携带打开面板时的原值，防止覆盖其他管理员修改。
+    showRoundSchedule: false,
+    roundScheduleId: null,
+    roundScheduleExpectedTime: null,
+    roundScheduleDate: '',
+    roundScheduleTime: '',
+    roundScheduleTeams: '',
+    roundScheduleLabel: '',
+    roundScheduleCurrentText: '',
+    roundScheduleSaving: false,
+    roundScheduleConflict: false,
     isBo3: false,           // 当前录入的是否淘汰赛 BO3
     bo3Games: ['', '', ''],  // BO3 三局小分
     // BO3 小局详情弹层
@@ -74,15 +101,80 @@ Page({
   },
 
   onLoad(options) {
-    this.setData({ matchId: options.matchId })
+    this._pageUnloaded = false
+    this.setData({ matchId: options.matchId, tab: options.tab === 'teams' ? 'teams' : 'schedule' })
     this.load()
   },
 
-  switchTab(e) {
-    this.setData({ tab: e.currentTarget.dataset.tab })
+  onUnload() {
+    this._pageUnloaded = true
   },
 
-  // 可滑动区块切换（挑战者组/传奇组）
+  switchTab(e) {
+    const tab = e.currentTarget.dataset.tab
+    if (['schedule', 'teams', 'challenger', 'legend', 'knockout'].indexOf(tab) < 0) return
+    this.setData({ tab })
+  },
+
+  toggleAdminSection(e) {
+    const section = e.currentTarget.dataset.section
+    if (['challengerRoster', 'challengerFlow', 'legendRoster', 'legendFlow', 'knockoutRoster', 'knockoutFlow'].indexOf(section) < 0) return
+    this.setData({ expandedSections: Object.assign({}, this.data.expandedSections, { [section]: !this.data.expandedSections[section] }) })
+  },
+  beijingToday() {
+    return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  },
+  filterRoundList() {
+    const today = this.beijingToday()
+    const playable = round => !!round.team1_id && !!round.team2_id
+    const confirmed = round => !!round.scheduled_time && (round.schedule_status === 'confirmed' || (round.team1_confirmed && round.team2_confirmed))
+    const pending = round => playable(round) && round.status !== 'finished'
+    const isToday = round => confirmed(round) && this.fmtDate(round.scheduled_time) === today
+    const unscheduled = round => round.status === 'pending' && playable(round) && !confirmed(round)
+    const rounds = this.data.allRounds || []
+    const counts = { all: rounds.length, today: rounds.filter(isToday).length, pending: rounds.filter(pending).length, unscheduled: rounds.filter(unscheduled).length }
+    const filtered = rounds.filter(round => {
+      if (this.data.roundGroup && round.group_name !== this.data.roundGroup) return false
+      if (this.data.roundDate && (!confirmed(round) || this.fmtDate(round.scheduled_time) !== this.data.roundDate)) return false
+      if (this.data.roundFilter === 'today') return isToday(round)
+      if (this.data.roundFilter === 'pending') return pending(round)
+      if (this.data.roundFilter === 'unscheduled') return unscheduled(round)
+      return true
+    }).slice().sort((left, right) => {
+      const leftTime = confirmed(left) ? left.scheduled_time : '9999'
+      const rightTime = confirmed(right) ? right.scheduled_time : '9999'
+      return leftTime.localeCompare(rightTime) || String(left.group_name || '').localeCompare(String(right.group_name || '')) || left.round_number - right.round_number || left.id - right.id
+    }).map(round => Object.assign({}, round, {
+      admin_readonly: round.group_name === '附加赛' && this.data.groupCount !== 3,
+      admin_can_schedule: round.admin_can_schedule && !(round.group_name === '附加赛' && this.data.groupCount !== 3),
+      admin_group_label: /^[A-Z]$/.test(round.group_name || '') ? round.group_name + ' 组' : round.group_name || '未分组',
+      admin_status_label: round.status === 'finished' ? '已录分' : round.status === 'in_progress' ? '进行中' : '待比赛',
+      admin_format_label: round.group_name === '淘汰赛' ? 'BO3' : 'BO1'
+    }))
+    this.setData({ filteredRounds: filtered, roundCounts: counts })
+  },
+  setRoundFilter(e) {
+    const filter = e.currentTarget.dataset.filter
+    if (!this.data.roundFilterOptions.some(item => item.id === filter)) return
+    this.setData({ roundFilter: filter, roundDate: '' })
+    this.filterRoundList()
+  },
+  setRoundGroup(e) {
+    const group = e.currentTarget.dataset.group || ''
+    if (group && !this.data.roundGroups.some(item => item.value === group)) return
+    this.setData({ roundGroup: group })
+    this.filterRoundList()
+  },
+  setRoundDate(e) {
+    this.setData({ roundDate: e.detail.value, roundFilter: 'all' })
+    this.filterRoundList()
+  },
+  resetRoundFilters() {
+    this.setData({ roundFilter: 'all', roundDate: '', roundGroup: '' })
+    this.filterRoundList()
+  },
+
+  // 阶段切换（挑战者组/传奇组）
   switchChallengerStage(e) {
     const index = Math.max(0, Math.min(Number(e.currentTarget.dataset.idx) || 0, this.data.challengerSwiper.length - 1))
     this.setData({ challengerStage: index })
@@ -114,8 +206,12 @@ Page({
   async load() {
     try {
       const detail = await api.adminMatchDetail(this.data.matchId)
+      if (this._pageUnloaded) return
       const teams = detail.teams || []
-      const rounds = detail.rounds || []
+      const rounds = (detail.rounds || []).map(round => Object.assign({}, round, {
+        admin_schedule_text: this.roundScheduleDisplay(round),
+        admin_can_schedule: round.status === 'pending' && !!round.team1_id && !!round.team2_id
+      }))
       const isChallengerGroup = name => !!name && ['附加赛', '上区', '下区', '淘汰赛'].indexOf(name) < 0
       const challengerRounds = rounds.filter(r => isChallengerGroup(r.group_name) || r.group_name === '附加赛')
       const legendRounds = rounds.filter(r => ['上区', '下区'].indexOf(r.group_name) >= 0)
@@ -128,7 +224,7 @@ Page({
         koGroups.push({
           title: '1/4决赛',
           rounds: koSorted.slice(0, 2).map((r, i) => Object.assign({}, r, {
-            ko_label: i === 0 ? '上区·第2 vs 第3' : '下区·第2 vs 第3',
+            ko_label: i === 0 ? '第一场' : '第二场',
             bo3_text: fmtBo3(r)
           }))
         })
@@ -137,7 +233,7 @@ Page({
         koGroups.push({
           title: '半决赛',
           rounds: koSorted.slice(2, 4).map((r, i) => Object.assign({}, r, {
-            ko_label: i === 0 ? '上区1 vs 下区胜者' : '下区1 vs 上区胜者',
+            ko_label: i === 0 ? '上区第1 vs 第二场胜者' : '下区第1 vs 第一场胜者',
             bo3_text: fmtBo3(r)
           }))
         })
@@ -221,8 +317,11 @@ Page({
         legendSwiper,
         allRounds: rounds
       })
+      const roundGroups = [...new Set(rounds.map(round => round.group_name).filter(Boolean))].sort().map(value => ({ value, label: /^[A-Z]$/.test(value) ? value + ' 组' : value }))
+      this.setData({ roundGroups, roundGroup: roundGroups.some(item => item.value === this.data.roundGroup) ? this.data.roundGroup : '' })
+      this.filterRoundList()
     } catch (err) {
-      this.showErr(err, '加载失败')
+      if (!this._pageUnloaded) this.showErr(err, '加载失败')
     }
   },
 
@@ -290,6 +389,7 @@ Page({
 
   // ===== 录比分（页面内输入面板）=====
   openScore(e) {
+    if (this._pageUnloaded || this.data.scoreSaving) return
     const rid = e.currentTarget.dataset.id
     // 判断该对阵是否淘汰赛（BO3）
     const r = []
@@ -297,16 +397,32 @@ Page({
       .concat(this.data.legendRounds)
       .concat(this.data.knockoutRounds)
       .find(x => x.id == rid)
+    if (!r) return
     if (r && r.group_name === '附加赛' && !this.data.canFinishPlayoff) {
       wx.showToast({ title: '历史附加赛仅可查看', icon: 'none' })
       return
     }
     const isBo3 = !!(r && r.group_name === '淘汰赛')
+    let windowHeight = 700
+    try {
+      const info = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : null
+      if (info && Number(info.windowHeight) > 0) windowHeight = Number(info.windowHeight)
+    } catch (_) {
+      // 不支持窗口信息的旧基础库继续使用可滚动面板。
+    }
+    this._scoreWindowHeight = windowHeight
     this.setData({
       scoreRoundId: rid,
       isBo3,
-      scoreInput: '',
-      bo3Games: ['', '', ''],
+      scoreInput: r.status === 'finished' && !isBo3 ? r.team1_score + '-' + r.team2_score : '',
+      bo3Games: [0, 1, 2].map(index => r.status === 'finished' && r.bo3_scores && r.bo3_scores[index] ? r.bo3_scores[index].t1 + '-' + r.bo3_scores[index].t2 : ''),
+      scoreSaving: false,
+      scoreKeyboardHeight: 0,
+      scorePanelHeight: Math.min(Math.floor(windowHeight * 0.82), isBo3 ? 520 : 400),
+      scoreFocusId: '',
+      scoreTeam1Name: r.team1_name || '队伍一',
+      scoreTeam2Name: r.team2_name || '队伍二',
+      scoreMatchLabel: `${r.group_name || ''}${/^[A-Z]$/.test(r.group_name || '') ? ' 组' : ''}${r.round_number ? ' · 第 ' + r.round_number + ' 场' : ''}`,
       showScoreInput: true
     })
   },
@@ -319,14 +435,34 @@ Page({
     games[idx] = e.detail.value
     this.setData({ bo3Games: games })
   },
+  onScoreFocus(e) {
+    this.setData({ scoreFocusId: e.currentTarget.dataset.focusId || '' })
+  },
+  onScoreKeyboardHeightChange(e) {
+    if (this._pageUnloaded || !this.data.showScoreInput) return
+    const windowHeight = this._scoreWindowHeight || 700
+    const height = Math.max(0, Math.min(Number(e.detail.height) || 0, windowHeight))
+    const focusId = this.data.scoreFocusId
+    // 输入框不再推起整个页面；面板避让键盘，表单独立滚动，按钮固定在面板底部。
+    this.setData({
+      scoreKeyboardHeight: height,
+      scorePanelHeight: Math.max(0, Math.min(Math.floor(windowHeight * 0.82), this.data.isBo3 ? 520 : 400, windowHeight - height - 12)),
+      scoreFocusId: ''
+    }, () => {
+      if (!this._pageUnloaded && this.data.showScoreInput) this.setData({ scoreFocusId: focusId })
+    })
+  },
   closeScoreInput() {
-    this.setData({ showScoreInput: false, scoreRoundId: null, scoreInput: '', bo3Games: ['', '', ''] })
+    if (this.data.scoreSaving) return
+    if (typeof wx.hideKeyboard === 'function') wx.hideKeyboard()
+    this.setData({ showScoreInput: false, scoreRoundId: null, scoreInput: '', bo3Games: ['', '', ''], scoreKeyboardHeight: 0, scoreFocusId: '' })
   },
   // 空处理器：阻止面板内点击冒泡到外层遮罩
   noop() {},
   async submitScore() {
     const rid = this.data.scoreRoundId
-    if (!rid) return
+    if (this._pageUnloaded || !rid || this.data.scoreSaving) return
+    this.setData({ scoreSaving: true })
     try {
       if (this.data.isBo3) {
         // ===== BO3（淘汰赛）：每局小分，总比分自动判定 =====
@@ -365,11 +501,115 @@ Page({
         }
         await api.updateRoundResult(rid, { team1_score: s1, team2_score: s2 })
       }
-      this.setData({ showScoreInput: false, scoreRoundId: null, scoreInput: '', bo3Games: ['', '', ''] })
+      if (this._pageUnloaded) return
+      if (typeof wx.hideKeyboard === 'function') wx.hideKeyboard()
+      this.setData({ showScoreInput: false, scoreRoundId: null, scoreInput: '', bo3Games: ['', '', ''], scoreKeyboardHeight: 0, scoreFocusId: '' })
       wx.showToast({ title: '比分已更新', icon: 'success' })
       this.load()
     } catch (err) {
-      this.showErr(err, '更新失败')
+      if (!this._pageUnloaded) this.showErr(err, '更新失败')
+    } finally {
+      if (!this._pageUnloaded) this.setData({ scoreSaving: false })
+    }
+  },
+
+  // ===== 管理员逐场排期 =====
+  roundScheduleDisplay(round) {
+    if (!round.scheduled_time) return '待管理员安排'
+    const time = this.fmtDateTime(round.scheduled_time) + '（北京时间）'
+    const confirmed = round.schedule_status === 'confirmed' || (round.team1_confirmed && round.team2_confirmed)
+    return confirmed ? time : '历史提议 ' + time + '，待管理员确认安排'
+  },
+  openRoundSchedule(e) {
+    if (this._pageUnloaded || this.data.roundScheduleSaving) return
+    const round = this.data.allRounds.find(item => item.id == e.currentTarget.dataset.id)
+    if (!round || round.status !== 'pending' || !round.team1_id || !round.team2_id) return
+    this.setData({
+      showRoundSchedule: true,
+      roundScheduleId: round.id,
+      roundScheduleExpectedTime: round.scheduled_time || null,
+      roundScheduleDate: this.fmtDate(round.scheduled_time),
+      roundScheduleTime: this.fmtTime(round.scheduled_time),
+      roundScheduleTeams: (round.team1_name || '队伍一') + ' vs ' + (round.team2_name || '队伍二'),
+      roundScheduleLabel: (round.group_name || '') + (/^[A-Z]$/.test(round.group_name || '') ? ' 组' : '') + (round.round_number ? ' · 第 ' + round.round_number + ' 场' : ''),
+      roundScheduleCurrentText: round.scheduled_time ? this.roundScheduleDisplay(round) : '尚未安排',
+      roundScheduleConflict: false
+    })
+  },
+  closeRoundSchedule() {
+    if (this._pageUnloaded || this.data.roundScheduleSaving) return
+    this.setData({ showRoundSchedule: false, roundScheduleId: null, roundScheduleConflict: false })
+  },
+  onRoundScheduleInput(e) {
+    if (this._pageUnloaded || this.data.roundScheduleSaving) return
+    const field = e.currentTarget.dataset.field
+    if (field === 'roundScheduleDate' || field === 'roundScheduleTime') {
+      this.setData({ [field]: e.detail.value })
+    }
+  },
+  async refreshRoundSchedule() {
+    if (this._pageUnloaded || this.data.roundScheduleSaving) return
+    const roundId = this.data.roundScheduleId
+    this.setData({ roundScheduleSaving: true })
+    try {
+      // 独立读取；加载失败时不得把旧的 expected_time 误标为已刷新。
+      const detail = await api.adminMatchDetail(this.data.matchId)
+      if (this._pageUnloaded || !this.data.showRoundSchedule) return
+      const round = (detail.rounds || []).find(item => item.id == roundId)
+      if (!round || round.status !== 'pending' || !round.team1_id || !round.team2_id) {
+        this.setData({ showRoundSchedule: false, roundScheduleId: null })
+        wx.showToast({ title: '该场已不可排期，请查看最新对阵', icon: 'none' })
+        await this.load()
+        return
+      }
+      // 保留草稿，显示服务器当前值，由管理员再次点击保存才写入。
+      this.setData({
+        roundScheduleExpectedTime: round.scheduled_time || null,
+        roundScheduleCurrentText: round.scheduled_time ? this.roundScheduleDisplay(round) : '尚未安排',
+        roundScheduleConflict: false
+      })
+      wx.showToast({ title: '当前排期已刷新，请核对后保存', icon: 'none' })
+    } catch (err) {
+      if (!this._pageUnloaded) this.showErr(err, '刷新排期失败，请重试')
+    } finally {
+      if (!this._pageUnloaded) this.setData({ roundScheduleSaving: false })
+    }
+  },
+  saveRoundSchedule() {
+    if (this._pageUnloaded || this.data.roundScheduleSaving || this.data.roundScheduleConflict) return
+    const date = this.data.roundScheduleDate
+    const time = this.data.roundScheduleTime
+    if (!date || !time) {
+      wx.showToast({ title: '请选择完整的比赛日期和时间', icon: 'none' })
+      return
+    }
+    // 按北京时间提交，不经过手机本地时区转换。
+    return this.writeRoundSchedule(date + 'T' + time + ':00')
+  },
+  clearRoundSchedule() {
+    return this.writeRoundSchedule(null)
+  },
+  async writeRoundSchedule(scheduledTime) {
+    if (this._pageUnloaded || this.data.roundScheduleSaving || this.data.roundScheduleConflict || !this.data.roundScheduleId) return
+    const roundId = this.data.roundScheduleId
+    const expectedTime = this.data.roundScheduleExpectedTime
+    this.setData({ roundScheduleSaving: true })
+    try {
+      await api.adminScheduleRound(roundId, scheduledTime, expectedTime)
+      if (this._pageUnloaded) return
+      this.setData({ showRoundSchedule: false, roundScheduleId: null, roundScheduleConflict: false })
+      wx.showToast({ title: scheduledTime ? '比赛时间已安排' : '比赛时间已清除', icon: 'success' })
+      await this.load()
+    } catch (err) {
+      if (this._pageUnloaded) return
+      if (err && Number(err.statusCode) === 409) {
+        this.setData({ roundScheduleConflict: true })
+        wx.showModal({ title: '排期已变更', content: '这场比赛的时间已被修改。你的输入已保留，请先点击「刷新当前排期」，核对后再保存。', showCancel: false })
+      } else {
+        this.showErr(err, '保存比赛时间失败，请重试')
+      }
+    } finally {
+      if (!this._pageUnloaded) this.setData({ roundScheduleSaving: false })
     }
   },
 
@@ -466,26 +706,34 @@ Page({
     })
   },
 
-  // ③ 生成对阵：一键为所有小组生成单循环对阵（已生成的组自动跳过）
+  // ③ 生成对阵：一键为所有小组生成双循环 BO1（已生成的组自动跳过）
   async generateAllMatches() {
+    if (this.data.generatingMatches) return
+    const groups = [...new Set(this.data.challengerTeams.map(t => t.group_name).filter(Boolean))]
+    if (groups.length < 2) {
+      wx.showToast({ title: '请先分组再生成对阵', icon: 'none' })
+      return
+    }
+    this.setData({ generatingMatches: true })
     try {
-      const groups = [...new Set(this.data.challengerTeams.map(t => t.group_name).filter(Boolean))]
-      if (groups.length < 2) {
-        wx.showToast({ title: '请先分组再生成对阵', icon: 'none' })
-        return
-      }
       let made = 0
       for (const g of groups) {
         // 该组已有对阵则跳过，避免重复生成
         const existing = this.data.challengerRounds.filter(r => r.group_name === g)
         if (existing.length > 0) continue
-        await api.autoMatches(this.data.matchId, g, true)
+        await api.autoMatches(this.data.matchId, g, false)
         made += 1
       }
-      wx.showToast({ title: made > 0 ? `已为 ${made} 个组生成对阵` : '各组对阵已存在', icon: 'success' })
-      this.load()
+      wx.showToast({ title: made > 0 ? `已为 ${made} 组生成双循环 BO1` : '各组对阵已存在', icon: 'success' })
     } catch (err) {
       this.showErr(err, '生成对阵失败')
+    } finally {
+      // 一部分组成功后，后续组可能失败；也要同步已有对阵，避免再次提交成功的组。
+      try {
+        await this.load()
+      } finally {
+        this.setData({ generatingMatches: false })
+      }
     }
   },
 

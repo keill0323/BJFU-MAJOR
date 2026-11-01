@@ -50,6 +50,8 @@ def applications(db: Session = Depends(get_db), user=Depends(get_current_user)):
 
 class SubscriptionChoice(BaseModel):
     choices: dict[str, str] = Field(min_length=1, max_length=3)
+    attempt_id: str | None = Field(default=None, min_length=16, max_length=96,
+                                   pattern=r"^[A-Za-z0-9_-]+$")
 
 
 @router.get("/wechat/config")
@@ -59,7 +61,12 @@ def wechat_config():
 
 @router.post("/wechat/subscriptions")
 def subscribe(body: SubscriptionChoice, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    return wechat_service.record_choice(db, user.id, body.choices)
+    return wechat_service.record_choice(db, user.id, body.choices, attempt_id=body.attempt_id)
+
+
+@router.get("/wechat/state")
+def wechat_state(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    return wechat_service.subscription_state(db, user.id)
 
 
 @router.get("/schedules")

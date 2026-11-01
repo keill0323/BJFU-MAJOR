@@ -152,6 +152,60 @@ class MatchRegressionTests(DatabaseTestCase):
         upper_first = self.db.query(TeamProgress).filter_by(match_id=match.id, seed=1).one()
         self.assertEqual(upper_first.team_id, teams[0].id)
 
+    def test_six_team_first_round_crosses_zones_and_both_zone_winners_have_byes(self):
+        match, teams, _ = self.ready_legend()
+        service.finish_legend_stage(self.db, match.id)
+        result = service.generate_knockout(self.db, match.id)
+
+        quarters = self.db.query(MatchRound).filter_by(
+            match_id=match.id, group_name="淘汰赛"
+        ).order_by(MatchRound.round_number, MatchRound.id).all()
+        self.assertEqual(result["added_rounds"], 2)
+        self.assertEqual([(r.team1_id, r.team2_id) for r in quarters], [
+            (teams[1].id, teams[6].id),  # 上2 vs 下3
+            (teams[5].id, teams[2].id),  # 下2 vs 上3
+        ])
+        first_round_teams = {team_id for r in quarters for team_id in (r.team1_id, r.team2_id)}
+        self.assertTrue(first_round_teams.isdisjoint({teams[0].id, teams[4].id}))
+        self.assertTrue(all(r.status == RoundStatus.PENDING for r in quarters))
+
+    def test_cross_zone_winners_keep_bracket_slots_even_when_third_places_upset(self):
+        for first_upset, second_upset in [(False, False), (True, False),
+                                           (False, True), (True, True)]:
+            with self.subTest(first_upset=first_upset, second_upset=second_upset):
+                match, teams, _ = self.ready_legend()
+                service.finish_legend_stage(self.db, match.id)
+                service.generate_knockout(self.db, match.id)
+                quarters = self.db.query(MatchRound).filter_by(
+                    match_id=match.id, group_name="淘汰赛"
+                ).order_by(MatchRound.round_number, MatchRound.id).all()
+                self.finish_knockout_round(quarters[0], reverse=first_upset)
+                self.finish_knockout_round(quarters[1], reverse=second_upset)
+
+                first_winner = teams[6].id if first_upset else teams[1].id
+                second_winner = teams[2].id if second_upset else teams[5].id
+                service.advance_knockout(self.db, match.id)
+                rounds = self.db.query(MatchRound).filter_by(
+                    match_id=match.id, group_name="淘汰赛"
+                ).order_by(MatchRound.round_number, MatchRound.id).all()
+                self.assertEqual(len(rounds), 4)
+                self.assertEqual([(r.team1_id, r.team2_id) for r in rounds[2:]], [
+                    (teams[0].id, second_winner),
+                    (teams[4].id, first_winner),
+                ])
+
+                # 后续接续场序保持不变，不按晋级队伍的原分区重新换位。
+                self.finish_knockout_round(rounds[2], reverse=first_upset)
+                self.finish_knockout_round(rounds[3], reverse=second_upset)
+                service.advance_knockout(self.db, match.id)
+                final = self.db.query(MatchRound).filter_by(
+                    match_id=match.id, group_name="淘汰赛", status=RoundStatus.PENDING
+                ).one()
+                self.assertEqual((final.team1_id, final.team2_id), (
+                    second_winner if first_upset else teams[0].id,
+                    first_winner if second_upset else teams[4].id,
+                ))
+
     def test_cannot_finish_legend_before_zone_rounds_exist(self):
         match, _, progresses = self.enrolled(8)
         for p in progresses:

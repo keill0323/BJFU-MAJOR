@@ -21,11 +21,28 @@
     </view>
 
     <!-- 阶段 tab -->
-    <view class="tabs">
+    <view class="tabs admin-phase-tabs">
+      <view class="tab {{tab === 'schedule' ? 'active' : ''}}" data-tab="schedule" bindtap="switchTab">比赛日</view>
       <view class="tab {{tab === 'teams' ? 'active' : ''}}" data-tab="teams" bindtap="switchTab">赛事队伍</view>
       <view class="tab {{tab === 'challenger' ? 'active' : ''}}" data-tab="challenger" bindtap="switchTab">挑战者组</view>
       <view class="tab {{tab === 'legend' ? 'active' : ''}}" data-tab="legend" bindtap="switchTab">传奇组</view>
       <view class="tab {{tab === 'knockout' ? 'active' : ''}}" data-tab="knockout" bindtap="switchTab">淘汰赛</view>
+    </view>
+
+    <view wx:if="{{tab === 'schedule'}}" class="card admin-schedule-card">
+      <view class="admin-list-heading"><text class="section-title">赛程与录分</text><text class="team-meta">{{filteredRounds.length}} / {{allRounds.length}} 场</text></view>
+      <text class="section-caption">按组别和日期查找比赛；时间均为北京时间。</text>
+      <view class="admin-filter-row"><button wx:for="{{roundFilterOptions}}" wx:key="id" class="admin-filter {{roundFilter === item.id ? 'selected' : ''}}" bindtap="setRoundFilter" data-filter="{{item.id}}">{{item.label}} {{roundCounts[item.id]}}</button></view>
+      <view class="admin-filter-row"><button class="admin-filter {{!roundGroup ? 'selected' : ''}}" bindtap="setRoundGroup" data-group="">全部组别</button><button wx:for="{{roundGroups}}" wx:key="value" class="admin-filter {{roundGroup === item.value ? 'selected' : ''}}" bindtap="setRoundGroup" data-group="{{item.value}}">{{item.label}}</button></view>
+      <view class="admin-date-row"><picker mode="date" value="{{roundDate}}" bindchange="setRoundDate"><view class="admin-date-picker">{{roundDate || '按日期查找'}} ▾</view></picker><button class="admin-reset" bindtap="resetRoundFilters">重置筛选</button></view>
+      <view wx:if="{{filteredRounds.length === 0}}" class="empty">当前条件下没有比赛<text class="team-meta">可点击「重置筛选」查看全部对阵。</text></view>
+      <view wx:for="{{filteredRounds}}" wx:key="id" class="admin-day-round">
+        <view class="admin-round-heading"><text class="tag tag-blue">{{item.admin_group_label}} · {{item.admin_format_label}}</text><text class="admin-day-state {{item.status === 'finished' ? 'done' : ''}}">{{item.admin_status_label}}</text></view>
+        <text class="admin-day-time">{{item.admin_schedule_text}}</text>
+        <view class="admin-day-duel"><text bindtap="showTeam" data-id="{{item.team1_id}}">{{item.team1_name || '轮空'}}</text><text class="admin-day-score">{{item.status === 'finished' ? item.team1_score + ' : ' + item.team2_score : 'VS'}}</text><text bindtap="showTeam" data-id="{{item.team2_id}}">{{item.team2_name || '轮空'}}</text></view>
+        <text wx:if="{{item.admin_readonly}}" class="team-meta">历史记录，仅供查看</text>
+        <view class="admin-day-actions"><button wx:if="{{item.admin_can_schedule}}" class="btn-outline small-btn" bindtap="openRoundSchedule" data-id="{{item.id}}">{{item.scheduled_time ? '调整时间' : '设置时间'}}</button><button wx:if="{{!item.admin_readonly && item.team1_id && item.team2_id}}" class="btn-primary small-btn" bindtap="openScore" data-id="{{item.id}}">{{item.status === 'finished' ? '查看 / 修正比分' : '录比分'}}</button></view>
+      </view>
     </view>
 
     <!-- ===== 队伍 tab：统一赛事排名 ===== -->
@@ -54,8 +71,9 @@
     <!-- ===== 挑战者组 tab ===== -->
     <view wx:if="{{tab === 'challenger'}}">
       <view class="card">
-        <text class="section-title">挑战者组队伍</text>
+        <view class="admin-fold-heading" bindtap="toggleAdminSection" data-section="challengerRoster"><text class="section-title">挑战者组队伍 · {{challengerTeams.length}}</text><text>{{expandedSections.challengerRoster ? '收起' : '查看名单'}} ▾</text></view>
         <view class="hint-bar">{{challengerFormatHint}}</view>
+        <view hidden="{{!expandedSections.challengerRoster}}">
         <view wx:if="{{challengerTeams.length === 0}}" class="empty">暂无挑战者队伍</view>
         <view class="chip-wrap">
           <view wx:for="{{challengerTeams}}" wx:key="team_id" class="team-chip" bindtap="showTeam" data-id="{{item.team_id}}">
@@ -64,9 +82,11 @@
 
           </view>
         </view>
-        <view class="op-btns">
+        </view>
+        <view class="admin-fold-heading flow-heading" bindtap="toggleAdminSection" data-section="challengerFlow"><text>赛事流程</text><text>{{expandedSections.challengerFlow ? '收起' : '分组、生成与推进'}} ▾</text></view>
+        <view class="op-btns" hidden="{{!expandedSections.challengerFlow}}">
           <view class="btn-outline small-btn" bindtap="promptGroup">{{groupingBusy ? '正在分组…' : '②分组(含种子)'}}</view>
-          <view class="btn-outline small-btn" bindtap="generateAllMatches">③生成对阵</view>
+          <view class="btn-outline small-btn" bindtap="generateAllMatches">{{generatingMatches ? '正在生成…' : '③生成双循环 BO1'}}</view>
           <view class="btn-primary small-btn" bindtap="finishGroup">④结束小组赛</view>
           <view wx:if="{{canFinishPlayoff}}" class="btn-primary small-btn" bindtap="finishPlayoff">⑤结束附加赛</view>
         </view>
@@ -77,11 +97,11 @@
         <view class="stage-tabs">
           <view wx:for="{{challengerSwiper}}" wx:key="title" class="stage-tab {{challengerStage === index ? 'active' : ''}}" data-idx="{{index}}" bindtap="switchChallengerStage">{{item.title}}</view>
         </view>
-        <swiper class="stage-swiper" current="{{challengerStage}}" bindchange="onChallengerSwiper">
-          <swiper-item wx:for="{{challengerSwiper}}" wx:key="title">
+        <block wx:for="{{challengerSwiper}}" wx:key="title">
+          <view wx:if="{{challengerStage === index}}" class="admin-stage-content">
             <!-- 小组赛：按 A/B/C 组分区 -->
             <block wx:if="{{item.type === 'group'}}">
-              <scroll-view scroll-y class="stage-scroll">
+              <view class="admin-round-list">
                 <view wx:if="{{item.count === 0}}" class="empty">暂无对阵</view>
                 <view wx:for="{{item.groups}}" wx:for-item="gr" wx:for-index="gname" wx:key="gname">
                   <text class="group-title">{{gname}}组</text>
@@ -97,17 +117,19 @@
                         <text class="vteam-score {{r.winner_id === r.team2_id ? 'score-win' : ''}}">{{r.team2_score == null ? '-' : r.team2_score}}</text>
                       </view>
                     </view>
+                    <text class="admin-round-time">开赛时间：{{r.admin_schedule_text}}</text>
                     <view class="detail-tags">
                       <text class="tag tag-blue">{{r.group_name}}组</text>
+                      <view wx:if="{{r.admin_can_schedule}}" class="btn-outline small-btn" bindtap="openRoundSchedule" data-id="{{r.id}}">{{r.scheduled_time ? '调整时间' : '设置时间'}}</view>
                       <view class="btn-outline small-btn" bindtap="openScore" data-id="{{r.id}}">录比分</view>
                     </view>
                   </view>
                 </view>
-              </scroll-view>
+              </view>
             </block>
             <!-- 附加赛：普通列表 -->
             <block wx:else>
-              <scroll-view scroll-y class="stage-scroll">
+              <view class="admin-round-list">
                 <view wx:if="{{item.historyOnly}}" class="hint-bar">历史附加赛对阵，仅保留查看；当前赛制没有附加赛晋级操作。</view>
                 <view wx:if="{{item.rounds.length === 0}}" class="empty">暂无对阵</view>
                 <view wx:for="{{item.rounds}}" wx:key="id" wx:for-item="r" class="round-row">
@@ -122,22 +144,25 @@
                       <text class="vteam-score {{r.winner_id === r.team2_id ? 'score-win' : ''}}">{{r.team2_score == null ? '-' : r.team2_score}}</text>
                     </view>
                   </view>
+                  <text class="admin-round-time">开赛时间：{{r.admin_schedule_text}}</text>
                   <view class="detail-tags">
                     <text class="tag tag-blue">{{r.group_name}}</text>
+                    <view wx:if="{{!item.historyOnly && r.admin_can_schedule}}" class="btn-outline small-btn" bindtap="openRoundSchedule" data-id="{{r.id}}">{{r.scheduled_time ? '调整时间' : '设置时间'}}</view>
                     <view wx:if="{{!item.historyOnly}}" class="btn-outline small-btn" bindtap="openScore" data-id="{{r.id}}">录比分</view>
                   </view>
                 </view>
-              </scroll-view>
+              </view>
             </block>
-          </swiper-item>
-        </swiper>
+          </view>
+        </block>
       </view>
     </view>
 
     <!-- ===== 传奇组 tab ===== -->
     <view wx:if="{{tab === 'legend'}}">
       <view class="card">
-        <text class="section-title">传奇组队伍（上区/下区）</text>
+        <view class="admin-fold-heading" bindtap="toggleAdminSection" data-section="legendRoster"><text class="section-title">传奇组队伍 · {{legendTeams.length}}</text><text>{{expandedSections.legendRoster ? '收起' : '查看名单'}} ▾</text></view>
+        <view hidden="{{!expandedSections.legendRoster}}">
         <view wx:if="{{legendTeams.length === 0}}" class="empty">暂无传奇组队伍</view>
         <view class="chip-wrap">
           <view wx:for="{{legendTeams}}" wx:key="team_id" class="team-chip" bindtap="showTeam" data-id="{{item.team_id}}">
@@ -147,7 +172,9 @@
 
           </view>
         </view>
-        <view class="op-btns">
+        </view>
+        <view class="admin-fold-heading flow-heading" bindtap="toggleAdminSection" data-section="legendFlow"><text>赛事流程</text><text>{{expandedSections.legendFlow ? '收起' : '分区与推进'}} ▾</text></view>
+        <view class="op-btns" hidden="{{!expandedSections.legendFlow}}">
           <view class="btn-primary small-btn" bindtap="divideLegend">⑥传奇组分区</view>
           <view class="btn-primary small-btn" bindtap="finishLegend">⑦结束传奇组</view>
         </view>
@@ -158,9 +185,9 @@
         <view class="stage-tabs">
           <view wx:for="{{legendSwiper}}" wx:key="title" class="stage-tab {{legendStage === index ? 'active' : ''}}" data-idx="{{index}}" bindtap="switchLegendStage">{{item.title}}</view>
         </view>
-        <swiper class="stage-swiper" current="{{legendStage}}" bindchange="onLegendSwiper">
-          <swiper-item wx:for="{{legendSwiper}}" wx:key="title">
-            <scroll-view scroll-y class="stage-scroll">
+        <block wx:for="{{legendSwiper}}" wx:key="title">
+          <view wx:if="{{legendStage === index}}" class="admin-stage-content">
+            <view class="admin-round-list">
               <view wx:if="{{item.rounds.length === 0}}" class="empty">暂无对阵</view>
               <view wx:for="{{item.rounds}}" wx:key="id" wx:for-item="r" class="round-row">
                 <view class="versus">
@@ -174,22 +201,25 @@
                     <text class="vteam-score {{r.winner_id === r.team2_id ? 'score-win' : ''}}">{{r.team2_score == null ? '-' : r.team2_score}}</text>
                   </view>
                 </view>
+                <text class="admin-round-time">开赛时间：{{r.admin_schedule_text}}</text>
                 <view class="detail-tags">
                   <text class="tag tag-blue">{{r.group_name}}</text>
+                  <view wx:if="{{r.admin_can_schedule}}" class="btn-outline small-btn" bindtap="openRoundSchedule" data-id="{{r.id}}">{{r.scheduled_time ? '调整时间' : '设置时间'}}</view>
                   <view class="btn-outline small-btn" bindtap="openScore" data-id="{{r.id}}">录比分</view>
                 </view>
               </view>
-            </scroll-view>
-          </swiper-item>
-        </swiper>
+            </view>
+          </view>
+        </block>
       </view>
     </view>
 
     <!-- ===== 淘汰赛 tab ===== -->
     <view wx:if="{{tab === 'knockout'}}">
       <view class="card">
-        <text class="section-title">淘汰赛队伍（6强 · 上下区）</text>
+        <view class="admin-fold-heading" bindtap="toggleAdminSection" data-section="knockoutRoster"><text class="section-title">淘汰赛队伍 · {{playoffTeams.length}}</text><text>{{expandedSections.knockoutRoster ? '收起' : '查看名单'}} ▾</text></view>
         <view wx:if="{{knockoutHint}}" class="hint-bar">{{knockoutHint}}</view>
+        <view hidden="{{!expandedSections.knockoutRoster}}">
         <view wx:if="{{playoffTeams.length === 0}}" class="empty">暂无淘汰赛队伍</view>
         <view class="chip-wrap">
           <view wx:for="{{playoffTeams}}" wx:key="team_id" class="team-chip" bindtap="showTeam" data-id="{{item.team_id}}">
@@ -202,7 +232,9 @@
 
           </view>
         </view>
-        <view class="op-btns">
+        </view>
+        <view class="admin-fold-heading flow-heading" bindtap="toggleAdminSection" data-section="knockoutFlow"><text>赛事流程</text><text>{{expandedSections.knockoutFlow ? '收起' : '生成与推进'}} ▾</text></view>
+        <view class="op-btns" hidden="{{!expandedSections.knockoutFlow}}">
           <view class="btn-primary small-btn" bindtap="genKnockout">⑧生成淘汰赛</view>
           <view class="btn-primary small-btn" bindtap="advanceKnockout">⑨推进淘汰赛</view>
         </view>
@@ -226,8 +258,10 @@
                 <text class="vteam-name" bindtap="showTeam" data-id="{{item.team2_id}}">{{item.team2_name || '轮空'}}</text>
               </view>
             </view>
+            <text class="admin-round-time">开赛时间：{{item.admin_schedule_text}}</text>
             <view class="detail-tags">
               <text class="bo3-more" bindtap="showBo3" data-id="{{item.id}}">小局</text>
+              <view wx:if="{{item.admin_can_schedule}}" class="btn-outline small-btn" bindtap="openRoundSchedule" data-id="{{item.id}}">{{item.scheduled_time ? '调整时间' : '设置时间'}}</view>
             </view>
           </view>
         </view>
@@ -237,7 +271,7 @@
 
   <!-- BO3 小局详情弹层 -->
   <view wx:if="{{showBo3 && bo3Detail}}" class="mask" bindtap="closeBo3">
-    <view class="bo3-panel" catchtap="noop">
+    <scroll-view scroll-y="{{true}}" class="bo3-panel admin-sheet-scroll" catchtap="noop">
       <view class="detail-header">
         <text class="section-title">{{bo3Detail.team1_name}} vs {{bo3Detail.team2_name}}</text>
         <image class="detail-close" src="/images/icons/x.svg" bindtap="closeBo3"/>
@@ -252,7 +286,7 @@
         <text class="bo3-game-score">{{item.t1}} : {{item.t2}}</text>
         <text class="tag {{item.t1 > item.t2 ? 'tag-green' : item.t2 > item.t1 ? 'tag-blue' : 'tag-gray'}}">{{item.t1 > item.t2 ? bo3Detail.team1_name : item.t2 > item.t1 ? bo3Detail.team2_name : '平局'}}</text>
       </view>
-    </view>
+    </scroll-view>
   </view>
 
   <!-- 队伍资料与本场战绩 -->
@@ -281,30 +315,68 @@
   </view>
 
   <!-- 比分输入面板（淘汰赛为 BO3，其余单局） -->
-  <view wx:if="{{showScoreInput}}" class="mask" catchtap="closeScoreInput">
-    <view class="score-panel" catchtap="noop">
-      <text class="section-title">{{isBo3 ? '录入比分（BO3 三局两胜）' : '录入比分'}}</text>
-      <block wx:if="{{isBo3}}">
-        <text class="team-meta">每局格式 13-9，第3局留空即 2-0；总比分自动判定</text>
-        <view wx:for="{{bo3Games}}" wx:key="index" class="bo3-row">
-          <text class="bo3-label">第{{index + 1}}局</text>
-          <input class="input score-input bo3-input" type="text" placeholder="{{index === 2 ? '第3局（2-1时填）' : '如 13-9'}}" value="{{item}}" data-index="{{index}}" bindinput="onBo3Input"/>
+  <view wx:if="{{showScoreInput}}" class="mask score-mask" style="bottom: {{scoreKeyboardHeight}}px;" catchtap="closeScoreInput">
+    <view class="score-backdrop" catchtouchmove="noop"></view>
+    <view class="score-panel {{scoreKeyboardHeight ? 'keyboard-open' : ''}} {{scorePanelHeight < 200 ? 'score-panel-compact' : ''}}" style="height: {{scorePanelHeight}}px;" catchtap="noop">
+      <view class="score-heading" catchtouchmove="noop">
+        <text class="section-title">{{isBo3 ? '录入比分 · BO3' : '录入比分 · BO1'}}</text>
+      </view>
+      <scroll-view scroll-y="{{true}}" class="score-form-scroll" scroll-into-view="{{scoreFocusId}}" show-scrollbar="{{true}}">
+        <view class="score-form-content">
+          <text class="score-match-label">{{scoreMatchLabel}}</text>
+          <text class="score-team-names">{{scoreTeam1Name}} vs {{scoreTeam2Name}}</text>
+          <block wx:if="{{isBo3}}">
+            <text class="team-meta">按上方队伍顺序填写每局小分，如 13-9。第 3 局留空即 2-0，总比分自动判定。</text>
+            <view wx:for="{{bo3Games}}" wx:key="index" class="bo3-row" id="score-game-{{index}}">
+              <text class="bo3-label">第{{index + 1}}局</text>
+              <input class="input score-input bo3-input" type="text" placeholder="{{index === 2 ? '第3局（2-1时填）' : '如 13-9'}}" value="{{item}}" data-index="{{index}}" data-focus-id="score-game-{{index}}" bindinput="onBo3Input" bindfocus="onScoreFocus" bindkeyboardheightchange="onScoreKeyboardHeightChange" adjust-position="{{false}}" disabled="{{scoreSaving}}"/>
+            </view>
+          </block>
+          <block wx:else>
+            <text class="team-meta">按上方队伍顺序填写比分，如 13-9。</text>
+            <view id="score-single">
+              <input class="input score-input" type="text" placeholder="如: 13-9" value="{{scoreInput}}" data-focus-id="score-single" bindinput="onScoreInput" bindfocus="onScoreFocus" bindkeyboardheightchange="onScoreKeyboardHeightChange" adjust-position="{{false}}" disabled="{{scoreSaving}}"/>
+            </view>
+          </block>
         </view>
-      </block>
-      <block wx:else>
-        <text class="team-meta">格式: 13-9（主队-客队）</text>
-        <input class="input score-input" type="text" placeholder="如: 13-9" value="{{scoreInput}}" bindinput="onScoreInput"/>
-      </block>
-      <view class="score-btns">
-        <view class="btn-outline" bindtap="closeScoreInput">取消</view>
-        <view class="btn-primary" bindtap="submitScore">确认</view>
+      </scroll-view>
+      <view class="score-btns score-footer" catchtouchmove="noop">
+        <button class="btn-outline" disabled="{{scoreSaving}}" bindtap="closeScoreInput">取消</button>
+        <button class="btn-primary" loading="{{scoreSaving}}" disabled="{{scoreSaving}}" bindtap="submitScore">{{scoreSaving ? '保存中' : '确认比分'}}</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 管理员逐场直接排期，无需队长确认 -->
+  <view wx:if="{{showRoundSchedule}}" class="mask score-mask" catchtap="closeRoundSchedule">
+    <view class="score-backdrop" catchtouchmove="noop"></view>
+    <view class="score-panel admin-round-schedule-panel" catchtap="noop">
+      <view class="score-heading" catchtouchmove="noop"><text class="section-title">安排比赛时间</text></view>
+      <scroll-view scroll-y="{{true}}" class="score-form-scroll">
+        <view class="score-form-content">
+          <text class="score-match-label">{{roundScheduleLabel}}</text>
+          <text class="score-team-names">{{roundScheduleTeams}}</text>
+          <text class="team-meta">管理员统一安排，无需队长确认。所有时间均为北京时间。</text>
+          <text class="admin-current-time">当前排期：{{roundScheduleCurrentText}}</text>
+          <view wx:if="{{roundScheduleConflict}}" class="registration-notice">
+            <text>排期已被修改。请先刷新当前排期，核对后再保存；下方输入会保留。</text>
+            <button class="btn-outline small-btn schedule-refresh" loading="{{roundScheduleSaving}}" disabled="{{roundScheduleSaving}}" bindtap="refreshRoundSchedule">刷新当前排期</button>
+          </view>
+          <view class="win-row"><text class="win-label">比赛日期</text><picker mode="date" value="{{roundScheduleDate}}" disabled="{{roundScheduleSaving}}" data-field="roundScheduleDate" bindchange="onRoundScheduleInput"><view class="win-picker">{{roundScheduleDate || '选择日期'}}</view></picker></view>
+          <view class="win-row"><text class="win-label">开赛时间</text><picker mode="time" value="{{roundScheduleTime}}" disabled="{{roundScheduleSaving}}" data-field="roundScheduleTime" bindchange="onRoundScheduleInput"><view class="win-picker">{{roundScheduleTime || '选择时间'}}</view></picker></view>
+          <button wx:if="{{roundScheduleExpectedTime}}" class="schedule-clear" disabled="{{roundScheduleSaving || roundScheduleConflict}}" bindtap="clearRoundSchedule">清除已安排时间</button>
+        </view>
+      </scroll-view>
+      <view class="score-btns score-footer" catchtouchmove="noop">
+        <button class="btn-outline" disabled="{{roundScheduleSaving}}" bindtap="closeRoundSchedule">取消</button>
+        <button class="btn-primary" loading="{{roundScheduleSaving}}" disabled="{{roundScheduleSaving || roundScheduleConflict}}" bindtap="saveRoundSchedule">{{roundScheduleSaving ? '保存中' : '保存时间'}}</button>
       </view>
     </view>
   </view>
 
   <!-- 报名时间管理，与比赛排期范围独立 -->
   <view wx:if="{{showRegistrationPanel}}" class="mask" bindtap="closeRegistrationPanel">
-    <view class="history-panel registration-panel" catchtap="noop">
+    <scroll-view scroll-y="{{true}}" class="history-panel registration-panel admin-sheet-scroll" catchtap="noop">
       <view class="detail-header">
         <text class="section-title">报名时间</text>
         <image class="detail-close" src="/images/icons/x.svg" bindtap="closeRegistrationPanel"/>
@@ -328,17 +400,17 @@
         <button class="btn-outline" disabled="{{registrationSaving}}" bindtap="closeRegistrationPanel">取消</button>
         <button class="btn-primary" loading="{{registrationSaving}}" disabled="{{registrationSaving}}" bindtap="saveRegistrationWindow">{{registrationSaving ? '保存中' : '保存报名时间'}}</button>
       </view>
-    </view>
+    </scroll-view>
   </view>
 
   <!-- 比赛排期范围管理面板 -->
   <view wx:if="{{showWindowPanel}}" class="mask" bindtap="closeWindowPanel">
-    <view class="history-panel" catchtap="noop">
+    <scroll-view scroll-y="{{true}}" class="history-panel admin-sheet-scroll" catchtap="noop">
       <view class="detail-header">
         <text class="section-title">比赛排期范围</text>
         <image class="detail-close" src="/images/icons/x.svg" bindtap="closeWindowPanel"/>
       </view>
-      <text class="team-meta">限定双方队长可协商的比赛时间范围（北京时间），与报名开始、截止时间分别设置。</text>
+      <text class="team-meta">各阶段的排期参考范围（北京时间）。每场开赛时间由管理员在对阵旁设置；修改此范围不会取消已安排的比赛时间。</text>
 
       <view wx:if="{{stageWindows.length === 0}}" class="empty">暂无分组或已保存的排期范围，请先完成分组或生成对阵。</view>
       <view wx:for="{{windowSections}}" wx:for-item="section" wx:key="key" class="window-section">
@@ -385,6 +457,6 @@
           <button class="btn-primary" disabled="{{windowSaving}}" loading="{{windowSaving}}" bindtap="saveWindow">{{windowSaving ? '保存中' : '保存'}}</button>
         </view>
       </block>
-    </view>
+    </scroll-view>
   </view>
 </view>

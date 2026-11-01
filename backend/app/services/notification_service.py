@@ -50,7 +50,9 @@ def notify_schedule(db, round_, kind, scheduled_time, actor_id=None):
     current_teams = {team.id: team for team in db.query(Team).filter(Team.id.in_(team_ids))
                      .order_by(Team.id).populate_existing().with_for_update().all()}
     teams = [current_teams.get(tid) for tid in (round_.team1_id, round_.team2_id)]
-    recipients = {team.captain_id for team in teams if team and team.captain_id != actor_id}
+    admin_event = kind in ("admin_scheduled", "admin_rescheduled", "admin_cancelled")
+    recipients = {team.captain_id for team in teams
+                  if team and (admin_event or team.captain_id != actor_id)}
     for user_id in recipients:
         db.add(ScheduleNotification(
             user_id=user_id, match_id=round_.match_id, round_id=round_.id,
@@ -58,6 +60,7 @@ def notify_schedule(db, round_, kind, scheduled_time, actor_id=None):
             match_name=match.name, team1_name=teams[0].name if teams[0] else "轮空",
             team2_name=teams[1].name if teams[1] else "轮空",
         ))
+    return recipients
 
 
 def list_notifications(db, user_id, *, before_id=None, limit=30):

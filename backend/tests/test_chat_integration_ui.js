@@ -161,7 +161,7 @@ test('round contact is only enabled for participating captains, including finish
   page.detail = { rounds: [round] }; page.data.myTeamId = 1; page.data.isCaptain = true
   page.onShow()
   assert.equal(page.decorateRound(round, 1, true).can_chat, true)
-  assert.equal(page.decorateRound(round, 1, true).can_operate, false)
+  assert.equal(Object.hasOwn(page.decorateRound(round, 1, true), 'can_operate'), false)
   assert.equal(page.decorateRound(round, 1, false).can_chat, false)
   assert.equal(page.decorateRound(round, 3, true).can_chat, false)
   await page.contactRound(click(8))

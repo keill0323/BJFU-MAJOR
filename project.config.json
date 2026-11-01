@@ -27,5 +27,29 @@
     "include": []
   },
   "appid": "wx7ce76081417f57c4",
-  "editorSetting": {}
+  "editorSetting": {},
+  "watchOptions": {
+    "ignore": [
+      ".git",
+      ".git/**",
+      ".venv",
+      ".venv/**",
+      ".local",
+      ".local/**",
+      "node_modules",
+      "node_modules/**",
+      "backend",
+      "backend/**",
+      "runs",
+      "runs/**",
+      "artifacts",
+      "artifacts/**",
+      "docs",
+      "docs/**",
+      "tools",
+      "tools/**",
+      ".claude",
+      ".claude/**"
+    ]
+  }
 }

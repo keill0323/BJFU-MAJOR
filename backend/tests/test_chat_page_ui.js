@@ -13,6 +13,38 @@ const message = (id, overrides = {}) => ({ id: String(id), seq: String(id), send
 const room = () => ({ id: 7, peer: { id: 2, nickname: '对方', available: true },
   write_enabled: true, blocked: false, muted_until: null, unread: 0 })
 
+test('chat groups nearby timestamps and disclosure never changes retention or sends a packet', async () => {
+  const { page, state, open } = setup()
+  state.history = [message(1, { created_at: '2026-10-11T13:00:00+08:00' }),
+    message(2, { created_at: '2026-10-11T13:02:00+08:00' }),
+    message(3, { created_at: '2026-10-11T13:06:00+08:00' })]
+  await open()
+  assert.deepEqual(plain(page.data.rows.map(row => row.showTime)), [true, false, true])
+  page.toggleRules()
+  assert.equal(page.data.showRules, true)
+  page.toggleRules()
+  assert.equal(page.data.showRules, false)
+  assert.equal(state.packets.length, 0)
+  const source = fs.readFileSync(path.join(root, 'pages/chat/chat.wxml'), 'utf8')
+  assert.match(source, /maxlength="1000"/)
+  assert.match(source, /双方已读后自动清理/)
+  assert.match(source, /与对方是否在线无关/)
+})
+
+test('a 1001-character message stays as a draft while 1000 characters can be sent', async () => {
+  const { page, state, open } = setup()
+  await open()
+  page.input({ detail: { value: '字'.repeat(1001) } })
+  await page.send()
+  assert.equal(state.packets.length, 0)
+  assert.equal(page.data.draft.length, 1001)
+  page.input({ detail: { value: '字'.repeat(1000) } })
+  await page.send()
+  await flush()
+  assert.equal(state.packets.length, 1)
+  assert.equal(state.packets[0].content.length, 1000)
+})
+
 function setup(overrides = {}) {
   const state = { token: 'account-a', selfId: 1, calls: [], packets: [], toasts: [], intervals: new Set(),
     listeners: new Set(), cache: new Map(), history: [message(1)], more: false, nextCursor: null,

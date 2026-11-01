@@ -335,3 +335,53 @@ docker compose run --rm --no-deps backend python -m app.services.chat_service
 第一条按消息编号、会话、发送者、发送意图编号、请求摘要和创建时间核对并清除已删除正文，追加删除事件，支持幂等重试。清单损坏时非零退出；核对输出中的身份不匹配记录，未完成检查前不要开放聊天。第二条执行一批常规清理，大积压需重复运行至处理完。不要使用旧清单覆盖最新清单，也不要把整库回滚作为只回滚代码的方法。
 
 聊天回滚优先关闭写入，再关闭聊天入口；保留聊天表和新增业务数据。若切回不含 worker 的旧后端，应在保留的新版本维护镜像中定时执行清理 CLI，继续遵守已确认的保留规则。发布状态和验证结果统一见项目日志。
+
+## 十六、管理员操作审计与聊天列表刷新
+
+管理员资料修改、角色修改、重新识别候选学号，以及段位申请通过/驳回，会在对应业务事务中写入 `admin_audits`。记录服务端鉴权操作者 ID、动作发生时角色、目标用户 ID、动作、申请 ID、变更前后值、中文说明及 UTC 时间。没有变化、重复审批和提交失败不新增成功记录；不回填上线前无法核实的操作者。原有资料提交后再计算队伍评分的流程保留，后续计算失败时已经提交的资料和审计仍存在。
+
+仅管理员可调用 `GET /api/admin/audit-logs`，审核员不能查询。支持 `actor_id`、`target_user_id`、`action`、`application_id`、`created_from`、`created_to`、`page`、`page_size`；每页默认 20，最大 100。例如 `/api/admin/audit-logs?target_user_id=114&page=1&page_size=20`。时间筛选建议传带 `Z` 或时区偏移的 ISO 8601 值；无时区输入按 UTC。动作值为 `user.update`、`user.role.update`、`user.student_id.recognize`、`rank_application.approve`、`rank_application.reject`。返回 `items`、`total`、`page`、`page_size`，时间明确带 UTC 时区。
+
+资料/角色/候选学号请求体支持可选 `audit_reason`，段位审批接口通过同名查询参数传递；最长 500 字，未填或空白使用固定中文说明，旧客户端仍可使用。审计中的学号属于受限资料，仅管理员查询；不保存截图路径、原图、OpenID 或令牌，截图只记录有无及是否替换。没有修改或删除审计的接口，用户删除后保留原操作 ID。首版提供查询 API，未增加管理端审计页面。
+
+已有服务升级先保留数据库、配置和旧镜像备份，再从已审核代码构建并显式创建新表：
+
+```bash
+docker compose build backend
+docker compose run --rm --no-deps backend python -m app.migrations.admin_audit
+docker compose up -d --no-deps --force-recreate backend
+docker compose exec -T nginx nginx -s reload
+```
+
+迁移可重复执行，只创建新审计表，不修改用户、上传文件或既有历史。非 Docker 环境在实际服务环境的 `backend` 目录执行 `python -m app.migrations.admin_audit` 后重启。发布后应核验管理员查询成功、审核员/普通用户被拒绝，并在隔离数据中检查业务修改和审计共同保存。回滚代码时保留审计表及记录，不恢复旧数据库。
+
+聊天列表修复只涉及 `miniprogram/pages/chats/chats.js`，不改布局样式，也不新增聊天后端接口。后台事件从首屏重新核验已显示窗口，按 ID 去重并更新排序，成功后原子替换列表和游标；分页或刷新失败保留旧数据。每次后台刷新最多读取已加载页数加一页，大量变化超出预算时提示下拉刷新；主动下拉返回首屏。同账号返回页面保留分页，换号清空，迟到响应不能覆盖新页面；排序变化时尝试保持可见会话的滚动位置，主动滚动时不强制补偿。此项需维护者发布对应小程序后生效，后端升级不会自动更新手机前端；真机滚动和实时刷新仍需体验版核验。实际完成与发布状态见统一项目日志。
+
+
+## 赛事助手与微信补订阅（独立配置）
+
+2026-11-01已部署核心赛事助手、滚动摘要与补订阅后端。经维护者明确允许，生产助手复用现有智谱Key并完成真实文本工具调用、工具结果续答、摘要以及登录HTTP查询验收后启用；代码和示例默认仍关闭。微信原生授权/真实推送、摘要广泛质量与并发仍需各自验收，不能仅凭单元测试或status可用断言完成。助手与原识图、私聊配置相互独立，没有更换YOLO/OCR权重。新增认证协助属于后续本机开发，不在此核心发布包中，发布状态以项目日志为准。
+
+- 后端准备：使用原运行环境，不增加依赖。备份后在后端环境执行 `python -m app.migrations.assistant` 与 `python -m app.migrations.recruitment_notifications`。前者幂等建表，并检查MySQL/MariaDB助手轮次`created_at`精度，必要时执行`DATETIME(6)`升级；不删除或回填旧记录，已丢失的历史微秒无法恢复。该DDL可能短暂锁定助手轮次表，应随维护部署执行。现有启动入口的Base.metadata.create_all不会给既有列升级精度，不能代替显式迁移；有多实例时先准备表结构，再滚动启动。此处为后续维护步骤，本次未对任何生产数据库执行。
+- 模型配置：默认候选更新为 `ASSISTANT_MODEL=glm-5.3-flash`，但保持 `ASSISTANT_ENABLED=false`、`ASSISTANT_EXTERNAL_ENABLED=false`、`ASSISTANT_TOOL_MODEL_VERIFIED=false`。启用前需配置独立 `ASSISTANT_API_KEY` 并验收当前账户的文本tools/tool_calls能力、公开业务资料范围及费用。支持的地址固定为智谱HTTPS `/api/paas/v4`，不接受任意代理/跳转，不自动借用识图密钥。GLM-5.3-Flash强制thinking.enabled，使用reasoning_effort=low、max_tokens=4096、clear_thinking=false；工具回合的reasoning_content仅在同一请求内存中原样回传，不进入数据库、trace、日志、API响应或后续用户轮次。单条思考最多24000 UTF-8字节、累计工具回合最多48000字节，请求正文最多100000字节，超限或异常明确结束，不截断思考伪装有效。保留显式配置glm-4.7-flash的关闭思考兼容模式，不自动切换模型或付费重试。2026-11-01官方标准API价：5.3-Flash输入0.8元/百万tokens、输出2.8元/百万tokens；该新模型不是免费版，后续价格以官网为准。官方资料：https://docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash 、https://docs.bigmodel.cn/cn/guide/start/pricing 、https://docs.bigmodel.cn/cn/guide/start/concept-param 、https://docs.bigmodel.cn/cn/guide/capabilities/thinking-mode 。文档能力与模拟协议回归不等于真实调用已验收；本次没有外部模型请求。
+- 助手入口：小程序首页内容最顶部始终展示“赛事助手”卡片与“进入助手”按钮，不再受服务开关控制显隐。`GET /api/assistant/status`只影响状态标签，关闭、未就绪、404及网络失败都允许进入 `pages/assistant/assistant` 查看真实说明，不绕过后端开关。404明确提示后端服务待更新。此入口改动需要发布前端才会影响手机正式版。认证用户创建独立助手会话，输入client_message_id保证重试幂等；会话24小时后过期，最多100轮；独立维护任务每分钟按200会话批次全局清理过期正文/turn/trace，开关关闭后仍继续清理，不承诺精确秒级删除。未确认预览到期24小时后清理；完成的最小报名幂等账本保留30天供核查，之后旧操作ID只会失效，不会重新提交。模型等待不持事务。报名确认只由独立HTTP卡片按钮触发，不能通过工具循环调用确认；原个人approved、团队pending语义保留。
+- 规则维护：管理员 `GET /api/assistant/knowledge` 读取当前version、entries、来源、scope、生效时间、maintainer和公开支持目录；整理审核后 `PUT`完整新版本（expected_version=读取的当前version，version=新编号、maintainer、entries、public_admin_contacts）。每条含id/title/text/keywords/status、可选scope_match_id/effective_from/effective_until及source{title,reference,version}；只有active且在作用域/生效期内可检索。发布后每次读取立即重建关键词索引摘要，不需另装向量库。并发发布基于唯一previous_version拒绝覆盖。公开目录当前仅指向参赛须知；不会因账号是admin/reviewer就公开其通讯录。
+- 知识来源限制：内置种子在 `backend/app/data/assistant_knowledge.json`，来自当前仓库参赛须知及维护者确认的交互要求，附源版本；完整策划案和本会话后续赛制安排有冲突，奖金/完整赛制尚未作为active条款导入。维护者须按具体赛事整理确认后发布，未知项明确未知。赛程/比分/报名/选手地图统计始终用实时业务工具重新查询，不能维护为知识库旧快照。
+- 微信模板只覆盖入队邀请team_invitation和入队申请team_application。个人报名引导订阅后续入队邀请，队长招募引导入队申请；不假称支持报名结果或赛程提醒。原 `WX_SUBSCRIBE_TEMPLATES` 的template_id及fields、正式/体验环境、AppID/Secret仍需与微信后台一致；无配置时允许继续并保留站内渠道，不借用不相干模板。本轮未读取或修改密钥。
+- 订阅状态：`GET /api/notifications/wechat/state`按登录账号和模板隔离；enabled/has_accepted表示曾同意，actual_remaining固定unknown。POST原subscriptions路径新增可选attempt_id防重复回调；成功发送才记对应Outbox使用事件，unknown不冒称送达/消耗，不自动重发。新的授权不被在途旧发送覆盖；补订阅文案只建议补充，不宣称累计额度耗尽。
+- 人工验收：先在体验环境核验首页关闭/开启、两账号会话隔离、对阵BO3小分与导入统计同名消歧；再对个人报名、队长发布招募/邀请/申请、助手个人确认逐一检查原生订阅弹窗。分别accept/reject/ban/取消/断网，确认业务和站内消息行为；由自愿测试账号接收一次真实通知后重进页面，验证补订阅提示、再次授权、切账号及模板变更。真实MySQL并发确认也须在隔离测试库验收；本机SQLite不替代该证据。
+
+### 可选滚动语义摘要（仅助手工作上下文）
+
+此实现参考 LangChain SummarizationMiddleware 与 LangMem RunningSummary 的滚动策略，未复制其源码或引入 LangChain/LangGraph/LangMem 依赖；也未安装 LLMLingua 的额外模型。参考：https://docs.langchain.com/oss/python/langchain/middleware/built-in#summarization 、https://langchain-ai.github.io/langmem/guides/summarization/ 、https://github.com/langchain-ai/langmem 、https://github.com/microsoft/LLMLingua 。
+
+新增 `assistant_summaries` 侧表随原助手迁移命令幂等创建，不给旧表追加列，也不删除或改写原始对话、报名账本；仅显式升级既有MySQL助手轮次时间列的精度，新侧表时间也保留微秒。旧同秒记录若作用域混合则整组与更旧历史不作摘要来源；秒精度scope起点的同秒整组也排除，不能靠UUID猜先后。摘要随24小时助手会话级联清理。旧库未建该表时压缩回退近期历史，仍需在正式启用前完成迁移。
+
+- 配置：`ASSISTANT_SUMMARY_ENABLED=false` 默认关闭；触发预算 `ASSISTANT_SUMMARY_TRIGGER_BYTES=20000`，最多保留 `ASSISTANT_SUMMARY_KEEP_TURNS=6` 个近期完整轮次，工作历史上限 `ASSISTANT_HISTORY_BUDGET_BYTES=50000`；摘要输入上限50000字节、输出上限4000字节、调用超时最多8秒，对应 `ASSISTANT_SUMMARY_INPUT_MAX_BYTES`、`ASSISTANT_SUMMARY_MAX_BYTES`、`ASSISTANT_SUMMARY_TIMEOUT_SECONDS`。这里是JSON UTF-8字节预算，不能当作目标模型的精确token计数；实际出站仍受100000字节硬限制。
+- 自动化范围：只在用户轮次之间，对本账号、本会话、当前连续赛事作用域的已完成且脱敏历史生成旧摘要；最多一次无工具摘要调用，保留近期完整user/assistant消息对，再加入本轮问题与独立受控对象。达到预算时可减少完整轮次数量，不截断某一条消息或JSON。原会话仍按既有24小时政策保留；摘要是有损资料，不能承诺永不遗忘。
+- 一致性：记录作用域起点、`(created_at,id)`来源游标、来源SHA256及摘要版本。先获得会话lease再读源，网络等待无数据库事务或行锁；返回后重新验证lease、来源及版本并以CAS提交。切换/清空赛事隔离旧摘要，重复的空context不误当每轮重置；未成功摘要的来源不推进游标。
+- 信任与权限：摘要仅保存topics/preferences/open_questions/source_notes，作为明确标记的低信任user层资料；不覆盖context_json/memory_json、实时比分/资格、授权或确认卡。当前轮工具调用及tool_call_id结果保持完整配对；reasoning_content仅当前轮内存回传，不入摘要。过大工具结果整体替换为有效的有界JSON提示，不截断协议。未提供用户私聊、截图、学号或确认令牌给摘要器。
+- 失败处理：摘要禁用、表未迁移、预算不足、超时、格式/长度不合格、源变化或CAS冲突时不覆盖有效旧摘要，回退允许的近期完整历史；失去lease则本轮停止。摘要耗时计入原总60秒预算，每轮最多新增一次模型请求；不会因为压缩失败而自动切模型、重试付费摘要或删除原始历史。
+- 启用验收：核心发布已经完成一次真实文本工具循环、结构摘要、登录HTTP公开查询与真实MySQL合成来源游标/锁失效冒烟检查，并按维护者授权开启；生产借用Key的授权例外不改变源码的独立Key/外传/验收门控。后续仍应检查真实摘要质量、遗漏、额外费用、长请求时延、MySQL并发和回退；仅status可用不代表所有链路均验收。此开关只影响助手，不开启私聊压缩或认证图片通道。
+
+真实智谱协议注意：当前GLM-5.3-Flash即使thinking.enabled，部分合法工具响应也会省略reasoning_content。适配器接受该缺失，不补造思考；有字符串时仍原样回传并限制字节，异常类型/超限拒绝。不要把“应当回传供应商实际提供的思考”误写为“供应商每次必须提供思考”。Compose已添加ASSISTANT_*透传，单独修改.env但不透传容器仍不能配置助手。

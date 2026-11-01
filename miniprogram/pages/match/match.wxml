@@ -1,10 +1,10 @@
 <event-return />
-<view class="page">
+<view class="page match-page">
   <view wx:if="{{!match}}" class="empty">{{loadFailed ? '赛事加载失败，请下拉重试' : '正在加载赛事…'}}</view>
 
   <block wx:else>
     <!-- 赛事 Hero -->
-    <view class="hero">
+    <view class="hero {{match.status === 'in_progress' || match.status === 'finished' ? 'hero-compact' : ''}}">
       <view class="hero-orbit hero-orbit-one"></view>
       <view class="hero-orbit hero-orbit-two"></view>
       <view class="hero-top">
@@ -39,7 +39,7 @@
     </view>
 
     <!-- 报名区 -->
-    <view class="card register-card reg-{{myReg ? myReg.status : ''}}">
+    <view wx:if="{{match.status === 'draft' || match.status === 'registering' || (myReg && (myReg.status === 'pending' || myReg.status === 'rejected'))}}" class="card register-card reg-{{myReg ? myReg.status : ''}}">
       <view class="register-heading"><text class="register-title">参赛报名</text><text class="register-caption">{{registerEndText ? '截止 ' + registerEndText : '集结你的校园战队'}}</text></view>
       <view wx:if="{{match.status === 'registering' && canRegisterTeam && !rosterLocked}}" class="btn-primary" bindtap="handleRegister">队伍报名</view>
       <view wx:elif="{{registered}}" class="register-done">
@@ -53,19 +53,21 @@
       <text wx:if="{{rosterLocked && (!myTeam || registered)}}" class="roster-note">参赛名单已锁定，不再接受新队伍报名</text>
     </view>
 
-    <!-- 阶段 tab -->
-    <view class="content-heading"><view><text class="section-kicker">THE TOURNAMENT</text><text class="content-title">赛事中心</text></view><text class="content-note">队伍 · 对阵 · 战绩</text></view>
-    <view class="tabs">
-      <view class="tab {{tab === 'teams' ? 'active' : ''}}" data-tab="teams" bindtap="switchTab"><text class="tab-code">INFO</text><text>队伍</text></view>
-      <view class="tab {{tab === 'challenger' ? 'active' : ''}}" data-tab="challenger" bindtap="switchTab"><text class="tab-code">01</text><text>挑战者组</text></view>
-      <view class="tab {{tab === 'legend' ? 'active' : ''}}" data-tab="legend" bindtap="switchTab"><text class="tab-code">02</text><text>传奇组</text></view>
-      <view class="tab {{tab === 'knockout' ? 'active' : ''}}" data-tab="knockout" bindtap="switchTab"><text class="tab-code">03</text><text>淘汰赛</text></view>
+    <subscribe-notice wx:if="{{!myTeam && (match.status === 'registering' || registered)}}"></subscribe-notice>
+    <view wx:if="{{myMatchSummary && mainTab === 'teams'}}" class="my-match-notice" data-tab="mine" data-jump="true" bindtap="switchTab" role="button" aria-label="查看本队对阵">
+      <view class="match-notice-icon"><image src="/images/icons/swords.svg" /></view>
+      <view class="match-notice-copy"><text class="match-notice-title">{{myMatchSummary.notice_title}}</text><text class="match-notice-meta">{{myMatchSummary.team_name}} · {{myMatchSummary.group_text}}</text></view>
+      <text class="match-notice-link">查看 ›</text>
     </view>
-    <view wx:if="{{tab !== 'teams'}}" class="schedule-hint">{{isCaptain ? '点击自己队伍的时间状态，与对手约定比赛时间' : '比赛时间由双方队长协商，比分由赛事管理者录入'}}</view>
-
+    <view class="tabs event-main-tabs" id="match-content">
+      <view class="tab {{mainTab === 'teams' ? 'active' : ''}}" data-tab="teams" bindtap="switchTab">赛事排名</view>
+      <view class="tab {{mainTab === 'matches' ? 'active' : ''}}" data-tab="matches" bindtap="switchTab">比赛对阵</view>
+      <view class="tab {{mainTab === 'stats' ? 'active' : ''}}" data-tab="stats" bindtap="switchTab">选手数据</view>
+      <view class="tab {{mainTab === 'info' ? 'active' : ''}}" data-tab="info" bindtap="switchTab">赛事信息</view>
+    </view>
     <!-- ===== 队伍 tab：统一赛事排名 ===== -->
-    <view wx:if="{{tab === 'teams'}}" class="card standings-card">
-      <text class="section-title">赛事队伍</text>
+    <view wx:if="{{mainTab === 'teams'}}" class="card standings-card">
+      <text class="section-title">赛事排名</text>
       <text class="section-caption">按阶段与名次展示，同名次并列。点击队伍查看分阶段战绩。</text>
       <view wx:if="{{rankingTeams.length === 0}}" class="empty">暂无队伍</view>
       <view wx:for="{{rankingTeams}}" wx:key="team_id" class="standing-row" bindtap="showTeam" data-id="{{item.team_id}}">
@@ -84,185 +86,97 @@
       </view>
     </view>
 
-    <!-- ===== 挑战者组 tab ===== -->
-    <view wx:if="{{tab === 'challenger'}}">
-      <view class="card">
-        <text class="section-title">挑战者组队伍</text>
-        <view wx:if="{{challengerTeams.length === 0}}" class="empty">暂无挑战者队伍</view>
-        <view class="chip-wrap">
-          <view wx:for="{{challengerTeams}}" wx:key="team_id" class="team-chip">
-            <text class="chip-name">{{item.team_name}}</text>
-            <text wx:if="{{item.group_name}}" class="tag tag-blue">{{item.group_name}}组</text>
-
-          </view>
+    <view wx:if="{{mainTab === 'matches'}}" class="card schedule-card matchup-card">
+      <view class="matchup-filter-heading"><text class="section-title">比赛对阵</text><text class="group-overview-count">{{matchupCount}} 场</text></view>
+      <view class="matchup-filters">
+        <view class="matchup-filter-row">
+          <picker class="matchup-filter-field matchup-stage-select" mode="selector" range="{{matchupStages}}" range-key="label" value="{{matchupStageIndex}}" bindchange="changeMatchupStagePicker">
+            <view class="matchup-select-control"><view class="matchup-select-copy"><text class="matchup-field-label">比赛阶段</text><text class="matchup-field-value">{{matchupStages[matchupStageIndex].label}}</text></view><text class="matchup-select-arrow">⌄</text></view>
+          </picker>
+          <picker class="matchup-filter-field matchup-date-select" mode="selector" range="{{matchupDates}}" range-key="label" value="{{matchupDateIndex}}" bindchange="changeMatchupDate">
+            <view class="matchup-select-control"><view class="matchup-select-copy"><text class="matchup-field-label">比赛日期</text><text class="matchup-field-value">{{matchupDates[matchupDateIndex].label}}</text></view><text class="matchup-select-arrow">⌄</text></view>
+          </picker>
+        </view>
+        <picker wx:if="{{matchupGroups.length}}" class="matchup-group-select" mode="selector" range="{{matchupGroupChoices}}" range-key="label" value="{{matchupGroupIndex}}" bindchange="changeMatchupGroupPicker">
+          <view class="matchup-select-control"><view class="matchup-select-copy"><text class="matchup-field-label">{{matchupStage === 'legend' ? '传奇分区' : '挑战者小组'}}</text><text class="matchup-field-value">{{matchupGroupChoices[matchupGroupIndex].label}}</text></view><text class="matchup-select-arrow">⌄</text></view>
+        </picker>
+        <view class="matchup-filter-footer">
+          <text class="matchup-rule-note">{{matchupStage === 'challenger' ? '挑战者小组赛 · 双循环 BO1' : matchupStage === 'playoff' ? '附加赛 · 单循环 BO1' : matchupStage === 'legend' ? '传奇组 · 单循环 BO1' : matchupStage === 'knockout' ? '淘汰赛 · BO3' : '比赛时间由管理员统一安排'}}</text>
+          <label wx:if="{{myMatchSummary}}" class="matchup-mine-toggle {{onlyMyTeam ? 'active' : ''}}"><switch class="matchup-mine-switch" type="checkbox" checked="{{onlyMyTeam}}" color="#087f8c" bindchange="toggleMyTeam"></switch><text>只看本队</text></label>
         </view>
       </view>
-
-      <view class="card">
-        <text class="section-title">挑战者组对阵</text>
-        <view class="stage-tabs">
-          <view wx:for="{{challengerSwiper}}" wx:key="type" class="stage-tab {{challengerStage === index ? 'active' : ''}}" data-idx="{{index}}" bindtap="switchChallengerStage">{{item.title}}</view>
-        </view>
-        <swiper class="stage-swiper" current="{{challengerStage}}" bindchange="onChallengerSwiper">
-          <swiper-item wx:for="{{challengerSwiper}}" wx:key="type">
-            <!-- 小组赛：按组分区 -->
-            <block wx:if="{{item.type === 'group'}}">
-              <scroll-view scroll-y class="stage-scroll">
-                <view wx:if="{{item.count === 0}}" class="empty">暂无对阵</view>
-                <view wx:for="{{item.groups}}" wx:for-item="gr" wx:for-index="gname" wx:key="gname">
-                  <text class="group-title">{{gname}}组</text>
-                  <view wx:for="{{gr}}" wx:key="id" wx:for-item="r" class="round-row {{r.status === 'finished' ? 'round-finished' : ''}}">
-                    <view class="round-heading"><text class="round-state {{r.status}}">{{r.status === 'finished' ? '已结束' : r.status === 'in_progress' ? '进行中' : '待比赛'}}</text><text class="round-format">第 {{r.round_number}} 场</text></view>
-                    <view class="versus">
-                      <view class="vteam {{r.winner_id === r.team1_id ? 'vteam-win' : ''}}">
-                        <text class="vteam-name">{{r.team1_name || '轮空'}}</text>
-                        <text class="vteam-score {{r.team1_id === r.winner_id ? 'score-win' : ''}}">{{r.team1_score == null ? '-' : r.team1_score}}</text>
+      <text wx:if="{{onlyMyTeam && myMatchSummary}}" class="matchup-own-caption">{{myMatchSummary.team_name}} · 本队在左，对手在右</text>
+      <view wx:if="{{canShowBracket}}" class="schedule-view-switch"><text>{{showBracket ? '六强淘汰赛晋级路径' : '按开赛日期查看完整对阵'}}</text><button class="schedule-view-button" bindtap="toggleMatchupBracket">{{showBracket ? '返回赛程列表' : '查看晋级图'}}</button></view>
+        <block wx:if="{{showBracket}}">
+          <view class="bracket-legend"><view class="bracket-live-dot"></view><text>六强晋级图</text><text class="bracket-scroll-hint">左右滑动查看完整晋级路径 →</text></view>
+          <scroll-view scroll-x class="bracket-scroll" scroll-into-view="{{focusedRoundId ? 'round-' + focusedRoundId : ''}}">
+            <view class="bracket-board">
+              <view wx:for="{{knockoutBracketColumns}}" wx:key="key" wx:for-item="column" class="bracket-column bracket-column-{{column.key}}">
+                <view class="bracket-column-heading"><text>{{column.title}}</text><text class="bracket-column-format">{{column.format}}</text></view>
+                <view class="bracket-nodes">
+                  <view wx:for="{{column.nodes}}" wx:key="key" wx:for-item="node" class="bracket-slot">
+                    <view wx:if="{{node.is_placeholder}}" class="bracket-node bracket-placeholder">
+                      <view class="bracket-node-heading"><text>{{node.label}}</text><text class="bracket-node-state">尚未生成</text></view>
+                      <view class="bracket-team"><view class="bracket-team-mark">{{node.team1_initial}}</view><text class="bracket-team-name">{{node.team1_name}}</text><text class="bracket-team-score">—</text></view>
+                      <view class="bracket-team"><view class="bracket-team-mark">{{node.team2_initial}}</view><text class="bracket-team-name">{{node.team2_name}}</text><text class="bracket-team-score">—</text></view>
+                      <text class="bracket-node-note">等待前序赛程完成后编排</text>
+                    </view>
+                    <view wx:else id="round-{{node.round.id}}" class="bracket-node {{focusedRoundId === node.round.id ? 'round-focused' : ''}} {{node.round.is_mine ? 'bracket-mine' : ''}}" data-id="{{node.round.id}}" bindtap="showBo3">
+                      <view class="bracket-node-heading"><text>{{node.label}}</text><text class="bracket-node-state {{node.round.status}}">{{node.status_text}}</text></view>
+                      <view class="bracket-team {{node.round.status === 'finished' && node.round.winner_id === node.round.team1_id ? 'bracket-team-win' : ''}}"><view class="bracket-team-mark">{{node.team1_initial}}</view><text class="bracket-team-name">{{node.team1_name}}</text><text class="bracket-team-score">{{node.round.status === 'pending' || node.round.team1_score == null ? '—' : node.round.team1_score}}</text></view>
+                      <view class="bracket-team {{node.round.status === 'finished' && node.round.winner_id === node.round.team2_id ? 'bracket-team-win' : ''}}"><view class="bracket-team-mark">{{node.team2_initial}}</view><text class="bracket-team-name">{{node.team2_name}}</text><text class="bracket-team-score">{{node.round.status === 'pending' || node.round.team2_score == null ? '—' : node.round.team2_score}}</text></view>
+                      <view class="bracket-node-footer"><text class="bracket-node-time">{{node.round.schedule_text}}</text><text class="bracket-detail">小局 ›</text></view>
+                      <view wx:if="{{node.round.can_chat}}" class="bracket-actions">
+                        <button class="round-menu-button" data-id="{{node.round.id}}" catchtap="openRoundActions">比赛操作 ···</button>
                       </view>
-                      <text class="vs-text">VS</text>
-                      <view class="vteam {{r.winner_id === r.team2_id ? 'vteam-win' : ''}}">
-                        <text class="vteam-name">{{r.team2_name || '轮空'}}</text>
-                        <text class="vteam-score {{r.team2_id === r.winner_id ? 'score-win' : ''}}">{{r.team2_score == null ? '-' : r.team2_score}}</text>
-                      </view>
-                    </view>
-                    <view class="round-side">
-                    <text class="tag tag-blue">{{r.group_name}}</text>
-                    <text wx:if="{{!r.can_operate}}" class="schedule-status {{r.schedule_status}}">{{r.schedule_text}}</text>
-                    <text wx:else class="schedule-status {{r.schedule_status}} clickable" data-id="{{r.id}}" catchtap="openSchedule">{{r.schedule_text}}</text>
-                    <button wx:if="{{r.can_chat}}" class="round-contact" data-id="{{r.id}}" catchtap="contactRound">联系对方队长</button>
-                  </view>
-                  </view>
-                </view>
-              </scroll-view>
-            </block>
-            <!-- 附加赛 -->
-            <block wx:elif="{{item.type === 'playoff'}}">
-              <scroll-view scroll-y class="stage-scroll">
-                <view wx:if="{{item.rounds.length === 0}}" class="empty">暂无对阵</view>
-                <view wx:for="{{item.rounds}}" wx:key="id" wx:for-item="r" class="round-row {{r.status === 'finished' ? 'round-finished' : ''}}">
-                  <view class="round-heading"><text class="round-state {{r.status}}">{{r.status === 'finished' ? '已结束' : r.status === 'in_progress' ? '进行中' : '待比赛'}}</text><text class="round-format">附加赛</text></view>
-                  <view class="versus">
-                    <view class="vteam {{r.winner_id === r.team1_id ? 'vteam-win' : ''}}">
-                      <text class="vteam-name">{{r.team1_name || '轮空'}}</text>
-                      <text class="vteam-score {{r.team1_id === r.winner_id ? 'score-win' : ''}}">{{r.team1_score == null ? '-' : r.team1_score}}</text>
-                    </view>
-                    <text class="vs-text">VS</text>
-                    <view class="vteam {{r.winner_id === r.team2_id ? 'vteam-win' : ''}}">
-                      <text class="vteam-name">{{r.team2_name || '轮空'}}</text>
-                      <text class="vteam-score {{r.team2_id === r.winner_id ? 'score-win' : ''}}">{{r.team2_score == null ? '-' : r.team2_score}}</text>
                     </view>
                   </view>
-                  <view class="round-side">
-                    <text class="tag tag-blue">{{r.group_name}}</text>
-                    <text wx:if="{{!r.can_operate}}" class="schedule-status {{r.schedule_status}}">{{r.schedule_text}}</text>
-                    <text wx:else class="schedule-status {{r.schedule_status}} clickable" data-id="{{r.id}}" catchtap="openSchedule">{{r.schedule_text}}</text>
-                    <button wx:if="{{r.can_chat}}" class="round-contact" data-id="{{r.id}}" catchtap="contactRound">联系对方队长</button>
-                  </view>
                 </view>
-              </scroll-view>
-            </block>
-          </swiper-item>
-        </swiper>
-      </view>
-    </view>
-
-    <!-- ===== 传奇组 tab ===== -->
-    <view wx:if="{{tab === 'legend'}}">
-      <view class="card">
-        <text class="section-title">传奇组队伍</text>
-        <text class="section-caption">上区 / 下区</text>
-        <view wx:if="{{legendTeams.length === 0}}" class="empty">暂无传奇组队伍</view>
-        <view class="chip-wrap">
-          <view wx:for="{{legendTeams}}" wx:key="team_id" class="team-chip">
-            <text class="chip-name">{{item.team_name}}</text>
-            <text class="tag {{item.seed <= 4 ? 'tag-orange' : 'tag-green'}}">{{item.seed <= 4 ? '直升' : '晋级'}}</text>
-            <text wx:if="{{item.group_name}}" class="tag tag-blue">{{item.group_name}}</text>
-
-          </view>
-        </view>
-      </view>
-
-      <view class="card">
-        <text class="section-title">传奇组循环赛对阵</text>
-        <view class="stage-tabs">
-          <view wx:for="{{legendSwiper}}" wx:key="title" class="stage-tab {{legendStage === index ? 'active' : ''}}" data-idx="{{index}}" bindtap="switchLegendStage">{{item.title}}</view>
-        </view>
-        <swiper class="stage-swiper" current="{{legendStage}}" bindchange="onLegendSwiper">
-          <swiper-item wx:for="{{legendSwiper}}" wx:key="title">
-            <scroll-view scroll-y class="stage-scroll">
-              <view wx:if="{{item.rounds.length === 0}}" class="empty">暂无对阵</view>
-              <view wx:for="{{item.rounds}}" wx:key="id" wx:for-item="r" class="round-row {{r.status === 'finished' ? 'round-finished' : ''}}">
-                <view class="round-heading"><text class="round-state {{r.status}}">{{r.status === 'finished' ? '已结束' : r.status === 'in_progress' ? '进行中' : '待比赛'}}</text><text class="round-format">第 {{r.round_number}} 场</text></view>
-                <view class="versus">
-                  <view class="vteam {{r.winner_id === r.team1_id ? 'vteam-win' : ''}}">
-                    <text class="vteam-name">{{r.team1_name || '轮空'}}</text>
-                    <text class="vteam-score {{r.team1_id === r.winner_id ? 'score-win' : ''}}">{{r.team1_score == null ? '-' : r.team1_score}}</text>
-                  </view>
-                  <text class="vs-text">VS</text>
-                  <view class="vteam {{r.winner_id === r.team2_id ? 'vteam-win' : ''}}">
-                    <text class="vteam-name">{{r.team2_name || '轮空'}}</text>
-                    <text class="vteam-score {{r.team2_id === r.winner_id ? 'score-win' : ''}}">{{r.team2_score == null ? '-' : r.team2_score}}</text>
-                  </view>
-                </view>
-                <view class="round-side">
-                    <text class="tag tag-blue">{{r.group_name}}</text>
-                    <text wx:if="{{!r.can_operate}}" class="schedule-status {{r.schedule_status}}">{{r.schedule_text}}</text>
-                    <text wx:else class="schedule-status {{r.schedule_status}} clickable" data-id="{{r.id}}" catchtap="openSchedule">{{r.schedule_text}}</text>
-                    <button wx:if="{{r.can_chat}}" class="round-contact" data-id="{{r.id}}" catchtap="contactRound">联系对方队长</button>
-                  </view>
-              </view>
-            </scroll-view>
-          </swiper-item>
-        </swiper>
-      </view>
-    </view>
-
-    <!-- ===== 淘汰赛 tab（BO3 大比分，点行看小局） ===== -->
-    <view wx:if="{{tab === 'knockout'}}">
-      <view class="card">
-        <text class="section-title">淘汰赛队伍</text>
-        <text class="section-caption">六强 · 上下区</text>
-        <view wx:if="{{playoffTeams.length === 0}}" class="empty">暂无淘汰赛队伍</view>
-        <view class="chip-wrap">
-          <view wx:for="{{playoffTeams}}" wx:key="team_id" class="team-chip">
-            <text class="chip-name">{{item.team_name}}</text>
-            <text wx:if="{{item.stage === 'playoff' && item.seed <= 2}}" class="tag tag-orange">轮空·直进半决赛</text>
-            <text wx:elif="{{item.stage === 'playoff' && item.seed <= 4}}" class="tag tag-green">1/4决赛·第2</text>
-            <text wx:elif="{{item.stage === 'playoff'}}" class="tag tag-blue">1/4决赛·第3</text>
-            <text wx:else class="tag tag-gray">已淘汰</text>
-            <text wx:if="{{item.group_name}}" class="tag tag-blue">{{item.group_name}}</text>
-
-          </view>
-        </view>
-      </view>
-
-      <view class="card">
-        <text class="section-title">淘汰赛对阵</text>
-        <text class="section-caption">BO3 三局两胜 · 点击对阵查看小局</text>
-        <view wx:if="{{knockoutGroups.length === 0}}" class="empty">暂无对阵</view>
-        <view wx:for="{{knockoutGroups}}" wx:key="title" wx:for-item="grp" class="ko-section">
-          <text class="group-title ko-title">{{grp.title}}</text>
-          <view wx:for="{{grp.rounds}}" wx:key="id" wx:for-item="item" class="round-row ko-row {{item.status === 'finished' ? 'round-finished' : ''}}" bindtap="showBo3" data-id="{{item.id}}">
-            <view class="round-heading"><text class="round-state {{item.status}}">{{item.status === 'finished' ? '已结束' : item.status === 'in_progress' ? '进行中' : '待比赛'}}</text><text class="round-format">BO3</text></view>
-            <view class="versus">
-              <view class="vteam {{item.winner_id === item.team1_id ? 'vteam-win' : ''}}">
-                <text class="vteam-name">{{item.team1_name || '轮空'}}</text>
-              </view>
-              <view class="big-score">
-                <text class="big-score-text {{item.status === 'finished' ? 'score-win' : 'score-tbd'}}">{{item.team1_score}} : {{item.team2_score}}</text>
-                <text class="big-score-label">{{item.ko_label}}</text>
-              </view>
-              <view class="vteam {{item.winner_id === item.team2_id ? 'vteam-win' : ''}}">
-                <text class="vteam-name">{{item.team2_name || '轮空'}}</text>
               </view>
             </view>
-            <view class="round-side">
-              <text class="bo3-more">小局 ›</text>
-              <text wx:if="{{!item.can_operate}}" class="schedule-status {{item.schedule_status}}">{{item.schedule_text}}</text>
-              <text wx:else class="schedule-status {{item.schedule_status}} clickable" data-id="{{item.id}}" catchtap="openSchedule">{{item.schedule_text}}</text>
-              <button wx:if="{{item.can_chat}}" class="round-contact" data-id="{{item.id}}" catchtap="contactRound">联系对方队长</button>
+          </scroll-view>
+        </block>
+      <block wx:if="{{!showBracket}}">
+        <view wx:if="{{matchupCount === 0}}" class="empty">{{matchupEmptyText}}</view>
+        <view wx:for="{{matchupTimelineSections}}" wx:key="key" wx:for-item="section" class="group-match-table schedule-day-section">
+          <view class="round-group-heading schedule-day-heading"><view class="schedule-day-copy"><text class="group-title">{{section.title}}</text><text class="schedule-day-caption">{{section.caption}}</text></view><text class="group-round-count">{{section.rounds.length}} 场</text></view>
+          <view wx:for="{{section.rounds}}" wx:key="id" wx:for-item="r" id="round-{{r.id}}" class="round-row schedule-match-card {{r.group_name === '淘汰赛' ? 'ko-row' : ''}} {{focusedRoundId === r.id ? 'round-focused' : ''}} {{r.status === 'finished' ? 'round-finished' : ''}} {{r.is_mine ? 'round-mine' : ''}}" bindtap="openMatchupDetail" data-id="{{r.id}}">
+            <view class="round-heading schedule-match-heading"><view class="round-heading-state"><text wx:if="{{r.is_mine}}" class="my-team-badge">本队</text><text class="round-state {{r.status}}">{{r.status === 'finished' ? '已结束' : r.status === 'in_progress' ? '进行中' : '待比赛'}}</text></view><text class="schedule-stage-text">{{r.stage_label}} · {{r.group_name === '淘汰赛' ? 'BO3' : 'BO1'}}</text></view>
+            <view class="schedule-match-main">
+              <view class="schedule-time"><text class="schedule-clock">{{r.timeline_clock}}</text><text class="schedule-clock-caption">{{r.timeline_clock_caption}}</text></view>
+              <view class="versus matchup-duel">
+                <view class="vteam matchup-team {{r.display_winner1 ? 'vteam-win' : ''}}"><view class="team-mark">{{r.display_team1_initial}}</view><text class="vteam-name">{{r.display_team1_name}}</text></view>
+                <view class="schedule-duel-score"><view class="schedule-scoreline"><text class="vteam-score {{r.display_winner1 ? 'score-win' : ''}}">{{r.status === 'pending' || r.display_score1 == null ? '—' : r.display_score1}}</text><text class="schedule-score-divider">:</text><text class="vteam-score {{r.display_winner2 ? 'score-win' : ''}}">{{r.status === 'pending' || r.display_score2 == null ? '—' : r.display_score2}}</text></view><text class="schedule-score-caption">{{r.group_name === '淘汰赛' ? '大比分' : '地图比分'}}</text></view>
+                <view class="vteam matchup-team {{r.display_winner2 ? 'vteam-win' : ''}}"><view class="team-mark">{{r.display_team2_initial}}</view><text class="vteam-name">{{r.display_team2_name}}</text></view>
+              </view>
             </view>
+            <view class="matchup-result-line schedule-card-footer"><text class="round-format">{{r.group_match_text || '赛事第 ' + r.round_number + ' 场'}}{{r.group_round_label ? ' · ' + r.group_round_label : ''}}</text><text wx:if="{{onlyMyTeam && r.status === 'finished'}}" class="my-result {{r.result_text === '胜' ? 'win' : r.result_text === '负' ? 'loss' : ''}}">本队{{r.result_text}}</text><button wx:if="{{r.can_chat}}" class="round-menu-button" data-id="{{r.id}}" catchtap="openRoundActions">{{r.group_name === '淘汰赛' ? '比赛操作 ···' : '联系队长 ›'}}</button><text wx:else class="bo3-more">{{r.group_name === '淘汰赛' ? '小局详情 ›' : '比赛详情 ›'}}</text></view>
+            <text wx:if="{{onlyMyTeam && r.bo3_text}}" class="record-maps matchup-maps">小局（本队在前）：{{r.bo3_text}}</text>
           </view>
         </view>
+      </block>
+      <text class="matchup-admin-note">如需调整比赛时间，请联系赛事管理员。</text>
+    </view>
+    <view wx:if="{{mainTab === 'stats'}}" class="event-player-stats"><player-stats match-id="{{match.id}}" /></view>
+    <view wx:if="{{mainTab === 'info'}}" class="card event-info-card">
+      <text class="section-title">赛事信息</text>
+      <text class="event-info-description">{{match.description || '赛事介绍待补充'}}</text>
+      <view class="event-info-line"><text>赛事类型</text><text>{{match.match_type === 'freshman' ? '新生赛' : '校园赛事'}} · CS2</text></view>
+      <view class="event-info-line"><text>参赛规模</text><text>{{teams.length}} / {{match.max_teams || '不限'}} 队 · 每队 {{match.team_size || '不限'}} 人</text></view>
+      <view class="event-info-line"><text>报名截止</text><text>{{registerEndText || '未设置'}}</text></view>
+      <view class="event-format-list"><view><text>挑战者小组赛</text><text>双循环 BO1</text></view><view wx:if="{{hasPlayoffStage}}"><text>附加赛</text><text>单循环 BO1</text></view><view><text>传奇组</text><text>单循环 BO1</text></view><view><text>淘汰赛</text><text>BO3</text></view></view>
+      <text class="section-caption">比赛时间由管理员统一安排。队伍战绩可在赛事排名中点击查看。</text>
+      <button class="event-rules-link" bindtap="goRules">查看完整赛事规则 <text>›</text></button>
+    </view>
+    <!-- 按实际参赛名单与历史对阵列出分组，不用阶段排名猜测组别 -->
+    <view wx:if="{{mainTab === 'info' && groupOverview.length}}" id="group-overview" class="card group-overview-card">
+      <view class="group-overview-heading"><text class="section-title">分组一览</text><text class="group-overview-count">{{groupCount ? groupCount + ' 个挑战者小组 · ' : ''}}{{teams.length}} 支队伍</text></view>
+      <text class="section-caption">完整参赛分组与历史组员。点击队伍查看战绩，或进入该组对阵。</text>
+      <view wx:for="{{groupOverview}}" wx:key="key" wx:for-item="group" class="group-overview-section {{group.is_mine ? 'my-group-section' : ''}}">
+        <view class="group-overview-title"><text>{{group.label}}</text><text class="group-member-count">{{group.team_count}} 队<text wx:if="{{group.is_mine}}"> · 本队所在</text></text></view>
+        <view wx:for="{{group.teams}}" wx:key="team_id" wx:for-item="team" class="group-member {{team.is_mine ? 'my-group-member' : ''}}" data-id="{{team.team_id}}" bindtap="showTeam"><view class="group-member-dot"></view><text class="group-member-name">{{team.team_name}}</text><text wx:if="{{team.is_mine}}" class="my-team-badge">我的队伍</text></view>
+        <text wx:if="{{group.hint && !group.round_count}}" class="group-overview-hint">{{group.hint}}</text>
+        <view class="group-overview-footer"><text wx:if="{{group.round_count}}" class="group-progress">已完成 {{group.finished_count}} / {{group.round_count}} 场</text><button wx:if="{{group.can_view}}" class="group-round-link" data-tab="{{group.tab}}" data-group="{{group.group_name}}" bindtap="openGroupRounds">查看{{group.label}}对阵 ›</button></view>
       </view>
     </view>
 
@@ -297,10 +211,10 @@
           <image class="detail-close" src="/images/icons/x.svg" bindtap="closeBo3"/>
         </view>
         <view class="bo3-big">
-          <text class="bo3-big-score">{{bo3Detail.score1}} : {{bo3Detail.score2}}</text>
+          <text class="bo3-big-score">{{bo3Detail.status === 'pending' ? 'VS' : (bo3Detail.score1 == null ? '—' : bo3Detail.score1) + ' : ' + (bo3Detail.score2 == null ? '—' : bo3Detail.score2)}}</text>
           <text class="bo3-big-label">{{bo3Detail.ko_label}}</text>
         </view>
-        <view wx:if="{{bo3Detail.games.length === 0}}" class="empty">暂无小局比分</view>
+        <view wx:if="{{bo3Detail.games.length === 0}}" class="empty">{{bo3Detail.format_text === 'BO1' ? '本场采用 BO1，比分以上方展示为准' : '暂无小局比分'}}</view>
         <view wx:for="{{bo3Detail.games}}" wx:key="index" class="bo3-game">
           <text class="bo3-game-title">第{{index + 1}}局</text>
           <text class="bo3-game-score">{{item.t1}} : {{item.t2}}</text>
@@ -309,63 +223,5 @@
       </view>
     </view>
 
-    <!-- 时间协商面板 -->
-    <view wx:if="{{showSchedule && scheduleRound}}" class="mask" bindtap="closeSchedule">
-      <view class="schedule-panel" catchtap="noop">
-        <view class="detail-header">
-          <text class="section-title">比赛时间协商</text>
-          <image class="detail-close" src="/images/icons/x.svg" bindtap="closeSchedule"/>
-        </view>
-        <text class="team-meta">{{scheduleRound.team1_name || '轮空'}} vs {{scheduleRound.team2_name || '轮空'}}</text>
-        <button wx:if="{{scheduleRound.can_chat}}" class="round-contact" data-id="{{scheduleRound.id}}" catchtap="contactRound">先和对方队长聊一聊</button>
-        <text wx:if="{{scheduleRound.window_text}}" class="team-meta">限定时段：{{scheduleRound.window_text}}</text>
-
-        <!-- 未约定：提交时间 -->
-        <block wx:if="{{scheduleRound.schedule_status === 'unconfirmed'}}">
-          <view class="win-row">
-            <text class="win-label">日期</text>
-            <picker mode="date" value="{{scheduleDate}}" bindchange="onScheduleDateChange">
-              <view class="win-picker">{{scheduleDate || '选择日期'}}</view>
-            </picker>
-          </view>
-          <view class="win-row">
-            <text class="win-label">时间</text>
-            <picker mode="time" value="{{scheduleTime}}" bindchange="onScheduleTimeChange">
-              <view class="win-picker">{{scheduleTime || '选择时间'}}</view>
-            </picker>
-          </view>
-          <view class="score-btns">
-            <view class="btn-outline" bindtap="closeSchedule">取消</view>
-            <view class="btn-primary" bindtap="submitSchedule">提交时间</view>
-          </view>
-        </block>
-
-        <!-- 待确认：我方未确认，可同意/拒绝 -->
-        <block wx:elif="{{scheduleRound.schedule_status === 'pending' && !scheduleRound.i_confirmed}}">
-          <text class="team-meta">对方提议：{{scheduleRound.schedule_text}}</text>
-          <view class="score-btns">
-            <view class="btn-outline" bindtap="rejectSchedule">拒绝</view>
-            <view class="btn-primary" bindtap="confirmSchedule">同意</view>
-          </view>
-        </block>
-
-        <!-- 待确认：我方已确认，等待对方（可撤回提议） -->
-        <block wx:elif="{{scheduleRound.schedule_status === 'pending' && scheduleRound.i_confirmed}}">
-          <text class="team-meta">已提交 {{scheduleRound.schedule_text}}，等待对方确认</text>
-          <view class="score-btns">
-            <view class="btn-outline" bindtap="rejectSchedule">作废提议</view>
-          </view>
-        </block>
-
-        <!-- 已确定：展示 + 作废重新协商 -->
-        <block wx:else>
-          <text class="team-meta">比赛时间已确定：{{scheduleRound.schedule_text}}</text>
-          <view class="score-btns">
-            <view class="btn-outline" bindtap="closeSchedule">关闭</view>
-            <view class="btn-outline" bindtap="rejectSchedule">作废重新协商</view>
-          </view>
-        </block>
-      </view>
-    </view>
   </block>
 </view>

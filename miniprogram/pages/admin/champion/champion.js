@@ -200,5 +200,5 @@ Page({
     if (index >= 0 && index < pages.length - 1) wx.navigateBack({ delta: pages.length - 1 - index, fail: () => wx.redirectTo({ url: '/pages/admin/admin?tab=matches' }) })
     else wx.redirectTo({ url: '/pages/admin/admin?tab=matches' })
   },
-  goMatchAdmin() { wx.navigateTo({ url: '/pages/admin/mdetail/mdetail?id=' + this.data.matchId }) }
+  goMatchAdmin() { wx.navigateTo({ url: '/pages/admin/mdetail/mdetail?matchId=' + this.data.matchId }) }
 })

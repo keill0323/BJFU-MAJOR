@@ -87,7 +87,12 @@ for (const [name, action, upload] of [
     assert.equal(state.compressions.length, 0)
     assert.equal(state.uploads.length, 0)
     dialog.agree(agreeEvent())
-    assert.deepEqual(state.uploads, [{ method: upload, value: '/compressed.jpg' }])
+    assert.deepEqual(state.uploads, [{ method: upload,
+      value: action === 'chooseRankImage' ? '/selected.jpg' : '/compressed.jpg' }])
+    if (action === 'chooseRankImage') {
+      assert.equal(state.compressions.length, 0, 'rank screenshot text must retain original pixels')
+      assert.deepEqual(Array.from(state.media[0].sizeType), ['original'])
+    }
     assert.equal(state.media.length, 1, 'do not call chooseMedia again after native resume')
     assert.equal(dialog.data.visible, false)
     dialog.agree(agreeEvent())
