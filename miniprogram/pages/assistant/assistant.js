@@ -13,6 +13,10 @@ const positiveId = value => Number.isSafeInteger(Number(value)) && Number(value)
 const plain = (value, limit = 5000) => typeof value === 'string' ? value.slice(0, limit) : ''
 const actionId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : ''
 const statsKey = value => typeof value === 'string' && /^[a-f0-9]{32}$/.test(value) ? value : ''
+// 仅保留本次小程序运行内、同一登录令牌的会话；不把聊天或令牌写入本地存储。
+let sessionSnapshot = null
+let sessionOwner = null
+const clone = value => JSON.parse(JSON.stringify(value))
 
 function decorateCards(cards, completed = {}, uncertain = {}, currentVerification = false) {
   return (Array.isArray(cards) ? cards : []).filter(card => card && CARD_TYPES.includes(card.type)).slice(0, 12).map((card, cardIndex) => {
@@ -34,7 +38,8 @@ function decorateCards(cards, completed = {}, uncertain = {}, currentVerificatio
           contact_player: '联系选手', contact_team: '联系队长', select_match: '选择赛事', select_team: '选择队伍', select_player: '选择选手', select_stats_player: '选择统计选手', open_rules: '查看参赛须知', open_verify: '查看／提交材料' }[kind] || ''
         return { key: 'item-' + itemIndex, id: itemId, title: plain(item.title, 160), subtitle: plain(item.subtitle, 500), detail: plain(item.detail), badge: plain(item.badge, 160),
           action: validAction ? { kind, id: target, player_key: playerKey, match_id: matchId, scope } : null, actionLabel: validAction ? label : '',
-          selectKind: itemId ? ({ matches: 'match', teams: 'team', players: 'player' }[card.type] || '') : '' }
+          selectKind: itemId ? ({ matches: 'match', teams: 'team', players: 'player' }[card.type] || '') : '',
+          selectField: ({ matches: 'match_id', teams: 'team_id', players: 'player_id' }[card.type] || '') }
       })
     }
   })
@@ -59,6 +64,13 @@ Page({
   onShow() { this._visible = true; this.syncAccount(); wechatSubscriptions().catch(() => {}); return this.loadStatus() },
   onHide() { this.stop() },
   onUnload() { this.stop(); this._conversationId = null; this._pendingMessage = null },
+  rememberSession() {
+    if (sessionOwner !== this || !this._token || this._token !== (wx.getStorageSync('token') || '')) return
+    sessionSnapshot = clone({ token: this._token, conversationId: this._conversationId || null,
+      pendingMessage: this._pendingMessage || null, confirmedActions: this._confirmedActions, uncertainActions: this._uncertainActions,
+      data: { messages: this.data.messages, draft: this.data.draft, context: this.data.context, contextLabels: this.data.contextLabels,
+        requestError: this.data.requestError, retryAvailable: this.data.retryAvailable } })
+  },
   stop() {
     this._visible = false
     this._generation = (this._generation || 0) + 1
@@ -74,16 +86,27 @@ Page({
       }))
       this.setData({ messages: this.data.messages, requestError: '报名结果尚未确认，返回后可核查同一操作' })
     }
+    this.rememberSession()
   },
   syncAccount() {
     const token = wx.getStorageSync('token') || ''
     if (token !== this._token) {
+      const saved = this._token === undefined && token && sessionSnapshot && sessionSnapshot.token === token ? clone(sessionSnapshot) : null
+      sessionSnapshot = null
+      sessionOwner = this
       this._token = token
       this._generation = (this._generation || 0) + 1
       this._conversationId = null; this._pendingMessage = null; this._confirmedActions = {}; this._uncertainActions = {}; this._confirmPendingId = null; this._contactAttempt = null
       this.setData({ messages: [], draft: '', context: {}, contextLabels: {}, requestError: '', retryAvailable: false,
         sending: false, confirming: '', selector: '', options: [], logged: !!token,
         verificationCard: null, verificationError: '', verificationLoading: false })
+      if (saved) {
+        this._conversationId = saved.conversationId
+        this._pendingMessage = saved.pendingMessage
+        this._confirmedActions = saved.confirmedActions
+        this._uncertainActions = saved.uncertainActions
+        this.setData(saved.data)
+      }
     }
     return token
   },
@@ -157,7 +180,7 @@ Page({
       })) })
       this.scrollToEnd()
     } catch (error) {
-      if (!this.current(g, token)) return
+      if (!this.current(g, token) || id !== this._conversationId) return
       if ([404, 410].includes(error.statusCode)) { this._conversationId = null; this._pendingMessage = null; this.setData({ messages: [], retryAvailable: false }) }
       this.setData({ requestError: error.detail || '会话状态未能恢复，请重试' })
     }
@@ -179,14 +202,16 @@ Page({
     return this._visible && this.data.available && !this.data.loading
   },
   async send() {
+    return this.sendMessage(this.data.draft.trim())
+  },
+  async sendMessage(text, preserveDraft = false) {
     if (!this.canUse() || this.data.sending || this.data.confirming) return
     if (this._pendingMessage) { wx.showToast({ title: '请先获取上一条结果，或开启新对话', icon: 'none' }); return }
-    const text = this.data.draft.trim()
     if (!text) return
     const intent = { client_message_id: 'am_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2).padEnd(13, '0') + Math.random().toString(36).slice(2).padEnd(13, '0'),
       message: text, context: Object.assign({}, this.data.context) }
     this._pendingMessage = intent
-    this.setData({ draft: '', messages: this.data.messages.concat({ id: intent.client_message_id, role: 'user', content: text, cards: [] }) })
+    this.setData({ draft: preserveDraft ? this.data.draft : '', messages: this.data.messages.concat({ id: intent.client_message_id, role: 'user', content: text, cards: [] }) })
     return this.sendIntent(intent)
   },
   retryMessage() {
@@ -246,7 +271,18 @@ Page({
   chooseOption(e) {
     const item = this.data.options.find(item => item.id === Number(e.currentTarget.dataset.id))
     if (!item || !this.data.selector) return
-    this.setContext(this.data.selector, item.id, item.title); this.closeSelector()
+    const kind = this.data.selector
+    this.closeSelector()
+    return this.selectContext(kind, item.id, item.title)
+  },
+  selectContext(kind, id, title) {
+    if (!this.canUse() || this.data.sending || this.data.confirming || !this.setContext(kind, id, title)) return
+    if (kind === 'match') {
+      if (this._pendingMessage) { wx.showToast({ title: '已选赛事，请先获取上一条结果', icon: 'none' }); return }
+      wx.showToast({ title: '已选择，正在查询赛事', icon: 'none' })
+      return this.sendMessage('请以所选赛事继续刚才的查询；如果没有未完成的问题，请介绍赛事当前状态及对阵安排。', true)
+    }
+    wx.showToast({ title: '已选为查询对象', icon: 'success' })
   },
   setContext(kind, id, title) {
     const field = SCOPE_FIELDS[kind], target = positiveId(id)
@@ -258,6 +294,7 @@ Page({
     }
     context[field] = target; labels[kind] = plain(title, 160)
     this.setData({ context, contextLabels: labels })
+    return true
   },
   clearContext(e) {
     const kind = e.currentTarget.dataset.kind, field = kind === 'stats_player' ? 'stats_player_key' : SCOPE_FIELDS[kind]
@@ -278,7 +315,14 @@ Page({
   selectCardItem(e) {
     if (!this.canUse() || this.data.sending || this.data.confirming) return
     const card = this.getCard(e), item = card && card.items[Number(e.currentTarget.dataset.item)]
-    if (item && item.selectKind) this.setContext(item.selectKind, item.id, item.title)
+    if (item && item.selectKind) return this.selectContext(item.selectKind, item.id, item.title)
+  },
+  navigateToDetail(url) {
+    const token = this._token, g = this._generation
+    this.rememberSession()
+    wx.navigateTo({ url, fail: () => {
+      if (this.current(g, token)) wx.showToast({ title: '页面未能打开，请重试', icon: 'none' })
+    } })
   },
   async openCardItem(e) {
     const card = this.getCard(e), item = card && card.items[Number(e.currentTarget.dataset.item)], action = item && item.action
@@ -295,9 +339,9 @@ Page({
       return
     }
     if (!id) return
-    if (kind === 'open_match') wx.navigateTo({ url: '/pages/match/match?id=' + id })
-    else if (kind === 'open_team') wx.navigateTo({ url: '/pages/teams/teams?teamId=' + id })
-    else if (['open_player', 'select_player', 'select_team', 'select_match'].includes(kind)) this.setContext(kind.endsWith('team') ? 'team' : kind.endsWith('match') ? 'match' : 'player', id, item.title)
+    if (kind === 'open_match') this.navigateToDetail('/pages/match/match?id=' + id + '&source=assistant')
+    else if (kind === 'open_team') this.navigateToDetail('/pages/teams/teams?teamId=' + id)
+    else if (['open_player', 'select_player', 'select_team', 'select_match'].includes(kind)) return this.selectContext(kind.endsWith('team') ? 'team' : kind.endsWith('match') ? 'match' : 'player', id, item.title)
     else if (['contact_player', 'contact_team'].includes(kind)) {
       if (this._contactAttempt) return
       const attempt = this._contactAttempt = {}, token = this._token, g = this._generation
@@ -337,7 +381,9 @@ Page({
   newConversation() {
     if (this.data.sending || this.data.confirming) return
     this._conversationId = null; this._pendingMessage = null; this._confirmPendingId = null
+    this._confirmedActions = {}; this._uncertainActions = {}
     this.setData({ messages: [], requestError: '', retryAvailable: false, draft: '' })
+    this.rememberSession()
   },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }) },
   goEvents() { wx.reLaunch({ url: '/pages/index/index' }) }

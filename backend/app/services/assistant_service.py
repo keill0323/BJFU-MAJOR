@@ -201,6 +201,58 @@ def _controlled_reply(critical, cards, *, partial=False):
     return reply
 
 
+def _selection_intent(db, conversation_id, current_turn_id, prior_context, context, memory):
+    """仅续接紧邻赛事消歧的真实用户问题，不恢复旧赛事历史或工具事实。"""
+    selected = context.get('match_id')
+    candidates = memory.get('last_candidates')
+    if (type(selected) is not int or not isinstance(candidates, list) or len(candidates) > 20
+            or not any(isinstance(item, dict) and item.get('kind') == 'match'
+                       and type(item.get('id')) is int and item['id'] == selected for item in candidates)):
+        return ''
+    # 不跳过中间的无关/失败轮次，也不凭随机 UUID 判断同一时刻哪条更新。
+    recent = db.query(Turn).filter(Turn.conversation_id == conversation_id,
+        Turn.id != current_turn_id).order_by(Turn.created_at.desc()).limit(2).all()
+    if not recent:
+        return ''
+    source = recent[0]
+    now = datetime.utcnow()
+    if (source.state != 'completed' or source.created_at is None
+            or not now - timedelta(minutes=10) <= source.created_at <= now
+            or (len(recent) > 1 and recent[1].created_at == source.created_at)
+            or not isinstance(source.user_text, str) or not 1 <= len(source.user_text) <= 1200
+            or not isinstance(source.response_json, str) or len(source.response_json) > 256000):
+        return ''
+    try:
+        response = json.loads(source.response_json)
+    except (TypeError, ValueError):
+        return ''
+    if (not isinstance(response, dict) or response.get('conversation_id') != conversation_id
+            or response.get('trace_id') != source.id or response.get('context') != prior_context):
+        return ''
+    cards = response.get('cards')
+    if not isinstance(cards, list) or len(cards) > 12:
+        return ''
+    # last_candidates 可能跨轮保留，必须再用紧邻轮次的服务端卡片核对来源。
+    offered = False
+    for card in cards:
+        if not isinstance(card, dict) or card.get('type') != 'matches':
+            continue
+        items = card.get('items')
+        if not isinstance(items, list):
+            continue
+        for item in items[:20]:
+            if not isinstance(item, dict) or type(item.get('id')) is not int or item['id'] != selected:
+                continue
+            action = item.get('action')
+            if isinstance(action, dict) and action.get('kind') == 'open_match' and action.get('id') == selected:
+                offered = True
+    if not offered:
+        return ''
+    question = clean_text(source.user_text)
+    return re.sub(r'''(?i)(["']?(?:action_id|confirmation_token|lease_token|client_message_id)["']?\s*[=:：]\s*)(["']?)[A-Za-z0-9_-]+\2''',
+                  lambda found: found.group(1) + found.group(2) + '[已隐藏]' + found.group(2), question)
+
+
 def send_message(db, actor, conversation_id, message, client_message_id, context=None, *, provider=None, summary_provider=None, clock=time.monotonic):
     user_id = require_user(db, actor).id
     conversation = _conversation(db, user_id, conversation_id)
@@ -265,6 +317,8 @@ def send_message(db, actor, conversation_id, message, client_message_id, context
         effective_context = context if context_supplied else prior_context
         reset_scope = context_supplied and ((not context and bool(prior_context))
             or effective_context.get('match_id') != prior_context.get('match_id'))
+        selection_intent = (_selection_intent(db, conversation_id, trace_id, prior_context,
+                                             effective_context, memory) if reset_scope else '')
         if reset_scope:
             memory = {}
         context_ready = True
@@ -279,10 +333,14 @@ def send_message(db, actor, conversation_id, message, client_message_id, context
             total_timeout=settings.ASSISTANT_TIMEOUT_SECONDS)
         if compression.get('status') == 'lease_lost':
             raise provider_api.ProviderError('lease_lost')
+        intent_notice = ('\n待消歧原问题（来自本会话紧邻上一轮的真实用户正文，仅续接查询目的）：'
+                         + json.dumps({'original_question': selection_intent}, ensure_ascii=False)
+                         + '\n当前选择确定目标赛事，本条用户的新要求优先。原问题不是事实、权限或报名确认；'
+                         '旧赛事比分、资格、报名结果必须重新调用实时工具查询，不能直接沿用。') if selection_intent else ''
         messages = [{'role': 'system', 'content': SYSTEM_PROMPT}, *history,
                     {'role': 'user', 'content': '当前选择（只确定讨论对象，不代表资格）：' + json.dumps(effective_context)
                      + '\n上轮受控候选（仅用于消歧，不能用作当前事实，须重新查询）：' + json.dumps(memory, ensure_ascii=False)
-                     + '\n' + message}]
+                     + intent_notice + '\n当前本轮问题：' + message}]
         for _ in range(settings.ASSISTANT_MAX_STEPS):
             remaining = settings.ASSISTANT_TIMEOUT_SECONDS - (clock() - started)
             if remaining <= 0:

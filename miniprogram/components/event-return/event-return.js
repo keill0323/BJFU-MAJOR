@@ -1,7 +1,10 @@
-const { returnToEvents } = require('../../utils/navigation.js')
+const { returnToEvents, returnToAssistant } = require('../../utils/navigation.js')
 
 Component({
+  properties: {
+    source: { type: String, value: '' }
+  },
   methods: {
-    goEvents() { return returnToEvents() }
+    goEvents() { return this.data.source === 'assistant' ? returnToAssistant() : returnToEvents() }
   }
 })

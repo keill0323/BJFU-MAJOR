@@ -617,7 +617,7 @@ function createRenderer(navData, teamProfileData = null) {
     if ('wx:if' in attrs && !evaluate(attrs['wx:if'], scope)) return ''
     if (node.tag === 'block') return children(node.children, scope)
     if (node.tag === 'nav-drawer') return '<div class="preview-component">' + children(navTree.children, { ...navData, title: interpolate(attrs.title, scope), showAdminNotice: attrs['show-admin-notice'] ? !!evaluate(attrs['show-admin-notice'], scope) : !!navData.showAdminNotice }) + '</div>'
-    if (node.tag === 'event-return') return '<div class="preview-component">' + children(returnTree.children, {}) + '</div>'
+    if (node.tag === 'event-return') return '<div class="preview-component">' + children(returnTree.children, { source: attrs.source ? interpolate(attrs.source, scope) : '' }) + '</div>'
     if (node.tag === 'chat-entry') return '<div class="preview-component">' + children(chatEntryTree.children, { unread: 0 }) + '</div>'
     if (node.tag === 'team-profile') return profileTree ? '<div class="preview-component">' + children(profileTree.children, teamProfileData) + '</div>' : ''
     let tag = ({ view: 'div', text: 'span', image: 'img', 'scroll-view': 'div', swiper: 'div', 'swiper-item': 'div', picker: 'div', switch: 'input', input: 'input', textarea: 'textarea', button: 'button' })[node.tag] || 'div'

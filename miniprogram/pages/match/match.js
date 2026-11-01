@@ -65,6 +65,7 @@ function officialSchedule(round) {
 
 Page({
   data: {
+    returnSource: '',
     match: null,
     loadFailed: false,
     roundCount: 0,
@@ -202,7 +203,8 @@ Page({
   },
 
   // 页面加载：拉完整赛事资料 + 报名状态
-  async onLoad(options) {
+  async onLoad(options = {}) {
+    this.setData({ returnSource: options.source === 'assistant' ? 'assistant' : '' })
     const id = options.id
     if (!id) return
     this.matchId = id

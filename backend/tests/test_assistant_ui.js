@@ -39,11 +39,14 @@ function load(relative = 'pages/assistant/assistant.js', overrides = {}, token =
       return require(path.resolve(path.dirname(file), name))
     }
   }, { filename: file })
-  const page = Object.assign({}, definition)
-  page.data = JSON.parse(JSON.stringify(definition.data))
-  page.setData = value => Object.assign(page.data, value)
-  page.selectComponent = () => null
-  return { page, api, wx, storage, calls }
+  function newPage() {
+    const page = Object.assign({}, definition)
+    page.data = JSON.parse(JSON.stringify(definition.data))
+    page.setData = value => Object.assign(page.data, value)
+    page.selectComponent = () => null
+    return page
+  }
+  return { page: newPage(), newPage, api, wx, storage, calls }
 }
 
 async function open(overrides = {}, token) {
@@ -299,7 +302,7 @@ test('recommendations only contact a player or captain after their dedicated but
 
 test('scope selectors select current public objects and knowledge links use a fixed rules route', async () => {
   const { page, calls } = await replyWith([{ type: 'knowledge', title: '报名FAQ', items: [{ title: '联系赛事管理', action: { kind: 'open_rules' } }] }])
-  await page.openSelector(event({ kind: 'match' })); page.chooseOption(event({ id: 8 }))
+  await page.openSelector(event({ kind: 'match' })); await page.chooseOption(event({ id: 8 }))
   await page.openSelector(event({ kind: 'team' })); page.chooseOption(event({ id: 12 }))
   await page.openSelector(event({ kind: 'player' })); page.chooseOption(event({ id: 114 }))
   assert.equal(JSON.stringify(page.data.context), '{"match_id":8,"team_id":12,"player_id":114}')
@@ -341,6 +344,195 @@ test('changing or clearing an event also clears its team, while selecting the sa
   assert.equal(JSON.stringify(page.data.contextLabels), '{}')
   page.data.draft = '查看对阵'; await page.send()
   assert.equal(JSON.stringify(calls.posts[0].body.context), '{}')
+})
+
+test('selecting an event with an empty composer immediately continues the query using its ID', async () => {
+  const { page, api, calls } = await replyWith([{ type: 'matches', title: '请选择赛事', items: [
+    { id: 8, title: '起源杯', action: { kind: 'open_match', id: 8 } }
+  ] }])
+  const row = event({ message: page.data.messages[1].id, card: 0, item: 0 })
+  api.sendAssistantMessage = async (id, body) => { calls.posts.push({ id, body }); return { reply: '赛事详情', cards: [] } }
+  page.data.draft = ''
+  await page.selectCardItem(row)
+  assert.equal(calls.posts.length, 1)
+  const followUp = calls.posts[0].body
+  assert.equal(followUp.context.match_id, 8)
+  assert.match(followUp.message, /以所选赛事继续刚才的查询/)
+  assert.equal(page.data.draft, '')
+  assert.equal(page.data.messages.length, 4)
+  assert.equal(calls.confirmations.length, 0)
+  assert.match(calls.toasts.at(-1).title, /正在查询/)
+  const tree = parseWxml(fs.readFileSync(path.join(root, 'miniprogram/pages/assistant/assistant.wxml'), 'utf8'))
+  tree.scope = page.data
+  assert.match(createRenderer({})(tree), /已选 · 再次查询/)
+})
+
+test('automatic event query preserves the existing draft and rejects double taps while sending', async () => {
+  const work = deferred(), started = deferred()
+  const { page, api, calls } = await replyWith([{ type: 'matches', title: '选择', items: [{ id: 8, title: '起源杯' }] }])
+  api.sendAssistantMessage = (_, body) => { calls.posts.push({ body }); started.resolve(); return work.promise }
+  page.data.draft = '我还没写完的另一个问题'
+  const row = event({ message: page.data.messages[1].id, card: 0, item: 0 })
+  const first = page.selectCardItem(row)
+  await started.promise
+  await page.selectCardItem(row)
+  await page.openCardItem(row)
+  assert.equal(calls.posts.length, 1)
+  assert.equal(calls.posts[0].body.context.match_id, 8)
+  assert.equal(page.data.draft, '我还没写完的另一个问题')
+  work.resolve({ reply: '这是所选赛事的结果', cards: [preview()] }); await first
+  assert.equal(page.data.draft, '我还没写完的另一个问题')
+  assert.equal(page.data.messages.at(-1).content, '这是所选赛事的结果')
+  assert.equal(calls.confirmations.length, 0)
+})
+
+test('failed automatic queries keep the event and draft and retry the same intent explicitly', async () => {
+  const { page, api, calls } = await replyWith([{ type: 'matches', title: '选择', items: [{ id: 8, title: '起源杯' }] }])
+  api.sendAssistantMessage = async (_, body) => { calls.posts.push({ body }); throw { detail: '网络错误' } }
+  page.data.draft = '未发送草稿'
+  const row = event({ message: page.data.messages[1].id, card: 0, item: 0 })
+  await page.selectCardItem(row)
+  assert.equal(page.data.context.match_id, 8)
+  assert.equal(page.data.contextLabels.match, '起源杯')
+  assert.equal(page.data.draft, '未发送草稿')
+  assert.equal(page.data.retryAvailable, true)
+  assert.equal(page.data.requestError, '网络错误')
+  await page.selectCardItem(row)
+  assert.equal(calls.posts.length, 1)
+  const intent = page._pendingMessage
+  api.sendAssistantMessage = async (_, body) => { assert.equal(body, intent); return { reply: '赛事查询已完成', cards: [] } }
+  await page.retryMessage()
+  assert.equal(page.data.messages.length, 4)
+  assert.equal(page.data.draft, '未发送草稿')
+})
+
+test('team and player selection remains a visible context choice without an automatic query', async () => {
+  const { page, calls } = await replyWith([{ type: 'teams', title: '队伍', items: [{ id: 12, title: '银河战舰' }] }])
+  const row = event({ message: page.data.messages[1].id, card: 0, item: 0 })
+  await page.selectCardItem(row)
+  assert.equal(page.data.context.team_id, 12)
+  assert.equal(calls.posts.length, 0)
+  assert.equal(calls.toasts.at(-1).title, '已选为查询对象')
+  const tree = parseWxml(fs.readFileSync(path.join(root, 'miniprogram/pages/assistant/assistant.wxml'), 'utf8'))
+  tree.scope = page.data
+  assert.match(createRenderer({})(tree), /已选为查询对象 ✓/)
+})
+
+test('event detail navigation declares the assistant origin and failed navigation preserves the page', async () => {
+  const { page, wx, calls } = await replyWith([{ type: 'matches', title: '赛事', items: [
+    { id: 8, title: '起源杯', action: { kind: 'open_match', id: 8 } }
+  ] }])
+  page.data.draft = '返回后继续写'
+  const before = JSON.stringify(page.data.messages)
+  wx.navigateTo = options => { calls.navigations.push(options.url); options.fail({ errMsg: 'navigateTo:fail' }) }
+  await page.openCardItem(event({ message: page.data.messages[1].id, card: 0, item: 0 }))
+  assert.equal(calls.navigations.at(-1), '/pages/match/match?id=8&source=assistant')
+  assert.match(calls.toasts.at(-1).title, /页面未能打开/)
+  assert.equal(JSON.stringify(page.data.messages), before)
+  assert.equal(page.data.draft, '返回后继续写')
+  assert.equal(page._visible, true)
+})
+
+test('same-account page destruction restores history, selected IDs and the unsent draft in memory', async () => {
+  const { page, newPage, api, storage } = await open()
+  page.setContext('match', 8, '起源杯')
+  page.data.draft = '已发送的问题'; await page.send()
+  page.data.draft = '尚未发送的草稿'
+  page.onHide(); page.onUnload()
+  api.getAssistantConversation = async id => { assert.equal(id, 'conversation-1'); return { messages: [
+    { role: 'user', content: '已发送的问题', cards: [] }, { role: 'assistant', content: '查询完成', cards: [] }
+  ] } }
+  const fresh = newPage(); fresh.onLoad(); await fresh.onShow()
+  assert.equal(fresh._conversationId, 'conversation-1')
+  assert.equal(fresh.data.messages.length, 2)
+  assert.equal(fresh.data.messages[1].content, '查询完成')
+  assert.equal(fresh.data.context.match_id, 8)
+  assert.equal(fresh.data.contextLabels.match, '起源杯')
+  assert.equal(fresh.data.draft, '尚未发送的草稿')
+  assert.deepEqual(Object.keys(storage), ['token'])
+})
+
+test('a reconstructed page keeps its local history if refresh fails and does not lose the draft', async () => {
+  const { page, newPage, api } = await open()
+  page.data.draft = '查赛事'; await page.send()
+  page.data.draft = '未发送草稿'; page.onUnload()
+  api.getAssistantConversation = async () => { throw { statusCode: 503, detail: '暂时无法刷新' } }
+  const fresh = newPage(); fresh.onLoad(); await fresh.onShow()
+  assert.equal(fresh.data.messages.length, 2)
+  assert.equal(fresh.data.draft, '未发送草稿')
+  assert.equal(fresh.data.requestError, '暂时无法刷新')
+})
+
+test('reconstructed pending turns reject old replies and only retrieve the same original intent on click', async () => {
+  const pending = deferred(), started = deferred(); let restores = 0
+  const { page, newPage, api } = await open({ sendAssistantMessage: () => { started.resolve(); return pending.promise },
+    getAssistantConversation: async () => { restores++; return { messages: [] } } })
+  page.setContext('match', 8, '起源杯'); page.data.draft = '查询对阵'
+  const posting = page.send(); await started.promise
+  const intent = JSON.stringify(page._pendingMessage)
+  page.data.draft = '新草稿'; page.onUnload()
+  const fresh = newPage(); fresh.onLoad(); await fresh.onShow()
+  pending.resolve({ reply: '旧页面的迟到回包', cards: [] }); await posting
+  assert.equal(fresh.data.messages.length, 1)
+  assert.equal(fresh.data.retryAvailable, true)
+  assert.equal(restores, 0)
+  api.sendAssistantMessage = async (id, body) => { assert.equal(id, 'conversation-1'); assert.equal(JSON.stringify(body), intent); return { reply: '同一问题的结果', cards: [] } }
+  await fresh.retryMessage()
+  assert.equal(fresh.data.messages.length, 2)
+  assert.equal(fresh.data.draft, '新草稿')
+})
+
+test('reconstructed pages keep uncertain registrations as explicit checks of the same action', async () => {
+  const pending = deferred(), started = deferred()
+  const { page, newPage, api, cardEvent } = await replyWith([preview('survives-reconstruction')], {
+    confirmAssistantAction: () => { started.resolve(); return pending.promise }
+  })
+  page.beforePersonalRegistration = async () => {}
+  const confirming = page.confirmRegistration(cardEvent); await started.promise
+  page.onUnload()
+  api.getAssistantConversation = async () => ({ messages: [{ role: 'assistant', content: '报名预览', cards: [preview('survives-reconstruction')] }] })
+  const fresh = newPage(); fresh.onLoad(); await fresh.onShow()
+  const card = fresh.data.messages[0].cards[0]
+  assert.equal(card.confirmLabel, '核查报名结果')
+  pending.resolve({ message: '旧页面迟到的提交结果', cards: [] }); await confirming
+  assert.equal(fresh.data.messages.length, 1)
+  let checked
+  api.confirmAssistantAction = async id => { checked = id; return { message: '已提交，待审核', cards: [] } }
+  fresh.beforePersonalRegistration = async () => {}
+  await fresh.confirmRegistration(event({ message: fresh.data.messages[0].id, card: 0 }))
+  assert.equal(checked, 'survives-reconstruction')
+  assert.equal(card.confirmed, true)
+})
+
+test('reconstruction never restores another login and an intervening login invalidates the old snapshot', async () => {
+  const { page, newPage, storage } = await open()
+  page.setContext('match', 8, '旧赛事'); page.data.draft = '旧账号问题'; await page.send()
+  page.data.draft = '旧账号草稿'; page.onUnload()
+  storage.token = 'another-account'
+  const second = newPage(); second.onLoad(); await second.onShow()
+  assert.equal(second.data.messages.length, 0)
+  assert.equal(second.data.draft, '')
+  assert.equal(JSON.stringify(second.data.context), '{}')
+  second.onUnload(); storage.token = 'isolated-token'
+  const third = newPage(); third.onLoad(); await third.onShow()
+  assert.equal(third.data.messages.length, 0)
+  assert.equal(third._conversationId, null)
+})
+
+test('new conversation clears the saved history and ignores an old failing restore', async () => {
+  const pending = deferred()
+  const { page, api, newPage } = await open()
+  page.data.draft = '旧问题'; await page.send()
+  api.getAssistantConversation = () => pending.promise
+  const restoring = page.restore()
+  page.newConversation()
+  pending.reject({ statusCode: 404, detail: '旧会话已失效' }); await restoring
+  assert.equal(page.data.requestError, '')
+  page.onUnload()
+  const fresh = newPage(); fresh.onLoad(); await fresh.onShow()
+  assert.equal(fresh.data.messages.length, 0)
+  assert.equal(fresh._conversationId, null)
+  assert.equal(fresh.data.draft, '')
 })
 
 test('assistant layout bounds its scroll area, keeps the composer reachable and renders pending-result cards as text', async () => {

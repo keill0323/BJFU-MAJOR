@@ -1,4 +1,4 @@
-<event-return />
+<event-return source="{{returnSource}}" />
 <view class="page match-page">
   <view wx:if="{{!match}}" class="empty">{{loadFailed ? '赛事加载失败，请下拉重试' : '正在加载赛事…'}}</view>
 
