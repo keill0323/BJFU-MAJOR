@@ -6,6 +6,7 @@ import json
 import re
 import time
 import math
+import importlib.util
 from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
@@ -56,8 +57,11 @@ def public_payload(value):
 def status():
     enabled = settings.ASSISTANT_ENABLED
     ready = provider_api.configured()
-    return {'enabled': enabled, 'available': bool(enabled and ready),
-            'reason': '赛事助手暂未开放' if not enabled else ('' if ready else '助手文本工具模型尚未配置并验收'),
+    runtime_ready = settings.ASSISTANT_ENGINE == 'legacy' or (settings.ASSISTANT_ENGINE == 'langchain' and all(
+        importlib.util.find_spec(name) is not None for name in ('langchain', 'langchain_core', 'langgraph')))
+    return {'enabled': enabled, 'available': bool(enabled and ready and runtime_ready),
+            'reason': '赛事助手暂未开放' if not enabled else (
+                '助手执行框架依赖尚未安装' if not runtime_ready else ('' if ready else '助手文本工具模型尚未配置并验收')),
             'retention_hours': 24}
 
 
@@ -302,8 +306,7 @@ def send_message(db, actor, conversation_id, message, client_message_id, context
             return _prior_response(other, digest)
         raise HTTPException(409, '请求正在处理，请核查会话') from None
     effective_context, memory, context_ready = context if context_supplied else {}, {}, False
-    cards, calls, traces, seen_ids = [], 0, [], set()
-    reasoning_bytes = 0
+    cards, traces = [], []
     reply = '处理达到本次上限，请缩小查询范围后重试。'
     code, critical = 'step_limit', []
     try:
@@ -323,7 +326,6 @@ def send_message(db, actor, conversation_id, message, client_message_id, context
             memory = {}
         context_ready = True
         tools = definitions()
-        schemas = {item['function']['name']: item['function']['parameters'] for item in tools}
         from app.services.assistant_summary_service import build_history
         summarize = summary_provider if summary_provider is not None else (provider_api.summarize if provider is None else None)
         history, compression = build_history(db, user_id=user_id, conversation_id=conversation_id,
@@ -341,113 +343,27 @@ def send_message(db, actor, conversation_id, message, client_message_id, context
                     {'role': 'user', 'content': '当前选择（只确定讨论对象，不代表资格）：' + json.dumps(effective_context)
                      + '\n上轮受控候选（仅用于消歧，不能用作当前事实，须重新查询）：' + json.dumps(memory, ensure_ascii=False)
                      + intent_notice + '\n当前本轮问题：' + message}]
-        for _ in range(settings.ASSISTANT_MAX_STEPS):
-            remaining = settings.ASSISTANT_TIMEOUT_SECONDS - (clock() - started)
-            if remaining <= 0:
-                raise provider_api.ProviderError('time_budget')
-            # 网络等待期间没有任何数据库事务/行锁。
-            db.rollback()
-            response = (provider or provider_api.complete)(messages, tools, min(20, remaining))
-            if clock() - started >= settings.ASSISTANT_TIMEOUT_SECONDS:
-                raise provider_api.ProviderError('time_budget')
-            content = response.get('content') or ''
-            tool_calls = response.get('tool_calls') or []
-            if not isinstance(content, str) or len(content) > 10000 or not isinstance(tool_calls, list) or len(tool_calls) > 3:
-                raise provider_api.ProviderError('provider_response_invalid')
-            reasoning = provider_api.validated_reasoning(response)
-            if not tool_calls:
-                reply, code = clean_text(content).strip()[:2200] or '请补充想查询的赛事或队伍。', 'completed'
-                break
-            # 只构造协议需要的消息。5.3 的思考原文仅在本次请求内存回传，
-            # 不进入下面的response、Turn、Trace、memory或后续用户轮次。
-            normalized, invalid_calls = [], set()
-            for call in tool_calls:
-                if not isinstance(call, dict) or not isinstance(call.get('function'), dict):
-                    raise provider_api.ProviderError('provider_response_invalid')
-                identifier = call.get('id')
-                if not isinstance(identifier, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', identifier) or identifier in seen_ids:
-                    raise provider_api.ProviderError('provider_response_invalid')
-                seen_ids.add(identifier)
-                function = call['function']
-                if not isinstance(function.get('name'), str) or len(function['name']) > 64:
-                    raise provider_api.ProviderError('provider_response_invalid')
-                name, raw = function['name'], function.get('arguments')
+        from app.services.assistant_execution import TurnExecution, run_legacy
+        execution = TurnExecution(db=db, messages=messages, tools=tools,
+            model_call=provider or provider_api.complete,
+            authorize=lambda: require_user(db, type('Actor', (), {'id': user_id})()),
+            execute_tool=lambda user, name, arguments: execute_tool(db, user, name, arguments),
+            clean_text=clean_text, public_payload=public_payload, validate_arguments=validate_arguments,
+            settings=settings, clock=clock, started=started, context=effective_context,
+            memory=memory, cards=cards, critical=critical, traces=traces)
+        try:
+            if settings.ASSISTANT_ENGINE == 'legacy':
+                run_legacy(execution)
+            elif settings.ASSISTANT_ENGINE == 'langchain':
                 try:
-                    if name not in schemas or not isinstance(raw, str) or len(raw) > 4096:
-                        raise ValueError('invalid tool')
-                    arguments = json.loads(raw)
-                    validate_arguments(arguments, schemas[name])
-                    safe_arguments = json.dumps(public_payload(arguments), ensure_ascii=False)
-                except (ValueError, TypeError):
-                    invalid_calls.add(identifier)
-                    safe_arguments = '{}'
-                normalized.append({'id': identifier, 'type': 'function',
-                                   'function': {'name': name if name in schemas else 'unknown_tool', 'arguments': safe_arguments}})
-            protocol_message = {'role': 'assistant', 'content': clean_text(content), 'tool_calls': normalized}
-            if reasoning is not None:
-                reasoning_bytes += len(reasoning.encode('utf-8'))
-                if reasoning_bytes > provider_api.MAX_TURN_REASONING_BYTES:
-                    raise provider_api.ProviderError('provider_reasoning_limit')
-                protocol_message['reasoning_content'] = reasoning
-            messages.append(protocol_message)
-            for call in normalized:
-                calls += 1
-                if calls > settings.ASSISTANT_MAX_TOOL_CALLS or clock() - started >= settings.ASSISTANT_TIMEOUT_SECONDS:
-                    raise provider_api.ProviderError('tool_budget')
-                name = call['function']['name']
-                tick = clock()
-                try:
-                    if name not in schemas or call['id'] in invalid_calls:
-                        raise ValueError('unknown tool')
-                    raw = call['function']['arguments']
-                    if not isinstance(raw, str) or len(raw) > 4096:
-                        raise ValueError('invalid arguments')
-                    arguments = json.loads(raw)
-                    validate_arguments(arguments, schemas[name])
-                    user = require_user(db, type('Actor', (), {'id': user_id})())
-                    result = execute_tool(db, user, name, arguments)
-                    if not isinstance(result, dict):
-                        raise ValueError('invalid tool result')
-                    cards.extend(result.get('cards', [])[:5])
-                    candidates = []
-                    for card in result.get('cards', []):
-                        if card.get('type') not in ('matches', 'teams', 'players', 'player_stats'):
-                            continue
-                        for item in card.get('items', [])[:20]:
-                            kind = {'matches': 'match', 'teams': 'team', 'players': 'player', 'player_stats': 'stats_player'}[card['type']]
-                            identifier = item.get('id')
-                            if kind == 'stats_player':
-                                if not isinstance(identifier, str) or not re.fullmatch(r'[0-9a-f]{32}', identifier):
-                                    continue
-                            elif type(identifier) is not int or identifier < 1:
-                                continue
-                            candidates.append({'kind': kind, 'id': identifier, 'title': clean_text(item.get('title', ''))[:100],
-                                               'match_id': arguments.get('match_id') or effective_context.get('match_id')})
-                    if candidates:
-                        memory = {'last_candidates': candidates[:20]}
-                    selection = result.get('data', {}).get('selection')
-                    if isinstance(selection, dict) and selection.get('kind') == 'stats_player':
-                        # 这是业务工具产生的受控身份摘要，而非模型/昵称推断账号。
-                        memory = {'selection': public_payload(selection)}
-                    if name in ('prepare_registration', 'check_registration', 'get_my_registration', 'get_my_verification', 'get_match_standings'):
-                        critical.append(clean_text(result.get('message', '请以报名状态卡片为准')))
-                    result_code = str(result.get('status', 'ok'))[:40]
-                    model_result = public_payload(result)
-                except (ValueError, TypeError, KeyError):
-                    result_code, model_result = 'invalid_tool_arguments', {'status': 'error', 'message': '工具或参数不在允许范围，请更正或询问用户。'}
-                except HTTPException as error:
-                    result_code = 'permission_or_business_error'
-                    detail = error.detail if isinstance(error.detail, str) else error.detail.get('message', '操作不可用')
-                    model_result = {'status': 'blocked', 'message': clean_text(detail)}
-                finally:
-                    db.rollback()
-                traces.append((name if name in schemas else 'unknown_tool', result_code, int((clock()-tick)*1000)))
-                tool_content = json.dumps(model_result, ensure_ascii=False)
-                if len(tool_content.encode('utf-8')) > 18000:
-                    # 整块替换为有界JSON，不能截断工具结果/协议配对。
-                    tool_content = json.dumps({'status': 'result_too_large', 'data': {'truncated': True},
-                        'message': '查询结果超出本轮预算，请缩小赛事、队伍或选手范围后重新查询；完整卡片以页面为准。'}, ensure_ascii=False)
-                messages.append({'role': 'tool', 'tool_call_id': call['id'], 'content': tool_content})
+                    from app.services.assistant_langchain_runtime import run
+                except ImportError:
+                    raise provider_api.ProviderError('assistant_runtime_unavailable') from None
+                run(execution)
+            else:
+                raise provider_api.ProviderError('assistant_runtime_unavailable')
+        finally:
+            memory, reply, code = execution.memory, execution.reply, execution.code
         claim_kind = action_claim_kind(reply)
         if critical:
             reply = _controlled_reply(critical, cards)

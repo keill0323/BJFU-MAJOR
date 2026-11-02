@@ -1,0 +1,5 @@
+# Current create_agent runtime; no community integrations or external tracing service.
+-c constraints-assistant.txt
+langchain==1.4.7
+langchain-core==1.7.3
+langgraph==1.2.19

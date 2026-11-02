@@ -15,11 +15,12 @@
 
 ### Agent 的工作方式
 
-- 通过 Tool Calling 调用后端业务工具，查询实时业务状态，并将结果展示为文字与操作卡片。
+- 使用 LangChain `create_agent`（由 LangGraph 运行）调度模型与业务工具，查询实时状态并展示文字与操作卡片。
 - 报名先生成预览，由用户确认后提交；后端重新检查权限、资格和名额，使用事务与幂等记录处理重复请求。
 - 查询队伍当前晋级进度与整场战绩，兼容赛事年份简称；同阶段并列，累计胜场与晋级名次分开。
 - 检索版本化赛事规则与公开支持入口，支持多轮会话和可选滚动摘要。当前知识库使用赛事／版本／生效时间过滤与关键词检索。
 - 认证助手解释本人状态和驳回原因，并引导进入认证页面；审核仍由原认证流程处理。
+- 权限、事务、会话摘要和报名确认由现有后端管理；可用 `ASSISTANT_ENGINE=legacy` 显式切回原执行循环，无自动降级。
 
 选手统计来自受控导入的本站赛事数据。AI、Agent 和微信订阅通知均需单独配置；拒绝订阅不会阻止报名，站内提醒保留。
 
@@ -30,7 +31,7 @@
 | 前端 | 微信原生小程序 · JavaScript / WXML / WXSS |
 | 后端 | Python 3.12 · FastAPI · SQLAlchemy · Pydantic |
 | 数据与认证 | MySQL 8 / SQLite · JWT |
-| AI 接入 | OpenAI 兼容模型接口 · Tool Calling · 视觉辅助审核 |
+| AI 接入 | LangChain / LangGraph · GLM 兼容接口 · Tool Calling · 视觉辅助审核 |
 | 通信与部署 | WebSocket · Docker Compose · Nginx / HTTPS |
 
 ## 项目结构
@@ -65,7 +66,7 @@ BJFU-MAJOR/
 git clone https://github.com/keill0323/BJFU-MAJOR.git
 cd BJFU-MAJOR
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r .\backend\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r .\backend\requirements.txt -r .\backend\requirements-assistant.txt
 if (!(Test-Path .\backend\.env)) {
     Copy-Item .\backend\.env.example .\backend\.env
 }
@@ -83,6 +84,7 @@ SECRET_KEY=replace-with-your-own-random-secret
 WX_MOCK_LOGIN=true
 AI_REVIEW_ENABLED=false
 ASSISTANT_ENABLED=false
+ASSISTANT_ENGINE=langchain
 WX_SUBSCRIBE_ENABLED=false
 ```
 

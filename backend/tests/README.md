@@ -77,3 +77,5 @@ QQ 停用回归：`test_team_captain_qq.py`、`test_team_qq_ui.js` 验证无 QQ 
 全部选手与历史赛事补员：覆盖未报名/已入队/未认证用户、昵称与游戏 ID 搜索、学号不参与目录搜索、身份动态判定与人工覆盖，以及申请通过后的新老生显示。已结束赛事不限制当前组队、不新增历史报名；仍在进行的赛事保留原认证、人数及新增队伍限制。
 
 助手上下文压缩回归：`test_assistant_summary.py`覆盖滚动来源游标/指纹、版本CAS、有效lease、网络等待无事务、scope清空与隔离、摘要注入/脱敏、迁移和过期级联；`test_assistant_compaction_agent.py`连接真实编排器与模拟摘要/工具模型，验证完整近期轮次、摘要失败回退、总耗时预算、同轮reasoning隔离、超大工具JSON配对及初始化失败的幂等收尾；`test_assistant_time_precision.py`以方言编译和模拟连接验证MySQL时间精度升级，不能替代真实数据库DDL/并发验收。`test_assistant_provider.py`覆盖无工具摘要payload、出站门控和有界返回。测试只用合成资料，不读取实际聊天/认证图片，不调用收费模型；压缩率演示是同口径UTF-8消息字节变化，不是token、费用或质量指标。
+
+LangChain执行器回归：先在隔离环境安装`requirements.txt`与`requirements-assistant.txt`，从backend运行`python -m unittest discover -s tests -p "test_assistant*.py"`。`test_assistant_langchain_model.py`验证文本消息、原工具参数、tool_call_id和可选reasoning转换；`test_assistant_langchain_contracts.py`运行真实create_agent图，模型/数据仍为合成，覆盖同线程串行工具、网络等待无事务、白名单、预算、错误配对、预览不提交、partial及幂等。既有用例可另设`ASSISTANT_ENGINE=legacy`验证显式回滚，框架失败不得自动切换以重做请求。离线图运行不等于真实GLM或Linux验收；LangSmith SDK虽为依赖，当前执行器禁用云trace，无需配置其Key。

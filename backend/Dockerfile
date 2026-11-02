@@ -7,6 +7,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -i https://mirrors.cloud.tencent.com/pypi/simple -r requirements.txt
 
+COPY requirements-assistant.txt constraints-assistant.txt ./
+RUN pip install --no-cache-dir -i https://mirrors.cloud.tencent.com/pypi/simple -r requirements-assistant.txt
+
 # 拷贝代码
 COPY app ./app
 COPY .env.example ./.env.example

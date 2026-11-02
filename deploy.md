@@ -373,7 +373,7 @@ docker compose exec -T nginx nginx -s reload
 
 ### 可选滚动语义摘要（仅助手工作上下文）
 
-此实现参考 LangChain SummarizationMiddleware 与 LangMem RunningSummary 的滚动策略，未复制其源码或引入 LangChain/LangGraph/LangMem 依赖；也未安装 LLMLingua 的额外模型。参考：https://docs.langchain.com/oss/python/langchain/middleware/built-in#summarization 、https://langchain-ai.github.io/langmem/guides/summarization/ 、https://github.com/langchain-ai/langmem 、https://github.com/microsoft/LLMLingua 。
+摘要策略最初参考 LangChain SummarizationMiddleware 与 LangMem RunningSummary，保留现有数据库游标、lease与版本CAS实现；本次模型/工具循环改用LangChain create_agent，没有用框架checkpoint替代业务事务，也未引入LangMem或LLMLingua模型。参考：https://docs.langchain.com/oss/python/langchain/middleware/built-in#summarization 、https://langchain-ai.github.io/langmem/guides/summarization/ 。
 
 新增 `assistant_summaries` 侧表随原助手迁移命令幂等创建，不给旧表追加列，也不删除或改写原始对话、报名账本；仅显式升级既有MySQL助手轮次时间列的精度，新侧表时间也保留微秒。旧同秒记录若作用域混合则整组与更旧历史不作摘要来源；秒精度scope起点的同秒整组也排除，不能靠UUID猜先后。摘要随24小时助手会话级联清理。旧库未建该表时压缩回退近期历史，仍需在正式启用前完成迁移。
 
@@ -385,3 +385,10 @@ docker compose exec -T nginx nginx -s reload
 - 启用验收：核心发布已经完成一次真实文本工具循环、结构摘要、登录HTTP公开查询与真实MySQL合成来源游标/锁失效冒烟检查，并按维护者授权开启；生产借用Key的授权例外不改变源码的独立Key/外传/验收门控。后续仍应检查真实摘要质量、遗漏、额外费用、长请求时延、MySQL并发和回退；仅status可用不代表所有链路均验收。此开关只影响助手，不开启私聊压缩或认证图片通道。
 
 真实智谱协议注意：当前GLM-5.3-Flash即使thinking.enabled，部分合法工具响应也会省略reasoning_content。适配器接受该缺失，不补造思考；有字符串时仍原样回传并限制字节，异常类型/超限拒绝。不要把“应当回传供应商实际提供的思考”误写为“供应商每次必须提供思考”。Compose已添加ASSISTANT_*透传，单独修改.env但不透传容器仍不能配置助手。
+
+### LangChain执行器候选与回滚
+
+- 安装：先在隔离环境安装`backend/requirements.txt`和`backend/requirements-assistant.txt`，后者约束新增框架依赖；现有FastAPI/Pydantic版本保持。默认`ASSISTANT_ENGINE=langchain`，显式`legacy`只回滚执行循环，不关闭已启用的助手。不自动降级、重试或切换模型；缺框架依赖时status说明不可用。
+- 边界：create_agent/LangGraph负责本轮模型与工具往返；现有GLM出站白名单、可选reasoning协议、总时限/步数/工具预算、JWT鉴权、Schema、报名事务与确认端点保持。工具在原请求线程按顺序执行，网络等待前释放数据库事务；无框架持久checkpoint/store/cache，不把图状态用于报名幂等账本。LangSmith SDK是传递依赖，执行器强制关闭本轮云trace，不需新增其账号或Key。
+- 发布：新依赖不能只COPY源码到旧镜像。需在目标Linux/Python3.12平台构建含框架依赖的候选镜像，并先跑回归、真实GLM合成资料验收、资源与错误回退验证。以已核验的稳定运行版本为基线叠加本轮Agent文件/配置，保留原识图链、依赖和卷，不整树覆盖混杂工作区或较旧源码。Windows Python3.13通过不等于Linux或生产通过；严禁复制Windows虚拟环境上服务器。本轮仅本地候选，现网切换需基于实际验收与明确授权。
+- 回滚：保留旧稳定镜像与配置，或在依赖完整的候选中显式设置`ASSISTANT_ENGINE=legacy`并重启后端；原业务数据库、上传文件、会话和确认端点不回滚、不清空。已经执行的业务确认不能靠恢复图checkpoint撤销。回滚后重新检查既有tool协议和幂等结果，不能为重新生成回答重复确认报名。

@@ -11,6 +11,7 @@ Since: 2026-07-21
 """
 from pydantic_settings import BaseSettings
 from pydantic import Field
+from typing import Literal
 import os
 
 
@@ -70,6 +71,7 @@ class Settings(BaseSettings):
     ASSISTANT_API_KEY: str = ''
     ASSISTANT_BASE_URL: str = 'https://open.bigmodel.cn/api/paas/v4'
     ASSISTANT_MODEL: str = 'glm-5.3-flash'
+    ASSISTANT_ENGINE: Literal['langchain', 'legacy'] = 'langchain'
     ASSISTANT_TIMEOUT_SECONDS: int = Field(default=60, ge=5, le=65)
     ASSISTANT_MAX_STEPS: int = Field(default=6, ge=1, le=8)
     ASSISTANT_MAX_TOOL_CALLS: int = Field(default=8, ge=1, le=12)
