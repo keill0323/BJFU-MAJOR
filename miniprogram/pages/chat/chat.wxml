@@ -1,12 +1,12 @@
 <event-return/>
 <view class="chat-shell" style="height: {{windowHeight - keyboardHeight - returnHeight}}px">
-  <view class="room-head"><view class="room-title"><text class="room-name">{{room.peer.nickname || '私聊'}}</text><text class="room-menu" bindtap="menu">···</text></view><text class="room-meta">{{status === 'online' ? '实时连接已建立' : status === 'connecting' ? '正在连接…' : '网络连接中断，正在重试（与对方是否在线无关）'}}{{room.unread ? ' · ' + room.unread + ' 条未读' : ''}}</text><text class="room-rule" bindtap="toggleRules">消息保留与使用说明 {{showRules ? '⌃' : '⌄'}}</text><text wx:if="{{showRules}}" class="room-rules">发送满 24 小时且双方已读后自动清理；未读消息继续保留。每条最多 1000 字。连接状态只表示你与服务器的连接，不代表对方是否在线。失败消息可点击重试或长按移除。</text></view>
+  <view class="room-head"><view class="room-title"><text class="room-name">{{room.peer.nickname || '赛事沟通'}}</text><text class="room-menu" bindtap="menu">···</text></view><text class="room-meta">{{status === 'online' ? '实时连接已建立' : status === 'connecting' ? '正在连接…' : '网络连接中断，正在重试（与对方是否在线无关）'}}{{room.unread ? ' · ' + room.unread + ' 条未读' : ''}}</text><text class="room-rule" bindtap="toggleRules">消息保留与使用说明 {{showRules ? '⌃' : '⌄'}}</text><text wx:if="{{showRules}}" class="room-rules">发送满 24 小时且双方已读后自动清理；未读消息继续保留。每条最多 1000 字。连接状态只表示你与服务器的连接，不代表对方是否在线。失败消息可点击重试或长按移除。</text></view>
   <view wx:if="{{error}}" class="chat-error" bindtap="load">{{error}} · 点击重试</view>
-  <view wx:if="{{room.blocked}}" class="chat-error">当前私聊已受限</view>
+    <view wx:if="{{room.blocked}}" class="chat-error">当前会话已受限</view>
   <view wx:elif="{{room.muted_until}}" class="chat-error">账号暂时无法发送消息</view>
   <scroll-view id="thread" class="thread" scroll-y scroll-into-view="{{anchor}}" bindscroll="scroll" upper-threshold="60">
     <view wx:if="{{more}}" class="history-more" bindtap="older">{{loadingMore ? '正在加载…' : '查看更早消息'}}</view>
-    <view wx:if="{{loading}}" class="chat-state">正在加载聊天…</view>
+    <view wx:if="{{loading}}" class="chat-state">正在加载会话…</view>
     <view wx:elif="{{!rows.length}}" class="chat-state">从一句你好开始。<text>已读的过期消息会自动清理。</text></view>
     <view wx:for="{{rows}}" wx:key="id" id="{{item.elementId}}" class="message {{item.mine ? 'mine' : 'theirs'}} {{!item.mine && !item.read_at && item.state === 'active' ? 'incoming-unread' : ''}}" data-message-id="{{item.id}}">
       <text wx:if="{{item.showTime}}" class="message-time">{{item.timeText}}</text>

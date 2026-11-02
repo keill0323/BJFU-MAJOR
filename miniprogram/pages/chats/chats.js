@@ -2,7 +2,7 @@ const chat = require('../../utils/chat-client.js')
 const api = require('../../utils/api.js')
 function decorate(room) {
   const peer = room.peer || { nickname: '账号暂不可用' }
-  let preview = '开始你们的交流'
+  let preview = '沟通报名、队伍或赛程事宜'
   if (room.latest) preview = room.latest.kind === 'text' ? room.latest.content : '分享了' + (room.latest.kind === 'team' ? '队伍' : '对阵') + '卡片'
   return Object.assign({}, room, { peer, preview, initial: Array.from(peer.nickname || '选手')[0], avatar: peer.avatar ? (/^https?:/.test(peer.avatar) ? peer.avatar : api.BASE + peer.avatar) : '',
     timeText: (room.latest ? new Date(room.latest.created_at) : new Date(room.updated_at)).toLocaleString('zh-CN', { hour12: false }).slice(0, 16) })
@@ -106,7 +106,7 @@ Page({
       const tail = rooms[rooms.length - 1]
       this._windowEnd = tail ? { id: tail.id, pinned: tail.pinned, updated_at: tail.updated_at } : null
     } catch (err) {
-      if (this.current(g, token) && this._listRequest === op && !err.stale) this.setData({ error: err.detail || '聊天加载失败，请重试' })
+      if (this.current(g, token) && this._listRequest === op && !err.stale) this.setData({ error: err.detail || '会话加载失败，请重试' })
     } finally {
       if (this._listRequest === op) {
         this._listRequest = null

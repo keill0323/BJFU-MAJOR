@@ -16,7 +16,7 @@ Component({
       { title: '赛事中心', icon: 'grid', url: '/pages/index/index' },
       { title: '我的队伍', icon: 'team', url: '/pages/team/team' },
       { title: '招募大厅', icon: 'team', url: '/pages/recruitment/recruitment' },
-      { title: '聊天', icon: 'mail', url: '/pages/chats/chats' },
+      { title: '赛事沟通', icon: 'mail', url: '/pages/chats/chats' },
       { title: '所有队伍', icon: 'team', url: '/pages/teams/teams' },
       { title: '名人堂', icon: 'honor', url: '/pages/hall/hall' },
       { title: '个人资料', icon: 'shield', url: '/pages/profile/profile' }
