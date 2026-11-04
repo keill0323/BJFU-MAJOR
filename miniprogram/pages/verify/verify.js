@@ -33,6 +33,7 @@ Page({
     const token = wx.getStorageSync('token') || ''
     this._visible = true
     if (token !== this._token) {
+      this.discardRankPicker()
       this._generation = (this._generation || 0) + 1
       this._selectionIntent = null
       this._activeUpload = null
@@ -46,17 +47,19 @@ Page({
       this.setData({ user: null })
       return
     }
-    return this.loadUser()
+    const rankUpload = this.resumeRankPicker()
+    const userLoad = this.loadUser()
+    return rankUpload ? Promise.all([userLoad, rankUpload]) : userLoad
   },
   onHide() {
     if (this._activeUpload) this._uncertainUpload = this._activeUpload
     this._activeUpload = null
-    this._selectionIntent = null
+    if (!this.currentRankPicker(this._rankPicker)) this._selectionIntent = null
     this._generation = (this._generation || 0) + 1
     this._visible = false
     this.setData({ uploading: false })
   },
-  onUnload() { this.onHide() },
+  onUnload() { this.discardRankPicker(); this.onHide() },
   currentOperation(intent) {
     return !!intent && this._visible !== false && intent.generation === (this._generation || 0)
       && intent.token === (wx.getStorageSync('token') || '')
@@ -227,24 +230,58 @@ Page({
   chooseRankImage() {
     return this.confirmMaterialPurpose('rank', intent => this.selectRankImage(intent))
   },
+  currentRankPicker(picker) {
+    if (!picker || this._rankPicker !== picker) return false
+    if (picker.token !== (wx.getStorageSync('token') || '')) {
+      this.discardRankPicker(picker)
+      return false
+    }
+    return true
+  },
+  discardRankPicker(picker = this._rankPicker) {
+    if (!picker || this._rankPicker !== picker) return
+    this._rankPicker = null
+    if (this._selectionIntent === picker.intent) this._selectionIntent = null
+  },
+  resumeRankPicker() {
+    const picker = this._rankPicker
+    if (!this.currentRankPicker(picker) || this._visible === false) return null
+    if (picker.state === 'failed') {
+      this.discardRankPicker(picker)
+      showImageError(picker.error)
+    } else {
+      // 原生相册/相机可能暂时隐藏页面；只恢复这一次本人主动发起的段位选图。
+      picker.intent = Object.assign({}, picker.intent, { generation: this._generation || 0 })
+      this._selectionIntent = picker.intent
+      if (picker.state === 'selected') {
+        this.discardRankPicker(picker)
+        return this.uploadRankWithPath(picker.filePath, picker.intent)
+      }
+    }
+    return null
+  },
   selectRankImage(intent) {
+    if (this._selectionIntent !== intent || !this.currentOperation(intent)) return
+    const picker = this._rankPicker = { token: intent.token, intent, state: 'selecting' }
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
       sizeType: ['original'],
       sourceType: ['album', 'camera'],
       success: (res) => {
-        if (this._selectionIntent !== intent || !this.currentOperation(intent)) return
+        if (!this.currentRankPicker(picker) || picker.state !== 'selecting') return
         const filePath = res && res.tempFiles && res.tempFiles[0] && res.tempFiles[0].tempFilePath
-        if (!filePath) { this._selectionIntent = null; showImageError(); return }
+        picker.state = filePath ? 'selected' : 'failed'
+        picker.filePath = filePath
         // 段位标签很小，保留原截图；体积仍由后端 10 MB 上限校验。
-        this._selectionIntent = null
-        this.uploadRankWithPath(filePath, intent)
+        this.resumeRankPicker()
       },
       fail: error => {
-        if (!this.currentOperation(intent) || (this._selectionIntent && this._selectionIntent !== intent)) return
-        this._selectionIntent = null
-        showImageError(error)
+        if (!this.currentRankPicker(picker) || picker.state !== 'selecting') return
+        picker.state = 'failed'
+        picker.error = error
+        if (this._selectionIntent === picker.intent) this._selectionIntent = null
+        this.resumeRankPicker()
       }
     })
   },
