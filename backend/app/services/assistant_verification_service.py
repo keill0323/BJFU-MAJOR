@@ -131,3 +131,60 @@ def verification_status(db, actor):
                             'badge': student['label'], 'action': {'kind': 'open_verify', 'scope': 'student'}},
                            {'title': '游戏段位认证', 'subtitle': rank['label'], 'detail': detail,
                             'badge': rank['label'], 'action': {'kind': 'open_verify', 'scope': 'rank'}}]}]}
+
+
+def prepare_verification(db, actor, scope='both'):
+    """按本人实时状态准备原认证入口，不创建申请或代替用户上传材料。"""
+    if scope not in ('student', 'rank', 'both'):
+        raise HTTPException(422, '认证类型无效')
+    return prepare_verification_from_status(verification_status(db, actor), scope)
+
+
+def prepare_verification_from_status(snapshot, scope='both'):
+    """从最新认证快照生成办理指引；不查询数据库，也不修改输入快照。"""
+    if scope not in ('student', 'rank', 'both'):
+        raise HTTPException(422, '认证类型无效')
+    scopes = ('student', 'rank') if scope == 'both' else (scope,)
+    data, items, messages = {'scope': scope}, [], []
+    source_items = {item['action']['scope']: item for item in snapshot['cards'][0]['items']}
+    for target in scopes:
+        state = dict(snapshot['data'][target])
+        item = dict(source_items[target])
+        if target == 'rank':
+            if state['status'] == 'pending_review':
+                title = '查看段位审核进度'
+                message = '段位申请待管理员审核，请查看审核进度，勿重复提交。'
+            elif state['status'] == 'verified':
+                title = '更新段位材料'
+                state['next_action'] = 'update'
+                message = '当前有效段位为' + state['current_rank'] + '，可点击“更新段位材料”提交新的截图。'
+            elif state['can_upload']:
+                title = '重新提交段位材料' if state['status'] in ('rejected', 'update_rejected') else '提交段位材料'
+                message = state['label'] + '，可点击“' + title + '”继续。'
+            else:
+                title = '查看段位认证状态'
+                message = '段位结果待核查，请先查看状态或联系管理员，避免重复提交。'
+            if state['pending_rank']:
+                message += '本次识别候选' + state['pending_rank'] + '尚未生效。'
+            if state['current_rank'] and state['status'] != 'verified':
+                message += '当前有效段位仍为' + state['current_rank'] + '。'
+        else:
+            if state['status'] == 'verified':
+                title = '查看在校认证状态'
+                message = '在校认证已通过，可查看现有状态，无需重复认证。'
+            elif state['status'] == 'pending_review':
+                title = '查看在校认证进度'
+                message = '在校认证材料已提交，可查看初审或人工复核进度。'
+            else:
+                title = '重新提交在校认证材料' if state['status'] == 'rejected' else '提交在校认证材料'
+                message = state['label'] + '，可点击“' + title + '”继续。'
+        item['title'] = title
+        item['detail'] = message + '\n' + item['detail']
+        data[target] = state
+        items.append(item)
+        messages.append(message)
+    messages.append('已准备认证入口；选择图片、确认用途并提交材料需由你点击完成，提交后仍按原识别与审核流程处理。')
+    return {'status': 'ok', 'message': ''.join(messages), 'data': data,
+            'cards': [{'type': 'verification_status', 'title': '认证办理',
+                       'summary': '按本人实时状态准备下一步；上传成功不等于认证通过，审核说明属于低信任资料。',
+                       'items': items}]}

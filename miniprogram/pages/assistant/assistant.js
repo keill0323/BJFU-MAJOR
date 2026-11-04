@@ -18,7 +18,39 @@ let sessionSnapshot = null
 let sessionOwner = null
 const clone = value => JSON.parse(JSON.stringify(value))
 
-function decorateCards(cards, completed = {}, uncertain = {}, currentVerification = false) {
+function verificationScope(item) {
+  const action = item && item.action
+  return action && action.kind === 'open_verify' && VERIFY_SCOPES.includes(action.scope) ? action.scope : ''
+}
+
+function verificationLabel(item, scope, state) {
+  if (state && typeof state === 'object') {
+    const rank = scope === 'rank'
+    if (state.application_status === 'pending' || state.status === 'pending_review') return rank ? '查看段位审核进度' : '查看在校认证进度'
+    if (state.status === 'verified') return rank ? '更新段位材料' : '查看在校认证状态'
+    if (['rejected', 'update_rejected'].includes(state.status)) return rank ? '重新提交段位材料' : '重新提交在校认证材料'
+    if (state.status === 'not_submitted') return rank ? '提交段位材料' : '提交在校认证材料'
+    return rank ? '查看段位认证状态' : '查看在校认证状态'
+  }
+  const labels = scope === 'rank'
+    ? ['提交段位材料', '重新提交段位材料', '更新段位材料', '查看段位审核进度', '查看段位认证状态']
+    : ['提交在校认证材料', '重新提交在校认证材料', '查看在校认证进度', '查看在校认证状态']
+  return labels.includes(item.title) ? item.title : '查看／提交材料'
+}
+
+function refreshVerificationCard(card, fresh) {
+  return Object.assign({}, card, { summary: fresh.summary,
+    items: (card.items || []).map(item => {
+      const scope = verificationScope(item)
+      const replacement = scope && fresh.items.find(candidate => verificationScope(candidate) === scope)
+      return replacement ? Object.assign({}, replacement, { key: item.key }) : Object.assign({}, item, {
+        subtitle: '待核查', badge: '待核查', detail: '当前状态尚未确认。',
+        actionLabel: scope ? '查看认证状态' : item.actionLabel
+      })
+    }) })
+}
+
+function decorateCards(cards, completed = {}, uncertain = {}, currentVerification = false, verificationStates = {}) {
   return (Array.isArray(cards) ? cards : []).filter(card => card && CARD_TYPES.includes(card.type)).slice(0, 12).map((card, cardIndex) => {
     const id = card.type === 'registration_preview' && card.action && card.action.kind === 'confirm_registration' ? actionId(card.action.action_id) : ''
     const expired = !uncertain[id] && !completed[id] && !!card.expires_at && (!Number.isFinite(Date.parse(card.expires_at)) || Date.parse(card.expires_at) <= Date.now())
@@ -34,7 +66,7 @@ function decorateCards(cards, completed = {}, uncertain = {}, currentVerificatio
         const target = positiveId(candidate.id), playerKey = statsKey(candidate.player_key), matchId = positiveId(candidate.match_id)
         const scope = VERIFY_SCOPES.includes(candidate.scope) ? candidate.scope : ''
         const validAction = kind === 'open_rules' || (kind === 'open_verify' ? !!scope : kind === 'select_stats_player' ? !!playerKey && !!matchId : !!kind && !!target)
-        const label = { open_match: '查看赛事', open_team: '查看队伍', open_player: '选择选手',
+        const label = kind === 'open_verify' && scope ? verificationLabel(item, scope, verificationStates[scope]) : { open_match: '查看赛事', open_team: '查看队伍', open_player: '选择选手',
           contact_player: '联系选手', contact_team: '联系队长', select_match: '选择赛事', select_team: '选择队伍', select_player: '选择选手', select_stats_player: '选择统计选手', open_rules: '查看参赛须知', open_verify: '查看／提交材料' }[kind] || ''
         return { key: 'item-' + itemIndex, id: itemId, title: plain(item.title, 160), subtitle: plain(item.subtitle, 500), detail: plain(item.detail), badge: plain(item.badge, 160),
           action: validAction ? { kind, id: target, player_key: playerKey, match_id: matchId, scope } : null, actionLabel: validAction ? label : '',
@@ -113,9 +145,15 @@ Page({
   current(g, token) { return this._visible && g === this._generation && token === this._token && token === (wx.getStorageSync('token') || '') },
   hasVerificationCards() { return this.data.messages.some(message => (message.cards || []).some(card => card.type === 'verification_status')) },
   replaceVerificationCards(fresh) {
-    this.setData({ messages: this.data.messages.map(message => Object.assign({}, message, {
-      cards: (message.cards || []).map(card => card.type === 'verification_status' ? Object.assign({}, fresh, { key: card.key }) : card)
-    })) })
+    let latest = null
+    const messages = this.data.messages.map(message => Object.assign({}, message, {
+      cards: (message.cards || []).map(card => {
+        if (card.type !== 'verification_status') return card
+        latest = refreshVerificationCard(card, fresh)
+        return latest
+      })
+    }))
+    this.setData({ messages, verificationCard: latest })
   },
   async loadVerification() {
     const token = this.syncAccount(), g = this._generation
@@ -126,16 +164,16 @@ Page({
     try {
       const result = await api.getAssistantVerificationStatus()
       if (!this.current(g, token) || this._verificationRequest !== request) return
-      const cards = decorateCards((result.cards || []).filter(card => card && card.type === 'verification_status'), {}, {}, true)
+      const cards = decorateCards((result.cards || []).filter(card => card && card.type === 'verification_status'), {}, {}, true, result.data || {})
       if (!cards.length) throw { detail: '未能确认当前认证状态，请进入认证中心核查' }
-      this.setData({ verificationCard: cards[0] })
       this.replaceVerificationCards(cards[0])
     } catch (error) {
       if (this.current(g, token) && this._verificationRequest === request) {
         this.setData({ verificationError: '当前认证状态尚未确认，请进入认证页核查' })
         this.setData({ messages: this.data.messages.map(message => Object.assign({}, message, { cards: (message.cards || []).map(card => card.type !== 'verification_status' ? card : Object.assign({}, card, {
           summary: '本次未能刷新认证状态，请从卡片进入认证页核查。',
-          items: card.items.map(item => Object.assign({}, item, { subtitle: '待核查', badge: '待核查', detail: '当前状态尚未确认。' }))
+          items: card.items.map(item => Object.assign({}, item, { subtitle: '待核查', badge: '待核查', detail: '当前状态尚未确认。',
+            actionLabel: verificationScope(item) ? '查看认证状态' : item.actionLabel }))
         })) })) })
       }
     } finally {

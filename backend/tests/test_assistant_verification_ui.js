@@ -17,17 +17,39 @@ function verification({ student = '材料已提交，初审或人工复核中', 
     ] }] }
 }
 
+function verificationPageStatus(hasPending = false) {
+  const value = verification({ student: '尚未提交在校认证',
+    rank: hasPending ? '段位申请待管理员审核' : '尚未提交段位认证', pending: hasPending ? 'S10' : '' })
+  value.data.student = { status: 'not_submitted', label: '尚未提交在校认证', can_upload: true }
+  value.data.rank = { status: hasPending ? 'pending_review' : 'not_submitted',
+    label: hasPending ? '段位申请待管理员审核' : '尚未提交段位认证',
+    current_rank: null, pending_rank: hasPending ? 'S10' : null,
+    application_status: hasPending ? 'pending' : null, can_upload: !hasPending,
+    reason: hasPending ? '申请已提交，待管理员审核；识别候选段位尚未生效。' : '请在认证中心主动提交截图。' }
+  return value
+}
+
+function focusedVerification(scope, title) {
+  const value = verification()
+  value.data = Object.assign({ scope }, scope === 'both' ? value.data : { [scope]: value.data[scope] })
+  value.cards[0].title = '认证办理'
+  value.cards[0].items = value.cards[0].items.filter(item => scope === 'both' || item.action.scope === scope)
+  if (title && value.cards[0].items.length === 1) value.cards[0].items[0].title = title
+  return value
+}
+
 function fixture(pageName = 'assistant', overrides = {}, token = 'account-one') {
   const calls = { navigations: [], modals: [], toasts: [], selections: [], compressions: [], uploads: [], scrolls: [], me: 0, verification: 0 }
   const storage = { token }
+  const pendingRankAccounts = new Set()
   const api = Object.assign({ BASE: 'https://api.example.test', getAssistantStatus: async () => ({ enabled: true, available: true }),
-    getAssistantVerificationStatus: async () => { calls.verification++; return verification() },
+    getAssistantVerificationStatus: async () => { calls.verification++; return pageName === 'verify' ? verificationPageStatus(pendingRankAccounts.has(storage.token)) : verification() },
     createAssistantConversation: async () => ({ conversation_id: 'synthetic-conversation' }),
     getAssistantConversation: async () => ({ messages: [] }),
     sendAssistantMessage: async () => ({ reply: '请以当前本人状态为准', cards: verification().cards }),
     getMe: async () => { calls.me++; return { id: storage.token === 'account-one' ? 1 : 2, rank: null, is_verified: false } },
     uploadVerify: async file => { calls.uploads.push(['student', file]); return {} },
-    uploadRank: async file => { calls.uploads.push(['rank', file]); return { need_review: true, rank: 'S10' } }
+    uploadRank: async file => { calls.uploads.push(['rank', file]); pendingRankAccounts.add(storage.token); return { need_review: true, rank: 'S10' } }
   }, overrides)
   const wx = { getStorageSync: key => storage[key], getWindowInfo: () => ({ windowHeight: 700 }),
     navigateTo: options => calls.navigations.push(options.url), reLaunch: options => calls.navigations.push(options.url), removeStorageSync: key => { delete storage[key] },
@@ -182,6 +204,126 @@ test('no verification request or popup is made without an existing requested res
   assert.equal(page.data.verificationError, '')
 })
 
+test('a prepared rank-only card keeps its row identity and scope after the live full-status refresh', async () => {
+  const refresh = deferred()
+  const focused = focusedVerification('rank', '更新段位材料')
+  const f = await openAssistant({ sendAssistantMessage: async () => ({ reply: '请提交新的段位材料', cards: focused.cards }),
+    getAssistantVerificationStatus: () => refresh.promise })
+  f.page.data.draft = '帮我更新游戏段位'
+  const work = f.page.send()
+  await new Promise(resolve => setImmediate(resolve))
+  const original = f.page.data.messages[1].cards[0]
+  assert.equal(original.items.length, 1)
+  assert.equal(original.items[0].actionLabel, '更新段位材料')
+  const identity = { card: original.key, item: original.items[0].key }
+  const fresh = verification()
+  fresh.data.rank = { status: 'verified', current_rank: 'A+', application_status: 'approved', can_upload: true }
+  refresh.resolve(fresh)
+  await work
+  const result = f.page.data.messages[1].cards[0]
+  assert.equal(result.items.length, 1)
+  assert.equal(result.key, identity.card)
+  assert.equal(result.items[0].key, identity.item, 'rank initially occupies row zero even though the full response puts rank second')
+  assert.equal(result.items[0].action.scope, 'rank')
+  assert.equal(result.items[0].actionLabel, '更新段位材料')
+  assert.equal(f.page.data.verificationCard.items.length, 1)
+  assert.equal(f.page.data.verificationCard.items[0].action.scope, 'rank')
+  assert.doesNotMatch(JSON.stringify(result), /在校认证/)
+  assert.equal(f.calls.selections.length, 0)
+  assert.equal(f.calls.uploads.length, 0)
+})
+
+test('each historical verification card refreshes its own scopes and keys instead of becoming the latest card', async () => {
+  const f = await openAssistant()
+  const rank = focusedVerification('rank').cards[0]
+  const student = focusedVerification('student').cards[0]
+  const both = focusedVerification('both').cards[0]
+  rank.key = 'rank-card'; rank.items[0].key = 'rank-entry'
+  student.key = 'student-card'; student.items[0].key = 'student-entry'
+  both.key = 'both-card'; both.items[0].key = 'both-student'; both.items[1].key = 'both-rank'
+  const ordinary = { key: 'ordinary', type: 'knowledge', title: '保持原内容', items: [] }
+  f.page.data.messages = [
+    { id: 'rank-message', cards: [rank, ordinary] },
+    { id: 'student-message', cards: [student] },
+    { id: 'both-message', cards: [both] }
+  ]
+  await f.page.loadVerification()
+  const cards = f.page.data.messages.map(message => message.cards[0])
+  assert.deepEqual(cards.map(card => Array.from(card.items, item => item.action.scope)), [['rank'], ['student'], ['student', 'rank']])
+  assert.deepEqual(cards.map(card => Array.from(card.items, item => item.key)), [['rank-entry'], ['student-entry'], ['both-student', 'both-rank']])
+  assert.deepEqual(cards.map(card => card.key), ['rank-card', 'student-card', 'both-card'])
+  assert.equal(f.page.data.messages[0].cards[1], ordinary)
+  assert.equal(cards[0].items[0].actionLabel, '查看段位审核进度')
+  assert.equal(cards[1].items[0].actionLabel, '查看在校认证进度')
+})
+
+test('returning from rank material updates only the rank card and changes its action to review progress', async () => {
+  let fresh = verification()
+  fresh.data.rank = { status: 'verified', current_rank: 'A+', application_status: 'approved', can_upload: true }
+  const focused = focusedVerification('rank', '更新段位材料')
+  const f = await openAssistant({ getAssistantVerificationStatus: async () => fresh,
+    sendAssistantMessage: async () => ({ reply: '已准备更新入口', cards: focused.cards }),
+    getAssistantConversation: async () => ({ messages: [{ role: 'assistant', content: '已准备更新入口', cards: focused.cards }] }) })
+  f.page.data.draft = '更新段位'; await f.page.send()
+  assert.equal(f.page.data.messages[1].cards[0].items[0].actionLabel, '更新段位材料')
+  f.page.onHide()
+  fresh = verification()
+  await f.page.onShow()
+  const card = f.page.data.messages[0].cards[0]
+  assert.equal(card.items.length, 1)
+  assert.equal(card.items[0].action.scope, 'rank')
+  assert.equal(card.items[0].actionLabel, '查看段位审核进度')
+  await f.page.openCardItem(event({ message: f.page.data.messages[0].id, card: 0, item: 0 }))
+  assert.equal(f.calls.navigations.at(-1), '/pages/verify/verify?focus=rank&source=assistant')
+  assert.equal(f.calls.uploads.length, 0)
+})
+
+test('a missing focused status never falls back to another scope and failed refresh preserves the entry', async () => {
+  const f = await openAssistant()
+  const rank = focusedVerification('rank').cards[0]
+  rank.key = 'focused'; rank.items[0].key = 'rank-stable'
+  f.page.data.messages = [{ id: 'focused-message', cards: [rank] }]
+  f.api.getAssistantVerificationStatus = async () => focusedVerification('student')
+  await f.page.loadVerification()
+  let card = f.page.data.messages[0].cards[0]
+  assert.equal(card.items.length, 1)
+  assert.equal(card.items[0].key, 'rank-stable')
+  assert.equal(card.items[0].action.scope, 'rank')
+  assert.equal(card.items[0].badge, '待核查')
+  assert.doesNotMatch(card.items[0].detail, /在校认证/)
+  f.api.getAssistantVerificationStatus = async () => { throw { statusCode: 503 } }
+  await f.page.loadVerification()
+  card = f.page.data.messages[0].cards[0]
+  assert.equal(card.items.length, 1)
+  assert.equal(card.items[0].action.scope, 'rank')
+  assert.equal(card.items[0].actionLabel, '查看认证状态')
+  assert.equal(f.page.data.verificationCard, null)
+  assert.equal(f.calls.selections.length, 0)
+})
+
+test('verification entry labels follow current business states without invoking material APIs', async () => {
+  const f = await openAssistant()
+  f.page.data.messages = [{ id: 'both-statuses', cards: focusedVerification('both').cards }]
+  for (const [student, rank, labels] of [
+    [{ status: 'verified', can_upload: false }, { status: 'not_submitted', application_status: null, can_upload: true }, ['查看在校认证状态', '提交段位材料']],
+    [{ status: 'rejected', can_upload: true }, { status: 'update_rejected', application_status: 'rejected', current_rank: 'A+', can_upload: true }, ['重新提交在校认证材料', '重新提交段位材料']],
+    [{ status: 'not_submitted', can_upload: true }, { status: 'check_required', can_upload: false }, ['提交在校认证材料', '查看段位认证状态']]
+  ]) {
+    const fresh = verification()
+    fresh.data = { student, rank }
+    fresh.cards[0].items.forEach(item => {
+      const current = fresh.data[item.action.scope]
+      item.subtitle = item.badge = current.status
+      item.detail = '来自本人状态接口'
+    })
+    f.api.getAssistantVerificationStatus = async () => fresh
+    await f.page.loadVerification()
+    assert.deepEqual(Array.from(f.page.data.messages[0].cards[0].items, item => item.actionLabel), labels)
+  }
+  assert.equal(f.calls.selections.length, 0)
+  assert.equal(f.calls.uploads.length, 0)
+})
+
 test('verification focus is a fixed selector and never auto-selects or uploads', async () => {
   const f = fixture('verify')
   f.page.onLoad({ focus: 'rank', source: 'assistant' }); await f.page.onShow()
@@ -271,7 +413,11 @@ test('ambiguous upload failure queries state and blocks a second photo selection
 })
 
 test('pending rank application resolves a timeout without reuploading or claiming approval', async () => {
-  const f = fixture('verify', { uploadRank: async () => { throw { errMsg: 'uploadFile:fail timeout' } } })
+  let submitted = false
+  const f = fixture('verify', {
+    uploadRank: async () => { submitted = true; throw { errMsg: 'uploadFile:fail timeout' } },
+    getAssistantVerificationStatus: async () => verificationPageStatus(submitted)
+  })
   f.page.onLoad(); await f.page.onShow(); await f.page.uploadRankWithPath('/synthetic.jpg')
   assert.equal(f.page._uncertainUpload, null)
   assert.match(f.calls.toasts.at(-1).title, /等待段位审核/)

@@ -127,16 +127,18 @@ function approveTeamRegistration(matchId, teamId) {
  * @param raw     是否原样返回后端 JSON（true 不归一化 role）——默认 true
  * @returns Promise，成功 resolve 后端返回数据，失败 reject 错误信息
  */
-function uploadFile(path, filePath, raw = true, timeout = 60000) {
+function uploadFile(path, filePath, raw = true, timeout = 60000, onProgress) {
   const token = wx.getStorageSync('token')
   return new Promise((resolve, reject) => {
-    wx.uploadFile({
+    let finished = false
+    const task = wx.uploadFile({
       url: BASE + path,
       filePath: filePath,
       name: 'file',
       timeout,
       header: { 'Authorization': token ? 'Bearer ' + token : '' },
       success(res) {
+        finished = true
         if (res.statusCode < 400) {
           try {
             resolve(raw ? JSON.parse(res.data) : normalizeRole(JSON.parse(res.data)))
@@ -156,10 +158,14 @@ function uploadFile(path, filePath, raw = true, timeout = 60000) {
         }
       },
       fail(err) {
+        finished = true
         console.error('上传失败详情:', err)
         reject({ detail: '网络错误：' + (err.errMsg || '请检查后端服务器是否启动') })
       }
     })
+    if (typeof onProgress === 'function' && task && typeof task.onProgressUpdate === 'function') {
+      task.onProgressUpdate(event => { if (!finished) onProgress(event) })
+    }
   })
 }
 
@@ -219,11 +225,11 @@ module.exports = {
   updateProfile: (data) => request('/api/auth/profile', 'PUT', data),     // 修改昵称/游戏ID
 
   // 上传学信网截图（multipart，走共享 uploadFile 函数）
-  uploadVerify: (filePath) => uploadFile('/api/auth/upload-verify', filePath, false),
+  uploadVerify: (filePath, onProgress) => uploadFile('/api/auth/upload-verify', filePath, false, 60000, onProgress),
 
   // 上传游戏段位截图（完美/5E平台，AI 识别段位）
   // CPU 本地 OCR 包含初始化时间；只延长段位上传，不影响其他接口。
-  uploadRank: (filePath) => uploadFile('/api/auth/upload-rank', filePath, true, 240000),
+  uploadRank: (filePath, onProgress) => uploadFile('/api/auth/upload-rank', filePath, true, 240000, onProgress),
 
   // 上传头像
   uploadAvatar: (filePath) => uploadFile('/api/auth/upload-avatar', filePath, false),

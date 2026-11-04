@@ -29,6 +29,7 @@ class TurnExecution:
         self.cards, self.critical, self.traces = cards, critical, traces
         self._summary_slots, self._preview_cards = {}, {}
         self._selection_slot = None
+        self._verification_scope = None
         self.steps, self.calls, self.reasoning_bytes = 0, 0, 0
         self.seen_ids, self.invalid_calls, self.consumed = set(), set(), set()
         self.pending = {}
@@ -124,6 +125,14 @@ class TurnExecution:
             result = self.execute_tool(actor, name, arguments)
             if not isinstance(result, dict):
                 raise ValueError('invalid tool result')
+            if name in ('get_my_verification', 'prepare_verification'):
+                if name == 'prepare_verification':
+                    self._verification_scope = result['data']['scope']
+                elif self._verification_scope is not None:
+                    # 后续刷新采用最新事实，同时延续本轮已经明确的办理类型。
+                    from app.services.assistant_verification_service import prepare_verification_from_status
+                    result = prepare_verification_from_status(result, self._verification_scope)
+                self.cards[:] = [card for card in self.cards if card.get('type') != 'verification_status']
             target_match = arguments.get('match_id')
             if (name in ('prepare_registration', 'check_registration')
                     and (name == 'prepare_registration' or result.get('status') == 'blocked')):
@@ -167,12 +176,14 @@ class TurnExecution:
                     'get_match_rounds', 'get_match_standings', 'get_player_stats')
                     and ((result.get('data') or {}).get('match_id') or arguments.get('match_id'))):
                 self.critical[self._selection_slot] = ''
-            if (name in ('prepare_registration', 'check_registration', 'get_my_registration', 'get_my_verification', 'get_match_standings')
+            if (name in ('prepare_registration', 'check_registration', 'get_my_registration', 'get_my_verification', 'prepare_verification', 'get_my_notice_summary', 'get_match_standings')
                     or (name == 'get_match_rounds' and arguments.get('next_only') is True)):
                 # 修正方式后的成功预览取代同一赛事先前误用personal的错误，
                 # 不把相互冲突的中间尝试全部拼成最终答复。
                 data = result.get('data') or {}
                 family = 'registration' if name in ('prepare_registration', 'check_registration', 'get_my_registration') else name
+                if name in ('get_my_verification', 'prepare_verification'):
+                    family = 'verification'
                 subject = (family, data.get('match_id') or arguments.get('match_id'),
                            data.get('team_id') if name == 'get_match_rounds' else None)
                 summary = self.clean_text(result.get('message', '请以结果卡片为准'))

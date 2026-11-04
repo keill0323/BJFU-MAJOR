@@ -3,7 +3,7 @@
   <view wx:if="{{!token}}" class="card guest-card">
     <view class="guest-mark">ID</view>
     <text class="guest-title">先认识你，再一起上场</text>
-    <text class="guest-copy">登录后完成在校与段位认证，开启你的校赛之旅。</text>
+    <text class="guest-copy">{{operationFeedback && operationFeedback.action === 'login' ? operationFeedback.message : '登录后完成在校与段位认证，开启你的校赛之旅。'}}</text>
     <view class="btn-primary" bindtap="goLogin">微信登录</view>
   </view>
   <view wx:elif="{{!user}}" class="card state-card">
@@ -13,8 +13,8 @@
   </view>
   <block wx:else>
     <view class="intro-row">
-      <view><text class="page-heading">参赛认证</text><text class="intro-hint">{{verifiedCount === 2 ? '认证已完成，可按需更新段位' : '完成在校与段位认证，准备参赛'}}</text></view>
-      <text class="completion-label">{{verifiedCount}} / 2 项完成</text>
+      <view><text class="page-heading">参赛认证</text><text class="intro-hint">{{rankReview && rankReview.pending ? '有段位申请正在审核，处理进度见下方' : rankReview && rankReview.status === 'unknown' && rankCanSubmit === false ? '有段位资料需要核查，详情见下方' : verifiedCount === 2 ? '认证已完成，可按需更新段位' : '完成在校与段位认证，准备参赛'}}</text></view>
+      <text class="completion-label">{{rankReview && rankReview.status === 'unknown' && rankCanSubmit === false ? (user.is_verified ? 1 : 0) : verifiedCount}} / 2 项完成</text>
     </view>
     <view id="verify-student" class="card verify-card">
       <view class="section-head">
@@ -37,12 +37,48 @@
         </view>
         <view wx:else class="upload-zone {{uploading ? 'is-busy' : ''}}" bindtap="chooseVerifyImage"><text class="upload-plus">+</text><text class="upload-label">{{uploading ? '上传处理中…' : '上传在校认证截图'}}</text><text class="upload-caption">从相册选择或拍照上传</text></view>
       </block>
+      <view wx:if="{{operationFeedback && operationFeedback.kind === 'student'}}" class="operation-feedback feedback-{{operationFeedback.state}}" aria-role="status" aria-live="polite">
+        <view class="feedback-heading"><view class="feedback-dot"></view><text class="feedback-title">{{operationFeedback.title}}</text></view>
+        <text class="feedback-message">{{operationFeedback.message}}</text>
+        <view wx:if="{{operationFeedback.state === 'uploading' && operationFeedback.progress !== null && operationFeedback.progress !== undefined}}" class="feedback-progress">
+          <view class="feedback-progress-track"><view class="feedback-progress-fill" style="width: {{operationFeedback.progress}}%"></view></view><text class="feedback-progress-value">{{operationFeedback.progress}}%</text>
+        </view>
+        <view wx:if="{{operationFeedback.action}}" class="feedback-actions">
+          <button wx:if="{{operationFeedback.action === 'refresh'}}" size="mini" bindtap="refreshVerificationStatus" disabled="{{uploading || rankStatusLoading}}" loading="{{rankStatusLoading}}">查询最新状态</button>
+          <button wx:elif="{{operationFeedback.action === 'retry'}}" size="mini" bindtap="chooseVerifyImage" disabled="{{uploading}}">重新选择图片</button>
+          <button wx:elif="{{operationFeedback.action === 'login'}}" size="mini" bindtap="goLogin">重新登录</button>
+        </view>
+      </view>
     </view>
     <view id="verify-rank" class="card verify-card">
       <view class="section-head">
         <view class="section-heading"><text class="step-number">02</text><text class="section-title">段位认证</text></view>
-        <text class="status-chip {{user.display_rank ? 'status-ok' : 'status-pending'}}">{{user.display_rank ? '已认证' : '参赛必需'}}</text>
+        <text class="status-chip {{rankReview && (rankReview.pending || (rankReview.status === 'unknown' && rankCanSubmit === false)) ? 'status-pending' : rankReview && rankReview.status === 'rejected' ? 'status-rejected' : user.display_rank ? 'status-ok' : 'status-pending'}}">{{rankReview && rankReview.pending ? '新申请待审核' : rankReview && rankReview.status === 'unknown' && rankCanSubmit === false ? '待核查' : rankReview && rankReview.status === 'rejected' ? '更新未通过' : user.display_rank ? '已认证' : '待认证'}}</text>
       </view>
+      <view wx:if="{{rankReview && (rankReview.pending || rankReview.status === 'rejected' || (rankReview.status === 'unknown' && rankCanSubmit === false))}}" class="rank-review feedback-{{rankReview.pending ? 'pending' : rankReview.status === 'unknown' ? 'unknown' : 'error'}}" aria-role="status" aria-live="polite">
+        <view class="feedback-heading"><view class="feedback-dot"></view><text class="feedback-title">{{rankReview.label || (rankReview.pending ? '段位申请已提交，等待审核' : rankReview.status === 'unknown' ? '段位结果待核查' : '本次段位申请未通过')}}</text></view>
+        <view class="review-values">
+          <view class="review-value"><text class="review-value-label">{{rankReview.status === 'unknown' ? '段位资料状态' : '当前有效段位'}}</text><text class="review-value-text">{{rankReview.status === 'unknown' ? '待管理员核查' : rankReview.currentRank || user.display_rank || '尚未认证'}}</text></view>
+          <view wx:if="{{rankReview.pending}}" class="review-value"><text class="review-value-label">本次识别候选</text><text class="review-value-text">{{rankReview.pendingRank || '待管理员核对'}}</text></view>
+        </view>
+        <text wx:if="{{rankReview.reason}}" class="feedback-message">{{rankReview.reason}}</text>
+        <text wx:if="{{rankReview.pending}}" class="review-note">审核通过后生效，结果可在消息页查看。</text>
+        <view class="feedback-actions"><button size="mini" bindtap="refreshVerificationStatus" disabled="{{uploading || rankStatusLoading}}" loading="{{rankStatusLoading}}">{{rankStatusLoading ? '正在查询' : rankReview.status === 'unknown' ? '重新核查状态' : '刷新审核状态'}}</button></view>
+      </view>
+      <view wx:if="{{operationFeedback && operationFeedback.kind === 'rank' && !(operationFeedback.state === 'pending' && rankReview && rankReview.pending)}}" class="operation-feedback feedback-{{operationFeedback.state}}" aria-role="status" aria-live="polite">
+        <view class="feedback-heading"><view class="feedback-dot"></view><text class="feedback-title">{{operationFeedback.title}}</text></view>
+        <text class="feedback-message">{{operationFeedback.message}}</text>
+        <view wx:if="{{operationFeedback.state === 'uploading' && operationFeedback.progress !== null && operationFeedback.progress !== undefined}}" class="feedback-progress">
+          <view class="feedback-progress-track"><view class="feedback-progress-fill" style="width: {{operationFeedback.progress}}%"></view></view><text class="feedback-progress-value">{{operationFeedback.progress}}%</text>
+        </view>
+        <view wx:if="{{operationFeedback.action}}" class="feedback-actions">
+          <button wx:if="{{operationFeedback.action === 'refresh'}}" size="mini" bindtap="refreshVerificationStatus" disabled="{{uploading || rankStatusLoading}}" loading="{{rankStatusLoading}}">查询最新状态</button>
+          <button wx:elif="{{operationFeedback.action === 'retry'}}" size="mini" bindtap="chooseRankImage" disabled="{{uploading || rankCanSubmit === false}}">重新选择图片</button>
+          <button wx:elif="{{operationFeedback.action === 'login'}}" size="mini" bindtap="goLogin">重新登录</button>
+        </view>
+      </view>
+      <view wx:if="{{rankStatusError}}" class="rank-status-error"><text>{{rankStatusError}}</text><button wx:if="{{!(operationFeedback && operationFeedback.kind === 'rank' && operationFeedback.action === 'refresh')}}" size="mini" bindtap="refreshVerificationStatus" disabled="{{uploading || rankStatusLoading}}" loading="{{rankStatusLoading}}">重新查询</button></view>
+      <text wx:elif="{{rankStatusLoading && !(rankReview && rankReview.pending)}}" class="rank-status-loading">正在查询段位申请状态…</text>
       <text class="section-copy">使用真实段位参与公平竞技。请上传包含历史信息的 PC 页面原截图，首次认证与段位更新均从这里提交。</text>
       <view class="platform-notes">
         <view class="platform-note"><text class="platform-name">完美平台</text><text class="platform-copy">PC 页面 → 天梯历史最高段位</text></view>
@@ -50,13 +86,13 @@
       </view>
       <view wx:if="{{user.rank_image}}" class="upload-preview">
         <image class="verify-thumb rank-thumb" src="{{user.rank_image_full}}" mode="aspectFill" bindtap="previewRankImage"/>
-        <view class="preview-info"><text class="preview-title">{{user.display_rank ? '已认证段位截图' : '已上传段位截图'}}</text><text class="preview-copy">{{user.display_rank || '审核结果可在消息页查看'}}</text><view class="text-action" bindtap="previewRankImage">查看原图 <text>↗</text></view></view>
+        <view class="preview-info"><text class="preview-title">{{rankReview && rankReview.status === 'unknown' && rankCanSubmit === false ? '段位截图（状态待核查）' : user.display_rank ? '已认证段位截图' : '已上传段位截图'}}</text><text class="preview-copy">{{rankReview && rankReview.status === 'unknown' && rankCanSubmit === false ? '请先核查段位资料状态' : user.display_rank || '审核结果可在消息页查看'}}</text><view class="text-action" bindtap="previewRankImage">查看原图 <text>↗</text></view></view>
       </view>
-      <view class="btn-primary rank-submit {{uploading ? 'is-busy' : ''}}" bindtap="chooseRankImage">{{uploading ? '上传处理中…' : user.display_rank ? '提交段位更新' : '上传段位截图'}}</view>
+      <button class="btn-primary rank-submit" bindtap="chooseRankImage" disabled="{{uploading || rankCanSubmit === false || (operationFeedback && operationFeedback.kind === 'rank' && operationFeedback.state === 'selecting')}}" loading="{{uploading && operationFeedback && operationFeedback.kind === 'rank'}}">{{uploading && operationFeedback && operationFeedback.kind === 'rank' ? (operationFeedback.state === 'processing' ? '正在识别截图…' : '正在上传截图…') : rankReview && rankReview.pending ? '已提交，等待审核' : rankReview && rankReview.status === 'unknown' && rankCanSubmit === false ? '先核查段位状态' : operationFeedback && operationFeedback.kind === 'rank' && operationFeedback.state === 'selecting' ? '正在选择图片…' : user.display_rank ? '提交段位更新' : '上传段位截图'}}</button>
       <text class="footer-note">手机界面截图暂不支持自动认证，将转人工审核。需人工复核时，可在消息页查看结果。</text>
     </view>
     <view class="rank-hero">
-      <view class="rank-hero-main"><image class="rank-emblem" src="{{user.rank_badge.icon}}" mode="aspectFit" aria-label="{{user.rank_badge.label}}"/><view class="rank-hero-info"><text class="hero-kicker">当前认证段位</text><text class="hero-rank">{{user.display_rank || '等待认证'}}</text></view><view class="rating-line"><text class="rating-number">{{user.rank ? user.individual_rating : '—'}}</text><text class="rating-label">个人水平分</text></view></view>
+      <view class="rank-hero-main"><image class="rank-emblem" src="{{user.rank_badge.icon}}" mode="aspectFit" aria-label="{{user.rank_badge.label}}"/><view class="rank-hero-info"><text class="hero-kicker">{{rankReview && rankReview.status === 'unknown' && rankCanSubmit === false ? '段位资料待核查' : '当前认证段位'}}</text><text class="hero-rank">{{rankReview && rankReview.status === 'unknown' && rankCanSubmit === false ? '待核查' : user.display_rank || '等待认证'}}</text></view><view class="rating-line"><text class="rating-number">{{rankReview && rankReview.status === 'unknown' && rankCanSubmit === false ? '—' : user.rank ? user.individual_rating : '—'}}</text><text class="rating-label">个人水平分</text></view></view>
     </view>
     <view class="support-row" bindtap="goRules"><text>认证说明与隐私政策</text><image src="/images/icons/chevron-right.svg"/></view>
   </block>

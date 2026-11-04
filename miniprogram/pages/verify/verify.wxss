@@ -59,4 +59,35 @@
 .is-busy { opacity: .65; }
 
 .intro-hint { display: block; color: #62798c; font-size: 24rpx; margin-top: 6rpx; line-height: 1.6; }
+.operation-feedback, .rank-review { margin: 0 0 22rpx; padding: 22rpx; border: 1rpx solid #cfe4e5; border-left: 5rpx solid #087f8c; border-radius: 16rpx; background: #f0f8f8; color: #244f63; }
+#verify-student .operation-feedback { margin-top: 22rpx; margin-bottom: 0; }
+.feedback-heading { display: flex; align-items: center; gap: 12rpx; }
+.feedback-dot { width: 12rpx; height: 12rpx; border-radius: 50%; background: #087f8c; flex-shrink: 0; }
+.feedback-title { display: block; min-width: 0; font-size: 26rpx; font-weight: 650; line-height: 1.5; word-break: break-all; }
+.feedback-message { display: block; margin-top: 10rpx; font-size: 24rpx; line-height: 1.7; overflow-wrap: anywhere; word-break: break-word; }
+.feedback-pending, .feedback-unknown { background: #fff9ed; border-color: #eadfc4; border-left-color: #a5782d; color: #755a28; }
+.feedback-pending .feedback-dot, .feedback-unknown .feedback-dot { background: #a5782d; }
+.feedback-success { background: #f0f8f3; border-color: #cee4d8; border-left-color: #247d60; color: #21624f; }
+.feedback-success .feedback-dot { background: #247d60; }
+.feedback-error { background: #fff3f1; border-color: #edcfca; border-left-color: #b74e43; color: #8f433b; }
+.feedback-error .feedback-dot { background: #b74e43; }
+.feedback-progress { display: flex; align-items: center; gap: 16rpx; margin-top: 18rpx; }
+.feedback-progress-track { flex: 1; min-width: 0; height: 10rpx; border-radius: 10rpx; background: #d6e9e9; overflow: hidden; }
+.feedback-progress-fill { height: 100%; border-radius: 10rpx; background: #087f8c; transition: width .16s ease; }
+.feedback-progress-value { flex-shrink: 0; color: #326273; font-size: 22rpx; font-variant-numeric: tabular-nums; }
+.feedback-actions { display: flex; flex-wrap: wrap; gap: 12rpx; margin-top: 16rpx; }
+.feedback-actions button, .rank-status-error button { display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0 20rpx; min-height: 58rpx; line-height: 1.5; font-size: 23rpx; font-weight: 600; border: 1rpx solid #b7d5d7; border-radius: 12rpx; color: #08717d; background: #fff; }
+.feedback-actions button::after, .rank-status-error button::after, button.rank-submit::after { border: 0; }
+.feedback-actions button[disabled], .rank-status-error button[disabled] { color: #70838b; background: #f3f5f5; border-color: #d6dfe1; }
+.review-values { display: flex; flex-wrap: wrap; gap: 16rpx; margin-top: 18rpx; }
+.review-value { flex: 1; min-width: 160rpx; }
+.review-value-label { display: block; font-size: 22rpx; line-height: 1.5; opacity: .85; }
+.review-value-text { display: block; margin-top: 5rpx; font-size: 29rpx; font-weight: 700; line-height: 1.4; word-break: break-all; }
+.review-note { display: block; margin-top: 12rpx; font-size: 23rpx; line-height: 1.6; }
+.rank-status-error { margin-bottom: 20rpx; padding: 18rpx; border-radius: 14rpx; background: #fff6e8; color: #8a632c; font-size: 23rpx; line-height: 1.7; }
+.rank-status-error text { display: block; overflow-wrap: anywhere; }
+.rank-status-error button { margin-top: 12rpx; }
+.rank-status-loading { display: block; margin-bottom: 18rpx; color: #637b8e; font-size: 23rpx; line-height: 1.6; }
+button.rank-submit { display: flex; align-items: center; justify-content: center; gap: 10rpx; width: 100%; min-height: 82rpx; box-sizing: border-box; padding: 18rpx 22rpx; font-size: 27rpx; font-weight: 650; line-height: 1.5; border-radius: 16rpx; }
+button.rank-submit[disabled] { color: #526d80; background: #e3ecef; opacity: 1; }
 @media (max-width: 350px) { .platform-notes { flex-direction: column; gap: 10rpx; }.platform-note { padding: 16rpx; }.intro-row { align-items: center; }.completion-label { font-size: 22rpx; }.rank-hero-main { gap: 12rpx; } }
