@@ -1,0 +1,10 @@
+[Unit]
+Description=BJFU Major MySQL management source whitelist
+DefaultDependencies=no
+After=local-fs.target systemd-modules-load.service
+Before=major-mysql-admin.socket
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /usr/local/sbin/major-mysql-admin-firewall.py

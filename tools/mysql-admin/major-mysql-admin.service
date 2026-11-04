@@ -1,0 +1,13 @@
+[Unit]
+Description=BJFU Major MySQL management TCP relay
+After=docker.service
+
+[Service]
+ExecStart=/lib/systemd/systemd-socket-proxyd --connections-max=32 --exit-idle-time=5min 127.0.0.1:3306
+DynamicUser=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+Restart=on-failure

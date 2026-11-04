@@ -1,0 +1,12 @@
+[Unit]
+Description=BJFU Major MySQL management listener
+Requires=major-mysql-admin-firewall.service
+After=major-mysql-admin-firewall.service
+
+[Socket]
+ListenStream=0.0.0.0:43306
+NoDelay=true
+Backlog=64
+
+[Install]
+WantedBy=sockets.target
