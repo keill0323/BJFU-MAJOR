@@ -168,8 +168,19 @@ def _match_selection_message(cards, *, has_more=False):
 
 def _match_search(db, keyword, *, limit=21):
     """先按原名匹配；再兼容‘26届起源杯’等明确年份简称，不猜同名赛事。"""
+    from sqlalchemy import func
+
     query = _public_match_query(db)
     keyword = (keyword or '').strip()
+    if keyword:
+        # 精确名称必须在模糊结果分页前查询，避免较旧的完整名称被同前缀新赛事遮住。
+        # SQL先缩小范围且有界读取；Python复核保持原有strip/casefold语义，
+        # 不让数据库的宽松排序规则把不同名称当作同一名称。
+        exact = query.filter(func.lower(func.trim(Match.name)) == keyword.lower()).order_by(
+            Match.id.desc()).limit(limit).all()
+        exact = [row for row in exact if row.name.strip().casefold() == keyword.casefold()]
+        if exact:
+            return exact
     direct = query.filter(Match.name.contains(keyword, autoescape=True)) if keyword else query
     rows = direct.order_by(Match.id.desc()).limit(limit).all()
     if not keyword:

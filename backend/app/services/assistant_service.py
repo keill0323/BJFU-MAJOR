@@ -186,15 +186,18 @@ def execute_tool(db, actor, name, arguments):
     from app.services import assistant_registration_service as registration
     from app.services import assistant_knowledge_service as knowledge
     from app.services.assistant_query_service import dispatch_read_tool
+    from app.services.assistant_answer_service import annotate_result
     if name == 'search_knowledge':
-        return knowledge.search_knowledge(db, **arguments)
-    if name == 'get_public_admin_contacts':
-        return knowledge.public_admin_contacts(db)
-    if name == 'check_registration':
-        return registration.check_registration(db, actor, **arguments)
-    if name == 'prepare_registration':
-        return registration.preview_registration(db, actor, **arguments)
-    return dispatch_read_tool(db, actor, name, arguments)
+        result = knowledge.search_knowledge(db, **arguments)
+    elif name == 'get_public_admin_contacts':
+        result = knowledge.public_admin_contacts(db)
+    elif name == 'check_registration':
+        result = registration.check_registration(db, actor, **arguments)
+    elif name == 'prepare_registration':
+        result = registration.preview_registration(db, actor, **arguments)
+    else:
+        result = dispatch_read_tool(db, actor, name, arguments)
+    return annotate_result(result, name, arguments)
 
 
 def _prior_response(turn, digest):
@@ -206,7 +209,11 @@ def _prior_response(turn, digest):
 
 
 def _controlled_reply(critical, cards, *, partial=False):
+    from app.services.assistant_answer_service import supporting_answers
     reply = '\n'.join(message for message in dict.fromkeys(critical) if message)[:1800]
+    supporting = supporting_answers(cards, critical, clean_text)
+    if supporting:
+        reply += '\n\n' + supporting
     if any(card.get('type') == 'registration_preview' for card in cards):
         reply += '\n这只是预览，尚未提交。请核对卡片并点击确认报名。'
     if partial:
@@ -377,12 +384,17 @@ def send_message(db, actor, conversation_id, message, client_message_id, context
         claim_kind = action_claim_kind(reply)
         if any(critical):
             reply = _controlled_reply(critical, cards)
-        elif claim_kind == 'business':
-            reply = '尚未执行报名提交、审批或联系操作。我可以检查报名资格并生成确认卡，你核对后点击“确认报名”即可提交；联系他人请使用站内联系入口。'
-            code = 'unsupported_action_claim'
-        elif claim_kind == 'verification':
-            reply = '助手不能代替认证审核或审批。请查询本人实时认证状态；提交材料需要你点击认证入口并完成授权，结果以真实状态卡片为准。'
-            code = 'unsupported_action_claim'
+        elif claim_kind:
+            # A guarded draft must not erase a successful, unrelated lookup
+            # (e.g. describing already-verified recruits as an approval claim).
+            grounded = _controlled_reply([], cards).strip()
+            if grounded:
+                reply = grounded + ('\n以上为查询结果，尚未执行报名、邀请或联系操作。' if claim_kind == 'business' else '')
+            else:
+                reply = ('尚未执行报名提交、审批或联系操作。我可以检查报名资格并生成确认卡，你核对后点击“确认报名”即可提交；联系他人请使用站内联系入口。'
+                         if claim_kind == 'business' else
+                         '助手不能代替认证审核或审批。请查询本人实时认证状态；提交材料需要你点击认证入口并完成授权，结果以真实状态卡片为准。')
+                code = 'unsupported_action_claim'
     except provider_api.ProviderError as error:
         code = 'partial' if any(critical) else error.code
         reply = (_controlled_reply(critical, cards, partial=True) if any(critical) else
@@ -392,8 +404,9 @@ def send_message(db, actor, conversation_id, message, client_message_id, context
         db.rollback()
         code = 'tool_execution_failed'
         reply = (_controlled_reply(critical, cards, partial=True) if any(critical) else '查询暂时不可用，请稍后重试。')
+    from app.services.assistant_answer_service import public_cards
     response = {'conversation_id': conversation_id, 'trace_id': trace_id, 'reply': reply,
-                'cards': cards[:12], 'context': effective_context, 'code': code}
+                'cards': public_cards(cards[:12]), 'context': effective_context, 'code': code}
     # 用lease校验拒绝迟到结果覆盖新轮次。
     owner = db.query(Conversation).filter_by(id=conversation_id, user_id=user_id, lease_token=trace_id).first()
     if owner:
