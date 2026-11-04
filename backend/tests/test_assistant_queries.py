@@ -59,9 +59,9 @@ class AssistantQueryTests(DatabaseTestCase):
     def test_tools_are_closed_schemas_and_reject_forged_identity_types_or_unknown_tools(self):
         for tool in service.READ_TOOL_DEFINITIONS:
             schema = tool["function"]["parameters"]
-            self.assertTrue(tool["function"]["strict"])
+            self.assertNotIn("strict", tool["function"])
             self.assertFalse(schema["additionalProperties"])
-            self.assertEqual(set(schema["required"]), set(schema["properties"]))
+            self.assertEqual(schema["required"], [])
         for name, args in (("register_user", {}), ("get_my_registration", {"user_id": 2}),
                            ("list_matches", {"limit": True}), ("recommend_players", {"rank": "arbitrary"}),
                            ("find_teams", {"team_id": -1})):

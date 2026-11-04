@@ -27,6 +27,8 @@ class TurnExecution:
         self.schemas = {item['function']['name']: item['function']['parameters'] for item in tools}
         self.context, self.memory = context, memory
         self.cards, self.critical, self.traces = cards, critical, traces
+        self._summary_slots, self._preview_cards = {}, {}
+        self._selection_slot = None
         self.steps, self.calls, self.reasoning_bytes = 0, 0, 0
         self.seen_ids, self.invalid_calls, self.consumed = set(), set(), set()
         self.pending = {}
@@ -122,9 +124,19 @@ class TurnExecution:
             result = self.execute_tool(actor, name, arguments)
             if not isinstance(result, dict):
                 raise ValueError('invalid tool result')
+            target_match = arguments.get('match_id')
+            if (name in ('prepare_registration', 'check_registration')
+                    and (name == 'prepare_registration' or result.get('status') == 'blocked')):
+                previous = self._preview_cards.pop(target_match, [])
+                self.cards[:] = [card for card in self.cards if not any(card is old for old in previous)]
             self.cards.extend(result.get('cards', [])[:5])
+            if name == 'prepare_registration':
+                self._preview_cards[target_match] = [card for card in result.get('cards', [])[:5]
+                    if card.get('type') == 'registration_preview']
             candidates = []
             for card in result.get('cards', []):
+                if name == 'get_my_team':
+                    break  # 本人队伍是账号事实，不是新一组待选对象；保留刚列出的赛事候选。
                 if card.get('type') not in ('matches', 'teams', 'players', 'player_stats'):
                     continue
                 for item in card.get('items', [])[:20]:
@@ -142,8 +154,36 @@ class TurnExecution:
             selection = result.get('data', {}).get('selection')
             if isinstance(selection, dict) and selection.get('kind') == 'stats_player':
                 self.memory = {'selection': self.public_payload(selection)}
-            if name in ('prepare_registration', 'check_registration', 'get_my_registration', 'get_my_verification', 'get_match_standings'):
-                self.critical.append(self.clean_text(result.get('message', '请以报名状态卡片为准')))
+            if (result.get('status') == 'needs_selection'
+                    and any(card.get('type') == 'matches' for card in result.get('cards', []))):
+                summary = self.clean_text(result.get('message', '请选择要继续的赛事。'))
+                if self._selection_slot is None:
+                    self._selection_slot = len(self.critical)
+                    self.critical.append(summary)
+                else:
+                    self.critical[self._selection_slot] = summary
+            elif (self._selection_slot is not None and name in (
+                    'prepare_registration', 'check_registration', 'get_my_registration',
+                    'get_match_rounds', 'get_match_standings', 'get_player_stats')
+                    and ((result.get('data') or {}).get('match_id') or arguments.get('match_id'))):
+                self.critical[self._selection_slot] = ''
+            if (name in ('prepare_registration', 'check_registration', 'get_my_registration', 'get_my_verification', 'get_match_standings')
+                    or (name == 'get_match_rounds' and arguments.get('next_only') is True)):
+                # 修正方式后的成功预览取代同一赛事先前误用personal的错误，
+                # 不把相互冲突的中间尝试全部拼成最终答复。
+                data = result.get('data') or {}
+                family = 'registration' if name in ('prepare_registration', 'check_registration', 'get_my_registration') else name
+                subject = (family, data.get('match_id') or arguments.get('match_id'),
+                           data.get('team_id') if name == 'get_match_rounds' else None)
+                summary = self.clean_text(result.get('message', '请以结果卡片为准'))
+                if (name == 'get_my_registration' and self._preview_cards.get(target_match)
+                        and data.get('registration_status') == 'not_registered'):
+                    pass  # 尚未确认的有效预览与“未报名”一致，保留预览作为当前操作提示。
+                elif subject in self._summary_slots:
+                    self.critical[self._summary_slots[subject]] = summary
+                else:
+                    self._summary_slots[subject] = len(self.critical)
+                    self.critical.append(summary)
             result_code = str(result.get('status', 'ok'))[:40]
             model_result = self.public_payload(result)
         except (ValueError, TypeError, KeyError):
